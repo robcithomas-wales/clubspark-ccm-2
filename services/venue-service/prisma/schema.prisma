@@ -24,6 +24,7 @@ model Venue {
   resources      Resource[]
   units          BookableUnit[]
   resourceGroups ResourceGroup[]
+  blackoutDates  BlackoutDate[]
 
   @@map("venues")
   @@schema("venue")
@@ -70,9 +71,10 @@ model Resource {
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
-  venue  Venue          @relation(fields: [venueId], references: [id])
-  group  ResourceGroup? @relation(fields: [groupId], references: [id])
-  units  BookableUnit[]
+  venue         Venue          @relation(fields: [venueId], references: [id])
+  group         ResourceGroup? @relation(fields: [groupId], references: [id])
+  units         BookableUnit[]
+  blackoutDates BlackoutDate[]
 
   @@map("resources")
   @@schema("venue")
@@ -143,6 +145,27 @@ model AddOn {
   @@index([tenantId])
   @@index([tenantId, venueId])
   @@index([tenantId, status])
+}
+
+model BlackoutDate {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  venueId        String   @map("venue_id") @db.Uuid
+  resourceId     String?  @map("resource_id") @db.Uuid
+  name           String
+  startDate      DateTime @map("start_date") @db.Date
+  endDate        DateTime @map("end_date") @db.Date
+  recurrenceRule String?  @map("recurrence_rule")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  venue    Venue     @relation(fields: [venueId], references: [id])
+  resource Resource? @relation(fields: [resourceId], references: [id])
+
+  @@map("blackout_dates")
+  @@schema("venue")
+  @@index([tenantId])
+  @@index([tenantId, venueId])
 }
 
 model AvailabilityConfig {

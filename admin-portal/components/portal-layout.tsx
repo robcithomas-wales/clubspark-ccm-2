@@ -8,6 +8,7 @@ import {
   Bell,
   CalendarDays,
   CalendarClock,
+  CalendarOff,
   ChevronDown,
   CreditCard,
   LayoutDashboard,
@@ -20,6 +21,7 @@ import {
   ShoppingBag,
   Users,
   Building2,
+  Repeat2,
 } from "lucide-react"
 
 const navSections = [
@@ -28,6 +30,7 @@ const navSections = [
     items: [
       { label: "Dashboard", href: "/", icon: LayoutDashboard },
       { label: "Bookings", href: "/bookings", icon: CalendarDays },
+      { label: "Recurring Series", href: "/booking-series", icon: Repeat2 },
       { label: "Availability", href: "/availability", icon: CalendarClock },
       { label: "Customers", href: "/customers", icon: Users },
       {
@@ -57,6 +60,9 @@ const navSections = [
       },
       { label: "Bookable Units", href: "/bookable-units", icon: LayoutGrid },
       { label: "Product Add-Ons", href: "/add-ons", icon: ShoppingBag },
+      { label: "Blackout Dates", href: "/blackout-dates", icon: CalendarOff },
+      { label: "Availability Configs", href: "/availability-configs", icon: CalendarClock },
+      { label: "Booking Rules", href: "/booking-rules", icon: ShieldCheck },
     ],
   },
   {

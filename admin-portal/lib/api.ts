@@ -68,8 +68,15 @@ const BOOKING_HEADERS = {
   "x-organisation-id": "11111111-1111-1111-1111-111111111111",
 }
 
-export async function getBookings(page = 1, limit = 25) {
+export async function getBookings(
+  page = 1,
+  limit = 25,
+  filters: { status?: string; fromDate?: string; toDate?: string } = {},
+) {
   const qs = new URLSearchParams({ page: String(page), limit: String(limit) })
+  if (filters.status && filters.status !== "all") qs.set("status", filters.status)
+  if (filters.fromDate) qs.set("fromDate", filters.fromDate)
+  if (filters.toDate) qs.set("toDate", filters.toDate)
   const res = await fetch(`${BOOKING_SERVICE}/bookings?${qs}`, {
     headers: BOOKING_HEADERS,
     cache: "no-store",
@@ -80,6 +87,29 @@ export async function getBookings(page = 1, limit = 25) {
   }
 
   return res.json() as Promise<{ data: any[]; pagination: PaginationMeta }>
+}
+
+export async function updateBooking(
+  id: string,
+  data: {
+    startsAt?: string
+    endsAt?: string
+    notes?: string
+    bookingSource?: string
+    customerId?: string | null
+  },
+) {
+  const res = await fetch(`${BOOKING_SERVICE}/bookings/${id}`, {
+    method: "PATCH",
+    headers: { ...BOOKING_HEADERS, "content-type": "application/json" },
+    body: JSON.stringify(data),
+    cache: "no-store",
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Failed to update booking: ${res.status} ${text}`)
+  }
+  return res.json()
 }
 
 export async function checkAvailability(params: {
@@ -107,6 +137,85 @@ export async function checkAvailability(params: {
 
   const json = await res.json()
   return json?.data ?? json
+}
+
+export async function getBookingRules() {
+  const res = await fetch(`${BOOKING_SERVICE}/booking-rules`, {
+    headers: BOOKING_HEADERS,
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to load booking rules")
+  const json = await res.json()
+  return (json.data ?? json) as any[]
+}
+
+export async function getBookingRuleById(id: string) {
+  const res = await fetch(`${BOOKING_SERVICE}/booking-rules/${id}`, {
+    headers: BOOKING_HEADERS,
+    cache: "no-store",
+  })
+  if (!res.ok) return null
+  const json = await res.json()
+  return json.data ?? json
+}
+
+export async function getBookingSeries() {
+  const res = await fetch(`${BOOKING_SERVICE}/booking-series`, {
+    headers: BOOKING_HEADERS,
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to load booking series")
+  const json = await res.json()
+  return (json.data ?? json) as any[]
+}
+
+export async function getBookingSeriesById(id: string) {
+  const res = await fetch(`${BOOKING_SERVICE}/booking-series/${id}`, {
+    headers: BOOKING_HEADERS,
+    cache: "no-store",
+  })
+  if (!res.ok) return null
+  const json = await res.json()
+  return json.data ?? json
+}
+
+export async function createBookingSeries(data: Record<string, unknown>) {
+  const res = await fetch(`${BOOKING_SERVICE}/booking-series`, {
+    method: "POST",
+    headers: { ...BOOKING_HEADERS, "content-type": "application/json" },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.message ?? "Failed to create booking series")
+  }
+  return res.json()
+}
+
+export async function cancelBookingSeries(
+  id: string,
+  data: { mode: "all" | "from_date" | "single"; fromDate?: string; bookingId?: string }
+) {
+  const res = await fetch(`${BOOKING_SERVICE}/booking-series/${id}/cancel`, {
+    method: "POST",
+    headers: { ...BOOKING_HEADERS, "content-type": "application/json" },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) throw new Error("Failed to cancel booking series")
+  return res.json()
+}
+
+export async function updateBookingSeries(
+  id: string,
+  data: Record<string, unknown>
+) {
+  const res = await fetch(`${BOOKING_SERVICE}/booking-series/${id}`, {
+    method: "PATCH",
+    headers: { ...BOOKING_HEADERS, "content-type": "application/json" },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) throw new Error("Failed to update booking series")
+  return res.json()
 }
 
 export async function getResources() {
@@ -818,4 +927,73 @@ export async function deleteAvailabilityConfig(id: string) {
     headers: FACILITY_HEADERS,
   })
   if (!res.ok) throw new Error(`Failed to delete availability config: ${res.status}`)
+}
+
+// ─── Blackout Dates ───────────────────────────────────────────────────────────
+
+export async function getBlackoutDates(params?: { venueId?: string; resourceId?: string }) {
+  const search = new URLSearchParams()
+  if (params?.venueId) search.set("venueId", params.venueId)
+  if (params?.resourceId) search.set("resourceId", params.resourceId)
+  const query = search.toString()
+  const url = query
+    ? `${FACILITY_SERVICE}/blackout-dates?${query}`
+    : `${FACILITY_SERVICE}/blackout-dates`
+  const res = await fetch(url, { headers: FACILITY_HEADERS, cache: "no-store" })
+  if (!res.ok) throw new Error(`Failed to load blackout dates: ${res.status}`)
+  const json = await res.json()
+  return (json.data ?? json) as any[]
+}
+
+export async function getBlackoutDateById(id: string) {
+  const res = await fetch(`${FACILITY_SERVICE}/blackout-dates/${id}`, {
+    headers: FACILITY_HEADERS,
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error(`Failed to load blackout date: ${res.status}`)
+  const json = await res.json()
+  return (json.data ?? json) as any
+}
+
+export type CreateBlackoutDateInput = {
+  venueId: string
+  resourceId?: string
+  name: string
+  startDate: string
+  endDate: string
+  recurrenceRule?: string
+}
+
+export async function createBlackoutDate(input: CreateBlackoutDateInput) {
+  const res = await fetch(`${FACILITY_SERVICE}/blackout-dates`, {
+    method: "POST",
+    headers: FACILITY_HEADERS,
+    body: JSON.stringify(input),
+  })
+  if (!res.ok) {
+    const errorText = await res.text()
+    throw new Error(`Failed to create blackout date: ${res.status} ${errorText}`)
+  }
+  return res.json()
+}
+
+export async function updateBlackoutDate(id: string, input: Partial<CreateBlackoutDateInput>) {
+  const res = await fetch(`${FACILITY_SERVICE}/blackout-dates/${id}`, {
+    method: "PATCH",
+    headers: FACILITY_HEADERS,
+    body: JSON.stringify(input),
+  })
+  if (!res.ok) {
+    const errorText = await res.text()
+    throw new Error(`Failed to update blackout date: ${res.status} ${errorText}`)
+  }
+  return res.json()
+}
+
+export async function deleteBlackoutDate(id: string) {
+  const res = await fetch(`${FACILITY_SERVICE}/blackout-dates/${id}`, {
+    method: "DELETE",
+    headers: FACILITY_HEADERS,
+  })
+  if (!res.ok) throw new Error(`Failed to delete blackout date: ${res.status}`)
 }

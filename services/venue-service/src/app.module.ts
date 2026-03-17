@@ -13,6 +13,7 @@ import { BookableUnitsModule } from './bookable-units/bookable-units.module.js'
 import { AddOnsModule } from './add-ons/add-ons.module.js'
 import { ResourceGroupsModule } from './resource-groups/resource-groups.module.js'
 import { AvailabilityConfigsModule } from './availability-configs/availability-configs.module.js'
+import { BlackoutDatesModule } from './blackout-dates/blackout-dates.module.js'
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { AvailabilityConfigsModule } from './availability-configs/availability-c
     BookableUnitsModule,
     AddOnsModule,
     AvailabilityConfigsModule,
+    BlackoutDatesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: TenantContextGuard },

@@ -4,6 +4,8 @@ import { randomBytes } from 'crypto'
 import { Prisma } from '../generated/prisma/index.js'
 import type { CreateBookingDto } from './dto/create-booking.dto.js'
 import type { CreateBookingAddOnDto } from './dto/create-booking-add-on.dto.js'
+import type { PaymentStatus } from './dto/update-payment-status.dto.js'
+import type { UpdateBookingDto } from './dto/update-booking.dto.js'
 
 function generateBookingReference(): string {
   return `BK-${randomBytes(5).toString('hex').toUpperCase()}`
@@ -22,8 +24,10 @@ export interface BookingRow {
   startsAt: Date
   endsAt: Date
   status: string
+  paymentStatus: string
   bookingReference: string
   notes: string | null
+  seriesId: string | null
   cancelledAt: Date | null
   createdAt: Date
   updatedAt: Date
@@ -37,8 +41,25 @@ export interface BookingRow {
 export class BookingsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(tenantId: string, page: number, limit: number) {
+  async list(
+    tenantId: string,
+    page: number,
+    limit: number,
+    filters: { status?: string; fromDate?: string; toDate?: string } = {},
+  ) {
     const offset = (page - 1) * limit
+
+    const statusFilter = filters.status && filters.status !== 'all'
+      ? Prisma.sql`AND b.status = ${filters.status}`
+      : Prisma.empty
+
+    const fromFilter = filters.fromDate
+      ? Prisma.sql`AND b.starts_at >= ${filters.fromDate}::timestamptz`
+      : Prisma.empty
+
+    const toFilter = filters.toDate
+      ? Prisma.sql`AND b.starts_at < ${filters.toDate}::timestamptz`
+      : Prisma.empty
 
     const rows = await this.prisma.read.$queryRaw<Array<BookingRow & { totalCount: number }>>(
       Prisma.sql`
@@ -54,8 +75,10 @@ export class BookingsRepository {
           b.starts_at          AS "startsAt",
           b.ends_at            AS "endsAt",
           b.status,
+          b.payment_status     AS "paymentStatus",
           b.booking_reference  AS "bookingReference",
           b.notes,
+          b.series_id          AS "seriesId",
           b.cancelled_at       AS "cancelledAt",
           b.created_at         AS "createdAt",
           b.updated_at         AS "updatedAt",
@@ -67,6 +90,9 @@ export class BookingsRepository {
         FROM booking.bookings b
         LEFT JOIN customer.customers c ON c.id = b.customer_id
         WHERE b.tenant_id = ${tenantId}::uuid
+        ${statusFilter}
+        ${fromFilter}
+        ${toFilter}
         ORDER BY b.starts_at DESC
         LIMIT ${limit} OFFSET ${offset}
       `,
@@ -92,8 +118,10 @@ export class BookingsRepository {
           b.starts_at          AS "startsAt",
           b.ends_at            AS "endsAt",
           b.status,
+          b.payment_status     AS "paymentStatus",
           b.booking_reference  AS "bookingReference",
           b.notes,
+          b.series_id          AS "seriesId",
           b.cancelled_at       AS "cancelledAt",
           b.created_at         AS "createdAt",
           b.updated_at         AS "updatedAt",
@@ -183,7 +211,7 @@ export class BookingsRepository {
             INSERT INTO booking.bookings (
               tenant_id, organisation_id, venue_id, resource_id,
               bookable_unit_id, customer_id, booking_source,
-              starts_at, ends_at, status, booking_reference, notes
+              starts_at, ends_at, status, payment_status, booking_reference, notes
             ) VALUES (
               ${tenantId}::uuid,
               ${organisationId}::uuid,
@@ -195,6 +223,7 @@ export class BookingsRepository {
               ${dto.startsAt}::timestamptz,
               ${dto.endsAt}::timestamptz,
               'active',
+              ${dto.paymentStatus ?? 'unpaid'},
               ${bookingReference},
               ${dto.notes ?? null}
             )
@@ -210,6 +239,7 @@ export class BookingsRepository {
               starts_at        AS "startsAt",
               ends_at          AS "endsAt",
               status,
+              payment_status   AS "paymentStatus",
               booking_reference AS "bookingReference",
               notes,
               cancelled_at     AS "cancelledAt",
@@ -256,6 +286,72 @@ export class BookingsRepository {
         starts_at        AS "startsAt",
         ends_at          AS "endsAt",
         cancelled_at     AS "cancelledAt",
+        updated_at       AS "updatedAt"
+    `
+    return rows[0] ?? null
+  }
+
+  async updatePaymentStatus(tenantId: string, id: string, paymentStatus: PaymentStatus) {
+    const rows = await this.prisma.write.$queryRaw<BookingRow[]>`
+      UPDATE booking.bookings
+      SET payment_status = ${paymentStatus},
+          updated_at     = now()
+      WHERE tenant_id = ${tenantId}::uuid
+        AND id        = ${id}::uuid
+        AND status   <> 'cancelled'
+      RETURNING
+        id,
+        tenant_id        AS "tenantId",
+        organisation_id  AS "organisationId",
+        venue_id         AS "venueId",
+        resource_id      AS "resourceId",
+        bookable_unit_id AS "bookableUnitId",
+        customer_id      AS "customerId",
+        booking_source   AS "bookingSource",
+        starts_at        AS "startsAt",
+        ends_at          AS "endsAt",
+        status,
+        payment_status   AS "paymentStatus",
+        booking_reference AS "bookingReference",
+        notes,
+        cancelled_at     AS "cancelledAt",
+        created_at       AS "createdAt",
+        updated_at       AS "updatedAt"
+    `
+    return rows[0] ?? null
+  }
+
+  async update(tenantId: string, id: string, dto: UpdateBookingDto): Promise<BookingRow | null> {
+    const rows = await this.prisma.write.$queryRaw<BookingRow[]>`
+      UPDATE booking.bookings
+      SET
+        starts_at      = COALESCE(${dto.startsAt ?? null}::timestamptz,   starts_at),
+        ends_at        = COALESCE(${dto.endsAt ?? null}::timestamptz,     ends_at),
+        notes          = CASE WHEN ${dto.notes !== undefined} THEN ${dto.notes ?? null}      ELSE notes          END,
+        booking_source = CASE WHEN ${dto.bookingSource !== undefined} THEN ${dto.bookingSource ?? null} ELSE booking_source END,
+        customer_id    = CASE WHEN ${dto.customerId !== undefined} THEN ${dto.customerId ?? null}::uuid ELSE customer_id END,
+        updated_at     = now()
+      WHERE tenant_id = ${tenantId}::uuid
+        AND id        = ${id}::uuid
+        AND status   <> 'cancelled'
+      RETURNING
+        id,
+        tenant_id        AS "tenantId",
+        organisation_id  AS "organisationId",
+        venue_id         AS "venueId",
+        resource_id      AS "resourceId",
+        bookable_unit_id AS "bookableUnitId",
+        customer_id      AS "customerId",
+        booking_source   AS "bookingSource",
+        starts_at        AS "startsAt",
+        ends_at          AS "endsAt",
+        status,
+        payment_status   AS "paymentStatus",
+        booking_reference AS "bookingReference",
+        notes,
+        series_id        AS "seriesId",
+        cancelled_at     AS "cancelledAt",
+        created_at       AS "createdAt",
         updated_at       AS "updatedAt"
     `
     return rows[0] ?? null

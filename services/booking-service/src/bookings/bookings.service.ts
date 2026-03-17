@@ -9,6 +9,8 @@ import { BookingsRepository } from './bookings.repository.js'
 import { AvailabilityRepository } from '../availability/availability.repository.js'
 import type { CreateBookingDto } from './dto/create-booking.dto.js'
 import type { CreateBookingAddOnDto } from './dto/create-booking-add-on.dto.js'
+import type { UpdatePaymentStatusDto } from './dto/update-payment-status.dto.js'
+import type { UpdateBookingDto } from './dto/update-booking.dto.js'
 import type { TenantContext } from '../common/decorators/tenant-context.decorator.js'
 
 @Injectable()
@@ -20,8 +22,13 @@ export class BookingsService {
     private readonly availabilityRepo: AvailabilityRepository,
   ) {}
 
-  async list(ctx: TenantContext, page: number, limit: number) {
-    return this.repo.list(ctx.tenantId, page, limit)
+  async list(
+    ctx: TenantContext,
+    page: number,
+    limit: number,
+    filters: { status?: string; fromDate?: string; toDate?: string } = {},
+  ) {
+    return this.repo.list(ctx.tenantId, page, limit, filters)
   }
 
   async getById(ctx: TenantContext, id: string) {
@@ -61,6 +68,20 @@ export class BookingsService {
     return booking
   }
 
+  async update(ctx: TenantContext, id: string, dto: UpdateBookingDto) {
+    if (dto.startsAt && dto.endsAt && new Date(dto.endsAt) <= new Date(dto.startsAt)) {
+      throw new BadRequestException('endsAt must be after startsAt')
+    }
+    const booking = await this.repo.update(ctx.tenantId, id, dto)
+    if (!booking) {
+      const exists = await this.repo.exists(ctx.tenantId, id)
+      if (!exists) throw new NotFoundException('Booking not found')
+      throw new ConflictException('Cannot edit a cancelled booking')
+    }
+    this.logger.log({ id, organisationId: ctx.organisationId }, 'Booking updated')
+    return booking
+  }
+
   async cancel(ctx: TenantContext, id: string) {
     const cancelled = await this.repo.cancel(ctx.tenantId, id)
 
@@ -90,5 +111,21 @@ export class BookingsService {
       'Creating booking add-on',
     )
     return this.repo.createAddOn(bookingId, dto)
+  }
+
+  async updatePaymentStatus(ctx: TenantContext, id: string, dto: UpdatePaymentStatusDto) {
+    const booking = await this.repo.updatePaymentStatus(ctx.tenantId, id, dto.paymentStatus)
+
+    if (!booking) {
+      const exists = await this.repo.exists(ctx.tenantId, id)
+      if (!exists) throw new NotFoundException('Booking not found')
+      throw new ConflictException('Cannot update payment status on a cancelled booking')
+    }
+
+    this.logger.log(
+      { id, paymentStatus: dto.paymentStatus, organisationId: ctx.organisationId },
+      'Booking payment status updated',
+    )
+    return booking
   }
 }

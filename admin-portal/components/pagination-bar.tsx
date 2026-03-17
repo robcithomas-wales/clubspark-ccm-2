@@ -4,13 +4,15 @@ interface PaginationBarProps {
   total: number
   limit: number
   basePath: string
+  extraParams?: Record<string, string>
 }
 
-export function PaginationBar({ page, totalPages, total, limit, basePath }: PaginationBarProps) {
+export function PaginationBar({ page, totalPages, total, limit, basePath, extraParams }: PaginationBarProps) {
   if (totalPages <= 1) return null
 
   function buildUrl(p: number) {
-    return `${basePath}?page=${p}`
+    const qs = new URLSearchParams({ page: String(p), ...extraParams })
+    return `${basePath}?${qs.toString()}`
   }
 
   const from = (page - 1) * limit + 1

@@ -1,7 +1,10 @@
 import Link from "next/link"
+import { Suspense } from "react"
 import { getBookings, getBookableUnits } from "@/lib/api"
 import { PortalLayout } from "@/components/portal-layout"
 import { PaginationBar } from "@/components/pagination-bar"
+import { BookingsFilterBar } from "@/components/bookings-filter-bar"
+import { getPaymentStatusClasses, getPaymentStatusLabel } from "@/lib/payment-status"
 import { CalendarDays, Clock3, ChevronRight, Plus } from "lucide-react"
 
 function formatDate(value?: string | null) {
@@ -163,13 +166,16 @@ function StatCard({
 export default async function BookingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>
+  searchParams: Promise<{ page?: string; status?: string; fromDate?: string; toDate?: string }>
 }) {
   const params = await searchParams
   const page = Math.max(1, Number(params.page) || 1)
+  const status = params.status
+  const fromDate = params.fromDate
+  const toDate = params.toDate
 
   const [bookingsResult, unitsResult] = await Promise.allSettled([
-    getBookings(page),
+    getBookings(page, 25, { status, fromDate, toDate }),
     getBookableUnits(),
   ])
 
@@ -251,13 +257,21 @@ export default async function BookingsPage({
             </div>
           </div>
 
+          <Suspense>
+            <BookingsFilterBar
+              status={status}
+              fromDate={fromDate}
+              toDate={toDate}
+            />
+          </Suspense>
+
           {bookings.length === 0 ? (
             <div className="px-6 py-10 text-sm text-slate-500">
               No bookings found.
             </div>
           ) : (
             <>
-              <div className="hidden grid-cols-9 gap-4 border-b border-slate-200 bg-slate-100 px-6 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 lg:grid">
+              <div className="hidden grid-cols-10 gap-4 border-b border-slate-200 bg-slate-100 px-6 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 lg:grid">
                 <div>Booking</div>
                 <div>Customer</div>
                 <div>Unit</div>
@@ -267,6 +281,7 @@ export default async function BookingsPage({
                 <div className="text-center">Duration</div>
                 <div className="text-center">Source</div>
                 <div className="text-center">Status</div>
+                <div className="text-center">Payment</div>
               </div>
 
               <div className="divide-y divide-slate-200">
@@ -281,7 +296,7 @@ export default async function BookingsPage({
                       href={`/bookings/${booking.id}`}
                       className="block px-6 py-5 transition hover:bg-blue-50/40"
                     >
-                      <div className="grid gap-4 lg:grid-cols-9 lg:items-center">
+                      <div className="grid gap-4 lg:grid-cols-10 lg:items-center">
                         <div className="min-w-0">
                           <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400 lg:hidden">
                             Booking
@@ -389,6 +404,17 @@ export default async function BookingsPage({
                             {booking.status || "unknown"}
                           </span>
                         </div>
+
+                        <div className="text-center">
+                          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400 lg:hidden">
+                            Payment
+                          </div>
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getPaymentStatusClasses(booking.paymentStatus)}`}
+                          >
+                            {getPaymentStatusLabel(booking.paymentStatus)}
+                          </span>
+                        </div>
                       </div>
                     </Link>
                   )
@@ -402,6 +428,11 @@ export default async function BookingsPage({
                   total={pagination.total}
                   limit={pagination.limit}
                   basePath="/bookings"
+                  extraParams={{
+                    ...(status && status !== "all" ? { status } : {}),
+                    ...(fromDate ? { fromDate } : {}),
+                    ...(toDate ? { toDate } : {}),
+                  }}
                 />
               )}
             </>

@@ -1,5 +1,5 @@
 // ClubSpark — Booking Service Prisma Schema
-// Owns: booking.bookings, booking.booking_add_ons
+// Owns: booking.bookings, booking.booking_add_ons, booking.booking_rules
 // Read-only: venue.bookable_units, venue.unit_conflicts (for validation + availability)
 
 generator client {
@@ -16,6 +16,32 @@ datasource db {
 
 // ─── booking schema (owned) ───────────────────────────────────────────────────
 
+model BookingSeries {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  organisationId String?   @map("organisation_id") @db.Uuid
+  venueId        String    @map("venue_id") @db.Uuid
+  resourceId     String    @map("resource_id") @db.Uuid
+  bookableUnitId String    @map("bookable_unit_id") @db.Uuid
+  customerId     String?   @map("customer_id") @db.Uuid
+  bookingSource  String?   @map("booking_source")
+  rrule          String
+  slotStartsAt   String    @map("slot_starts_at")
+  slotEndsAt     String    @map("slot_ends_at")
+  paymentStatus  String    @default("unpaid") @map("payment_status")
+  notes          String?
+  status         String    @default("active")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  bookings Booking[]
+
+  @@map("booking_series")
+  @@schema("booking")
+  @@index([tenantId])
+  @@index([tenantId, status])
+}
+
 model Booking {
   id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId         String    @map("tenant_id") @db.Uuid
@@ -28,12 +54,15 @@ model Booking {
   startsAt         DateTime  @map("starts_at")
   endsAt           DateTime  @map("ends_at")
   status           String    @default("active")
+  paymentStatus    String    @default("unpaid") @map("payment_status")
   bookingReference String    @map("booking_reference")
   notes            String?
   cancelledAt      DateTime? @map("cancelled_at")
+  seriesId         String?   @map("series_id") @db.Uuid
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
+  series BookingSeries? @relation(fields: [seriesId], references: [id])
   addOns BookingAddOn[]
 
   @@map("bookings")
@@ -43,6 +72,7 @@ model Booking {
   @@index([tenantId, bookableUnitId])
   @@index([tenantId, customerId])
   @@index([tenantId, status])
+  @@index([seriesId])
 }
 
 model BookingAddOn {
@@ -63,6 +93,67 @@ model BookingAddOn {
   @@map("booking_add_ons")
   @@schema("booking")
   @@index([bookingId])
+}
+
+model BookingRule {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId             String    @map("tenant_id") @db.Uuid
+  name                 String
+  description          String?
+
+  subjectType          String    @default("everyone") @map("subject_type")
+  subjectRef           String?   @map("subject_ref")
+
+  scopeType            String    @default("organisation") @map("scope_type")
+  scopeId              String?   @map("scope_id") @db.Uuid
+
+  daysOfWeek           Int[]     @map("days_of_week")
+  timeFrom             String?   @map("time_from")
+  timeTo               String?   @map("time_to")
+
+  canBook              Boolean   @default(true) @map("can_book")
+  requiresApproval     Boolean   @default(false) @map("requires_approval")
+
+  advanceDays          Int?      @map("advance_days")
+  minSlotMinutes       Int?      @map("min_slot_minutes")
+  maxSlotMinutes       Int?      @map("max_slot_minutes")
+  bookingPeriodDays    Int?      @map("booking_period_days")
+  maxBookingsPerPeriod Int?      @map("max_bookings_per_period")
+  allowSeries          Boolean   @default(true) @map("allow_series")
+
+  pricePerSlot         Decimal?  @map("price_per_slot") @db.Decimal(10, 2)
+  priceCurrency        String    @default("GBP") @map("price_currency") @db.VarChar(3)
+
+  minParticipants      Int?      @map("min_participants")
+  maxParticipants      Int?      @map("max_participants")
+
+  priority             Int       @default(0)
+  isActive             Boolean   @default(true) @map("is_active")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  purposePrices        BookingRulePurposePrice[]
+
+  @@map("booking_rules")
+  @@schema("booking")
+  @@index([tenantId])
+  @@index([tenantId, isActive])
+  @@index([tenantId, scopeType, scopeId])
+}
+
+model BookingRulePurposePrice {
+  id       String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ruleId   String  @map("rule_id") @db.Uuid
+  purpose  String
+  price    Decimal @db.Decimal(10, 2)
+  currency String  @default("GBP") @db.VarChar(3)
+
+  rule BookingRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@unique([ruleId, purpose])
+  @@map("booking_rule_purpose_prices")
+  @@schema("booking")
+  @@index([ruleId])
 }
 
 // ─── venue schema (read-only — for validation + availability) ─────────────────

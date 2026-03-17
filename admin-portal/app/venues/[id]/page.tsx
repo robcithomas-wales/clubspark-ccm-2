@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { PortalLayout } from "@/components/portal-layout"
-import { getVenues, getResourceGroups, getAvailabilityConfigs } from "@/lib/api"
+import { getVenues, getResourceGroups, getAvailabilityConfigs, getBlackoutDates } from "@/lib/api"
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
@@ -18,9 +18,10 @@ export default async function VenueDetailPage({
     notFound()
   }
 
-  const [groups, configs] = await Promise.all([
+  const [groups, configs, blackouts] = await Promise.all([
     getResourceGroups({ venueId: id }),
     getAvailabilityConfigs({ scopeType: "venue", scopeId: id }),
+    getBlackoutDates({ venueId: id }).catch(() => []),
   ])
 
   return (
@@ -137,6 +138,45 @@ export default async function VenueDetailPage({
                     href={`/availability-configs/${config.id}`}
                     className="text-xs font-medium text-[#1857E0] hover:underline"
                   >
+                    Edit
+                  </Link>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Blackout dates */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Blackout Dates ({(blackouts as any[]).length})
+            </h2>
+            <Link
+              href={`/blackout-dates/new?venueId=${id}`}
+              className="inline-flex h-8 items-center rounded-lg bg-[#1857E0] px-3 text-xs font-medium text-white transition hover:bg-[#1832A8]"
+            >
+              Add blackout
+            </Link>
+          </div>
+
+          {(blackouts as any[]).length === 0 ? (
+            <p className="text-sm text-slate-400">No blackout dates configured for this venue.</p>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {(blackouts as any[]).map((b: any) => (
+                <div key={b.id} className="flex items-center justify-between py-3">
+                  <div>
+                    <div className="text-sm font-medium text-slate-900">{b.name}</div>
+                    <div className="mt-0.5 text-xs text-slate-500">
+                      {new Date(b.startDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                      {new Date(b.startDate).toDateString() !== new Date(b.endDate).toDateString() && (
+                        <> – {new Date(b.endDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</>
+                      )}
+                      {b.recurrenceRule && <> · Recurring</>}
+                    </div>
+                  </div>
+                  <Link href={`/blackout-dates/${b.id}`} className="text-xs font-medium text-[#1857E0] hover:underline">
                     Edit
                   </Link>
                 </div>

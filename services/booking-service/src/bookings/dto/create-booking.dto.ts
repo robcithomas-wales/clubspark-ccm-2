@@ -1,17 +1,21 @@
-import { IsUUID, IsDateString, IsOptional, IsString } from 'class-validator'
+import { IsDateString, IsOptional, IsString, IsNotEmpty, IsIn } from 'class-validator'
+import { PAYMENT_STATUSES } from './update-payment-status.dto.js'
 
 export class CreateBookingDto {
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   venueId!: string
 
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   resourceId!: string
 
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   bookableUnitId!: string
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
   customerId?: string
 
   @IsOptional()
@@ -27,4 +31,8 @@ export class CreateBookingDto {
   @IsOptional()
   @IsString()
   notes?: string
+
+  @IsOptional()
+  @IsIn(PAYMENT_STATUSES)
+  paymentStatus?: string
 }

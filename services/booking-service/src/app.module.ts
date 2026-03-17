@@ -9,6 +9,8 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor.js
 import { HealthModule } from './health/health.module.js'
 import { BookingsModule } from './bookings/bookings.module.js'
 import { AvailabilityModule } from './availability/availability.module.js'
+import { BookingSeriesModule } from './booking-series/booking-series.module.js'
+import { BookingRulesModule } from './booking-rules/booking-rules.module.js'
 
 @Module({
   imports: [
@@ -17,6 +19,8 @@ import { AvailabilityModule } from './availability/availability.module.js'
     HealthModule,
     BookingsModule,
     AvailabilityModule,
+    BookingSeriesModule,
+    BookingRulesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: TenantContextGuard },

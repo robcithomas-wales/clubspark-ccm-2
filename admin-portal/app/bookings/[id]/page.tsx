@@ -6,10 +6,13 @@ import {
   ArrowLeft,
   History,
   FileText,
+  Repeat2,
 } from "lucide-react"
 import { getBookableUnits } from "@/lib/api"
 import { PortalLayout } from "@/components/portal-layout"
 import { CancelBookingButton } from "@/components/cancel-booking-button"
+import { PaymentStatusButton } from "@/components/payment-status-button"
+import { EditBookingPanel } from "@/components/edit-booking-panel"
 
 function formatDate(value?: string | null) {
   if (!value) return "n/a"
@@ -133,6 +136,20 @@ async function getBooking(id: string) {
   return json?.data ?? json
 }
 
+async function getBookingAddOns(id: string) {
+  try {
+    const response = await fetch(`http://localhost:4005/bookings/${id}/add-ons`, {
+      headers: BOOKING_HEADERS,
+      cache: "no-store",
+    })
+    if (!response.ok) return []
+    const json = await response.json()
+    return json?.data ?? json ?? []
+  } catch {
+    return []
+  }
+}
+
 function SummaryCard({
   label,
   value,
@@ -180,9 +197,10 @@ export default async function BookingDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const [booking, units] = await Promise.all([
+  const [booking, units, bookingAddOns] = await Promise.all([
     getBooking(id),
     getBookableUnits(),
+    getBookingAddOns(id),
   ])
 
   if (!booking) {
@@ -218,12 +236,12 @@ export default async function BookingDetailPage({
             value={unit?.name || booking.bookableUnitId}
           />
           <SummaryCard
-            label="Source"
-            value={getSourceLabel(booking.bookingSource)}
+            label="Booking status"
+            value={booking.status || "unknown"}
           />
           <SummaryCard
-            label="Status"
-            value={booking.status || "unknown"}
+            label="Payment"
+            value={booking.paymentStatus || "unpaid"}
           />
         </section>
 
@@ -274,6 +292,21 @@ export default async function BookingDetailPage({
               />
             </div>
 
+            {booking.seriesId && (
+              <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 flex items-center gap-3">
+                <Repeat2 className="h-4 w-4 text-sky-600 shrink-0" />
+                <span className="text-sm text-sky-800">
+                  Part of a recurring series.{" "}
+                  <Link
+                    href={`/booking-series/${booking.seriesId}`}
+                    className="font-semibold underline underline-offset-2 hover:text-sky-900"
+                  >
+                    View series →
+                  </Link>
+                </span>
+              </div>
+            )}
+
             <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
                 <div className="flex items-center gap-2">
@@ -306,6 +339,50 @@ export default async function BookingDetailPage({
                   {booking.id}
                 </div>
               </div>
+            </div>
+
+            {bookingAddOns.length > 0 && (
+              <div className="border-t border-slate-200 pt-6">
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  Product add-ons
+                </div>
+                <div className="mt-3 divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                  {bookingAddOns.map((addOn: any) => (
+                    <div key={addOn.id} className="flex items-center justify-between px-4 py-3">
+                      <div>
+                        <div className="text-sm font-medium text-slate-900">
+                          {addOn.addOnId}
+                        </div>
+                        <div className="mt-0.5 text-xs text-slate-500">
+                          {addOn.startsAt ? formatTime(addOn.startsAt) : ""}{addOn.endsAt ? ` – ${formatTime(addOn.endsAt)}` : ""}
+                          {addOn.quantity && addOn.quantity > 1 ? ` · qty ${addOn.quantity}` : ""}
+                        </div>
+                      </div>
+                      {addOn.price != null && (
+                        <div className="text-sm font-semibold text-slate-700">
+                          {addOn.currency ? `${addOn.currency} ` : ""}{addOn.price}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <EditBookingPanel
+              bookingId={booking.id}
+              status={booking.status}
+              startsAt={booking.startsAt}
+              endsAt={booking.endsAt}
+              notes={booking.notes}
+              bookingSource={booking.bookingSource}
+            />
+
+            <div className="border-t border-slate-200 pt-6">
+              <PaymentStatusButton
+                bookingId={booking.id}
+                paymentStatus={booking.paymentStatus ?? "unpaid"}
+              />
             </div>
 
             <div className="border-t border-slate-200 pt-6 xl:max-w-md">

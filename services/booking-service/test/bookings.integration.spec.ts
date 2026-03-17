@@ -16,6 +16,8 @@ import {
   SLOT_OVERLAP_END,
   SLOT_ADJACENT_START,
   SLOT_ADJACENT_END,
+  SLOT_NEXT_DAY_START,
+  SLOT_NEXT_DAY_END,
 } from './fixtures/index.js'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -230,5 +232,126 @@ describe('Bookings — integration', () => {
 
     expect(res.status).toBe(200)
     expect(res.body.data).toHaveLength(0)
+  })
+
+  it('filters bookings by status=active, excluding cancelled ones', async () => {
+    const created = await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
+    const id = created.body.data.id
+    await request.post(`/bookings/${id}/cancel`).set(HEADERS)
+
+    await request.post('/bookings').set(JSON_HEADERS).send(
+      bookingPayload({ startsAt: SLOT_ADJACENT_START, endsAt: SLOT_ADJACENT_END }),
+    )
+
+    const res = await request.get('/bookings?status=active').set(HEADERS)
+    expect(res.status).toBe(200)
+    expect(res.body.data).toHaveLength(1)
+    expect(res.body.data[0].status).toBe('active')
+  })
+
+  it('filters bookings by fromDate and toDate', async () => {
+    await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
+    await request.post('/bookings').set(JSON_HEADERS).send(
+      bookingPayload({ startsAt: SLOT_NEXT_DAY_START, endsAt: SLOT_NEXT_DAY_END }),
+    )
+
+    // Only request bookings on 2099-06-01
+    const res = await request
+      .get('/bookings?fromDate=2099-06-01&toDate=2099-06-02')
+      .set(HEADERS)
+
+    expect(res.status).toBe(200)
+    expect(res.body.data).toHaveLength(1)
+    expect(res.body.data[0].startsAt).toMatch(/^2099-06-01/)
+  })
+
+  // ── Update ────────────────────────────────────────────────────────────────
+
+  it('updates booking notes and returns the updated booking', async () => {
+    const created = await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
+    const id = created.body.data.id
+
+    const res = await request
+      .patch(`/bookings/${id}`)
+      .set(JSON_HEADERS)
+      .send({ notes: 'Updated notes' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.notes).toBe('Updated notes')
+  })
+
+  it('updates booking time window', async () => {
+    const created = await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
+    const id = created.body.data.id
+
+    const res = await request
+      .patch(`/bookings/${id}`)
+      .set(JSON_HEADERS)
+      .send({ startsAt: SLOT_NEXT_DAY_START, endsAt: SLOT_NEXT_DAY_END })
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.startsAt).toMatch(/^2099-06-02/)
+  })
+
+  it('returns 400 when endsAt is before startsAt on update', async () => {
+    const created = await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
+    const id = created.body.data.id
+
+    const res = await request
+      .patch(`/bookings/${id}`)
+      .set(JSON_HEADERS)
+      .send({ startsAt: SLOT_END, endsAt: SLOT_START })
+
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 409 when updating a cancelled booking', async () => {
+    const created = await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
+    const id = created.body.data.id
+    await request.post(`/bookings/${id}/cancel`).set(HEADERS)
+
+    const res = await request
+      .patch(`/bookings/${id}`)
+      .set(JSON_HEADERS)
+      .send({ notes: 'Should not work' })
+
+    expect(res.status).toBe(409)
+  })
+
+  it('returns 404 when updating a non-existent booking', async () => {
+    const res = await request
+      .patch(`/bookings/${TEST_NONEXISTENT_ID}`)
+      .set(JSON_HEADERS)
+      .send({ notes: 'Ghost booking' })
+
+    expect(res.status).toBe(404)
+  })
+
+  // ── Payment status ────────────────────────────────────────────────────────
+
+  it('updates payment status to paid', async () => {
+    const created = await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
+    const id = created.body.data.id
+
+    const res = await request
+      .patch(`/bookings/${id}/payment-status`)
+      .set(JSON_HEADERS)
+      .send({ paymentStatus: 'paid' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.paymentStatus).toBe('paid')
+  })
+
+  it('returns 409 when updating payment status on a cancelled booking', async () => {
+    const created = await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
+    const id = created.body.data.id
+    await request.post(`/bookings/${id}/cancel`).set(HEADERS)
+
+    const res = await request
+      .patch(`/bookings/${id}/payment-status`)
+      .set(JSON_HEADERS)
+      .send({ paymentStatus: 'paid' })
+
+    expect(res.status).toBe(409)
   })
 })

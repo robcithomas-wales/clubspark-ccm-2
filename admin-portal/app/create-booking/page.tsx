@@ -1,9 +1,12 @@
 import { PortalLayout } from "@/components/portal-layout"
 import { CreateBookingForm } from "@/components/create-booking-form"
-import { getBookableUnits } from "@/lib/api"
+import { getBookableUnits, getAddOnServices } from "@/lib/api"
 
 export default async function CreateBookingPage() {
-  const units = await getBookableUnits()
+  const [units, addOns] = await Promise.all([
+    getBookableUnits(),
+    getAddOnServices().catch(() => []),
+  ])
 
   return (
     <PortalLayout
@@ -12,7 +15,7 @@ export default async function CreateBookingPage() {
     >
       <div>
         <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-          <CreateBookingForm units={units} />
+          <CreateBookingForm units={units} addOns={addOns} />
         </div>
       </div>
     </PortalLayout>

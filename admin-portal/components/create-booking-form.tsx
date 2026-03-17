@@ -24,8 +24,18 @@ type Customer = {
   phone?: string | null
 }
 
+type AddOn = {
+  id: string
+  name: string
+  description?: string | null
+  price?: number | null
+  currency?: string | null
+  addOnType?: string | null
+}
+
 type CreateBookingFormProps = {
   units: BookableUnit[]
+  addOns?: AddOn[]
 }
 
 const tenantId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
@@ -92,7 +102,7 @@ function matchesCustomer(customer: Customer, query: string) {
   )
 }
 
-export function CreateBookingForm({ units }: CreateBookingFormProps) {
+export function CreateBookingForm({ units, addOns = [] }: CreateBookingFormProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -100,6 +110,7 @@ export function CreateBookingForm({ units }: CreateBookingFormProps) {
   const initialStart = searchParams.get("start") || ""
   const initialEnd = searchParams.get("end") || ""
   const initialCustomerId = searchParams.get("customerId") || ""
+  const initialRecurring = searchParams.get("recurring") === "1"
 
   const [bookableUnitId, setBookableUnitId] = React.useState(initialUnit)
   const [startsAt, setStartsAt] = React.useState(
@@ -112,7 +123,11 @@ export function CreateBookingForm({ units }: CreateBookingFormProps) {
   const [customerSearch, setCustomerSearch] = React.useState("")
   const [customers, setCustomers] = React.useState<Customer[]>([])
   const [bookingSource, setBookingSource] = React.useState("admin")
+  const [paymentStatus, setPaymentStatus] = React.useState("unpaid")
   const [notes, setNotes] = React.useState("")
+  const [selectedAddOnIds, setSelectedAddOnIds] = React.useState<Set<string>>(new Set())
+  const [isRecurring, setIsRecurring] = React.useState(initialRecurring)
+  const [rrule, setRrule] = React.useState("FREQ=WEEKLY;COUNT=10")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [isLoadingCustomers, setIsLoadingCustomers] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
@@ -230,22 +245,40 @@ export function CreateBookingForm({ units }: CreateBookingFormProps) {
     setIsSubmitting(true)
 
     try {
+      const commonPayload = {
+        venueId: selectedVenueId,
+        resourceId: selectedResourceId,
+        bookableUnitId: selectedUnit.id,
+        customerId: selectedCustomerId || null,
+        bookingSource,
+        paymentStatus,
+        startsAt: startsAtIso,
+        endsAt: endsAtIso,
+        notes: notes.trim() || null,
+      }
+
+      if (isRecurring) {
+        const response = await fetch("/api/booking-series", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...commonPayload, rrule }),
+        })
+        const result = await response.json().catch(() => null)
+        if (!response.ok) {
+          setError(result?.message ?? result?.error ?? "Failed to create recurring booking.")
+          return
+        }
+        const seriesId = result?.data?.series?.id
+        setSuccessMessage("Recurring booking series created.")
+        router.push(seriesId ? `/booking-series/${seriesId}` : "/booking-series")
+        router.refresh()
+        return
+      }
+
       const response = await fetch("/api/bookings", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          tenantId: selectedTenantId,
-          venueId: selectedVenueId,
-          resourceId: selectedResourceId,
-          bookableUnitId: selectedUnit.id,
-          customerId: selectedCustomerId || null,
-          bookingSource,
-          startsAt: startsAtIso,
-          endsAt: endsAtIso,
-          notes: notes.trim() || null,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId: selectedTenantId, ...commonPayload }),
       })
 
       const result = await response.json().catch(() => null)
@@ -267,6 +300,24 @@ export function CreateBookingForm({ units }: CreateBookingFormProps) {
           setError("Failed to create booking.")
         }
         return
+      }
+
+      const bookingId = result?.data?.id
+      if (bookingId && selectedAddOnIds.size > 0) {
+        await Promise.allSettled(
+          Array.from(selectedAddOnIds).map((addOnId) =>
+            fetch(`/api/bookings/${bookingId}/add-ons`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                addOnId,
+                startsAt: startsAtIso,
+                endsAt: endsAtIso,
+                quantity: 1,
+              }),
+            })
+          )
+        )
       }
 
       setSuccessMessage("Booking created successfully.")
@@ -579,6 +630,55 @@ export function CreateBookingForm({ units }: CreateBookingFormProps) {
       </section>
 
       <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Recurrence
+            </div>
+            <h3 className="mt-1 text-lg font-semibold text-slate-900">
+              Recurring booking
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsRecurring((v) => !v)}
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${isRecurring ? "bg-[#1832A8]" : "bg-slate-200"}`}
+            role="switch"
+            aria-checked={isRecurring}
+          >
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition duration-200 ${isRecurring ? "translate-x-5" : "translate-x-0"}`}
+            />
+          </button>
+        </div>
+
+        {isRecurring && (
+          <div className="space-y-3">
+            <div>
+              <label htmlFor="rrule" className="mb-2 block text-sm font-medium text-slate-700">
+                Recurrence rule (RRULE)
+              </label>
+              <input
+                id="rrule"
+                type="text"
+                value={rrule}
+                onChange={(e) => setRrule(e.target.value)}
+                className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none font-mono"
+                placeholder="FREQ=WEEKLY;COUNT=10"
+              />
+            </div>
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 space-y-1">
+              <div className="font-semibold">RRULE examples</div>
+              <div><code>FREQ=WEEKLY;COUNT=10</code> — weekly for 10 weeks</div>
+              <div><code>FREQ=WEEKLY;BYDAY=MO,WE,FR;COUNT=12</code> — Mon/Wed/Fri for 4 weeks</div>
+              <div><code>FREQ=MONTHLY;BYMONTHDAY=1;COUNT=6</code> — 1st of month for 6 months</div>
+              <div><code>FREQ=WEEKLY;UNTIL=20261231T000000Z</code> — weekly until 31 Dec 2026</div>
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-4">
         <div>
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
             Booking context
@@ -588,7 +688,7 @@ export function CreateBookingForm({ units }: CreateBookingFormProps) {
           </h3>
         </div>
 
-        <div className="grid gap-4">
+        <div className="grid gap-4 md:grid-cols-2">
           <div>
             <label
               htmlFor="bookingSource"
@@ -611,22 +711,98 @@ export function CreateBookingForm({ units }: CreateBookingFormProps) {
 
           <div>
             <label
-              htmlFor="notes"
+              htmlFor="paymentStatus"
               className="mb-2 block text-sm font-medium text-slate-700"
             >
-              Notes
+              Payment status
             </label>
-            <textarea
-              id="notes"
-              value={notes}
-              onChange={(event) => setNotes(event.target.value)}
-              rows={4}
-              placeholder="Add any useful booking notes"
-              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400"
-            />
+            <select
+              id="paymentStatus"
+              value={paymentStatus}
+              onChange={(event) => setPaymentStatus(event.target.value)}
+              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none"
+            >
+              <option value="unpaid">Unpaid</option>
+              <option value="paid">Paid (offline)</option>
+              <option value="free">Free</option>
+              <option value="pending">Send payment request</option>
+            </select>
           </div>
         </div>
+
+        <div>
+          <label
+            htmlFor="notes"
+            className="mb-2 block text-sm font-medium text-slate-700"
+          >
+            Notes
+          </label>
+          <textarea
+            id="notes"
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+            rows={4}
+            placeholder="Add any useful booking notes"
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400"
+          />
+        </div>
       </section>
+
+      {addOns.length > 0 && (
+        <section className="space-y-4">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Extras
+            </div>
+            <h3 className="mt-1 text-lg font-semibold text-slate-900">
+              Product add-ons
+            </h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Optionally attach product add-ons to this booking.
+            </p>
+          </div>
+
+          <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            {addOns.map((addOn) => {
+              const checked = selectedAddOnIds.has(addOn.id)
+              return (
+                <label
+                  key={addOn.id}
+                  className="flex cursor-pointer items-center gap-4 px-4 py-3 transition hover:bg-slate-50"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => {
+                      setSelectedAddOnIds((prev) => {
+                        const next = new Set(prev)
+                        if (next.has(addOn.id)) {
+                          next.delete(addOn.id)
+                        } else {
+                          next.add(addOn.id)
+                        }
+                        return next
+                      })
+                    }}
+                    className="h-4 w-4 rounded border-slate-300 text-[#1857E0]"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-slate-900">{addOn.name}</div>
+                    {addOn.description && (
+                      <div className="mt-0.5 text-xs text-slate-500">{addOn.description}</div>
+                    )}
+                  </div>
+                  {addOn.price != null && (
+                    <div className="shrink-0 text-sm font-semibold text-slate-700">
+                      {addOn.currency ? `${addOn.currency} ` : ""}{addOn.price}
+                    </div>
+                  )}
+                </label>
+              )
+            })}
+          </div>
+        </section>
+      )}
 
       {error && (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
@@ -646,7 +822,7 @@ export function CreateBookingForm({ units }: CreateBookingFormProps) {
           disabled={isSubmitting}
           className="inline-flex h-11 items-center justify-center rounded-2xl bg-[#1832A8] px-5 text-sm font-semibold text-white transition hover:bg-[#142a8c] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isSubmitting ? "Creating booking..." : "Create booking"}
+          {isSubmitting ? (isRecurring ? "Creating series..." : "Creating booking...") : (isRecurring ? "Create recurring series" : "Create booking")}
         </button>
 
         <button

@@ -22,3 +22,7 @@ export const SLOT_OVERLAP_END   = '2099-06-01T11:30:00Z'
 /** Adjacent (non-overlapping) slot — starts exactly when the first ends */
 export const SLOT_ADJACENT_START = '2099-06-01T11:00:00Z'
 export const SLOT_ADJACENT_END   = '2099-06-01T12:00:00Z'
+
+/** A slot on the following day — used for multi-booking filter tests */
+export const SLOT_NEXT_DAY_START = '2099-06-02T10:00:00Z'
+export const SLOT_NEXT_DAY_END   = '2099-06-02T11:00:00Z'

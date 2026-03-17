@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Param,
   Body,
   Query,
@@ -12,6 +13,8 @@ import { ApiTags, ApiSecurity, ApiQuery } from '@nestjs/swagger'
 import { BookingsService } from './bookings.service.js'
 import { CreateBookingDto } from './dto/create-booking.dto.js'
 import { CreateBookingAddOnDto } from './dto/create-booking-add-on.dto.js'
+import { UpdatePaymentStatusDto } from './dto/update-payment-status.dto.js'
+import { UpdateBookingDto } from './dto/update-booking.dto.js'
 import { TenantCtx, type TenantContext } from '../common/decorators/tenant-context.decorator.js'
 
 @ApiTags('bookings')
@@ -23,12 +26,18 @@ export class BookingsController {
   @Get()
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'status', required: false, type: String })
+  @ApiQuery({ name: 'fromDate', required: false, type: String })
+  @ApiQuery({ name: 'toDate', required: false, type: String })
   async list(
     @TenantCtx() ctx: TenantContext,
     @Query('page') page = 1,
     @Query('limit') limit = 25,
+    @Query('status') status?: string,
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string,
   ) {
-    const result = await this.service.list(ctx, Number(page), Number(limit))
+    const result = await this.service.list(ctx, Number(page), Number(limit), { status, fromDate, toDate })
     return {
       data: result.rows,
       pagination: {
@@ -50,6 +59,28 @@ export class BookingsController {
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() dto: CreateBookingDto, @TenantCtx() ctx: TenantContext) {
     const booking = await this.service.create(ctx, dto)
+    return { data: booking }
+  }
+
+  @Patch(':id/payment-status')
+  @HttpCode(HttpStatus.OK)
+  async updatePaymentStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdatePaymentStatusDto,
+    @TenantCtx() ctx: TenantContext,
+  ) {
+    const booking = await this.service.updatePaymentStatus(ctx, id, dto)
+    return { data: booking }
+  }
+
+  @Patch(':id')
+  @HttpCode(HttpStatus.OK)
+  async update(
+    @Param('id') id: string,
+    @Body() dto: UpdateBookingDto,
+    @TenantCtx() ctx: TenantContext,
+  ) {
+    const booking = await this.service.update(ctx, id, dto)
     return { data: booking }
   }
 
