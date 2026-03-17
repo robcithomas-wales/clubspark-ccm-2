@@ -3,6 +3,7 @@
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
+import { useState, useEffect } from "react"
 import {
   Bell,
   CalendarDays,
@@ -74,6 +75,45 @@ export function PortalLayout({
 }) {
   const pathname = usePathname()
 
+  // Initialise open groups: any group whose child matches the current path starts open
+  const defaultOpen = () => {
+    const open: Record<string, boolean> = {}
+    for (const section of navSections) {
+      for (const item of section.items) {
+        if ("children" in item && item.children) {
+          const active = item.children.some(
+            (c) => pathname === c.href || pathname.startsWith(c.href + "/")
+          )
+          if (active) open[item.label] = true
+        }
+      }
+    }
+    return open
+  }
+
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(defaultOpen)
+
+  // Re-evaluate when pathname changes (e.g. navigation opens the right group)
+  useEffect(() => {
+    setOpenGroups((prev) => {
+      const next = { ...prev }
+      for (const section of navSections) {
+        for (const item of section.items) {
+          if ("children" in item && item.children) {
+            const active = item.children.some(
+              (c) => pathname === c.href || pathname.startsWith(c.href + "/")
+            )
+            if (active) next[item.label] = true
+          }
+        }
+      }
+      return next
+    })
+  }, [pathname])
+
+  const toggleGroup = (label: string) =>
+    setOpenGroups((prev) => ({ ...prev, [label]: !prev[label] }))
+
   return (
     <div className="page-shell flex min-h-screen text-slate-900">
       <aside className="hidden w-[280px] shrink-0 border-r border-white/10 bg-[#0c1738] text-white lg:flex lg:flex-col" style={{background: "linear-gradient(180deg, #0c1738 0%, #0F1B3D 100%)"}}>
@@ -116,9 +156,12 @@ export function PortalLayout({
                     isParentActive
 
                   if ("children" in item && item.children) {
+                    const isOpen = !!openGroups[item.label]
                     return (
                       <div key={item.label}>
-                        <div
+                        <button
+                          type="button"
+                          onClick={() => toggleGroup(item.label)}
                           className={[
                             "group flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium transition-all duration-150",
                             active
@@ -133,31 +176,38 @@ export function PortalLayout({
                             ].join(" ")}
                           />
                           <span className="flex-1">{item.label}</span>
-                          <ChevronDown className="h-3.5 w-3.5 opacity-60" />
-                        </div>
+                          <ChevronDown
+                            className={[
+                              "h-3.5 w-3.5 opacity-60 transition-transform duration-200",
+                              isOpen ? "rotate-180" : "",
+                            ].join(" ")}
+                          />
+                        </button>
 
-                        <div className="ml-6 mt-1 space-y-0.5">
-                          {item.children.map((child) => {
-                            const childActive =
-                              pathname === child.href ||
-                              (child.href !== "/" && pathname.startsWith(child.href))
+                        {isOpen && (
+                          <div className="ml-6 mt-1 space-y-0.5">
+                            {item.children.map((child) => {
+                              const childActive =
+                                pathname === child.href ||
+                                (child.href !== "/" && pathname.startsWith(child.href))
 
-                            return (
-                              <Link
-                                key={child.href}
-                                href={child.href}
-                                className={[
-                                  "block rounded-lg px-3 py-2 text-sm transition-all duration-150",
-                                  childActive
-                                    ? "bg-[#1857E0] text-white"
-                                    : "text-[#A9BDD5] hover:bg-white/10 hover:text-white",
-                                ].join(" ")}
-                              >
-                                {child.label}
-                              </Link>
-                            )
-                          })}
-                        </div>
+                              return (
+                                <Link
+                                  key={child.href}
+                                  href={child.href}
+                                  className={[
+                                    "block rounded-lg px-3 py-2 text-sm transition-all duration-150",
+                                    childActive
+                                      ? "bg-[#1857E0] text-white"
+                                      : "text-[#A9BDD5] hover:bg-white/10 hover:text-white",
+                                  ].join(" ")}
+                                >
+                                  {child.label}
+                                </Link>
+                              )
+                            })}
+                          </div>
+                        )}
                       </div>
                     )
                   }
