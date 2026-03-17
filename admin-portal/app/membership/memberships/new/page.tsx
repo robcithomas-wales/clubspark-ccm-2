@@ -46,9 +46,10 @@ async function createMembershipAction(formData: FormData) {
 
 export default async function NewMembershipPage() {
   const plansResponse = await getMembershipPlans()
-  const customers = await getCustomers()
+  const customersResponse = await getCustomers()
 
   const plans = plansResponse.data || []
+  const customers = customersResponse.data || []
 
   return (
     <PortalLayout

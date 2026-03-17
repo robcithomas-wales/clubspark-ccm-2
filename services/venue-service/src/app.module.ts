@@ -11,6 +11,8 @@ import { VenuesModule } from './venues/venues.module.js'
 import { ResourcesModule } from './resources/resources.module.js'
 import { BookableUnitsModule } from './bookable-units/bookable-units.module.js'
 import { AddOnsModule } from './add-ons/add-ons.module.js'
+import { ResourceGroupsModule } from './resource-groups/resource-groups.module.js'
+import { AvailabilityConfigsModule } from './availability-configs/availability-configs.module.js'
 
 @Module({
   imports: [
@@ -19,8 +21,10 @@ import { AddOnsModule } from './add-ons/add-ons.module.js'
     HealthModule,
     VenuesModule,
     ResourcesModule,
+    ResourceGroupsModule,
     BookableUnitsModule,
     AddOnsModule,
+    AvailabilityConfigsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: TenantContextGuard },

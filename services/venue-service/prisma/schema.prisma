@@ -1,5 +1,5 @@
 // ClubSpark — Venue Service Prisma Schema
-// Owns the venue schema: venues, resources, bookable_units, unit_conflicts, add_ons
+// Owns the venue schema: venues, resources, resource_groups, bookable_units, unit_conflicts, add_ons, availability_configs
 
 generator client {
   provider        = "prisma-client-js"
@@ -21,30 +21,64 @@ model Venue {
   city      String?
   country   String  @default("GB")
 
-  resources Resource[]
-  units     BookableUnit[]
+  resources      Resource[]
+  units          BookableUnit[]
+  resourceGroups ResourceGroup[]
 
   @@map("venues")
   @@schema("venue")
   @@index([tenantId])
 }
 
-model Resource {
-  id           String  @id @db.Uuid
-  tenantId     String  @map("tenant_id") @db.Uuid
-  venueId      String  @map("venue_id") @db.Uuid
-  name         String
-  resourceType String  @map("resource_type")
-  sport        String?
-  isActive     Boolean @default(true) @map("is_active")
+model ResourceGroup {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  venueId     String   @map("venue_id") @db.Uuid
+  name        String
+  sport       String?
+  description String?
+  colour      String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
-  venue Venue          @relation(fields: [venueId], references: [id])
-  units BookableUnit[]
+  venue     Venue      @relation(fields: [venueId], references: [id])
+  resources Resource[]
+
+  @@map("resource_groups")
+  @@schema("venue")
+  @@index([tenantId])
+  @@index([venueId])
+}
+
+model Resource {
+  id               String   @id @db.Uuid
+  tenantId         String   @map("tenant_id") @db.Uuid
+  venueId          String   @map("venue_id") @db.Uuid
+  groupId          String?  @map("group_id") @db.Uuid
+  name             String
+  resourceType     String   @map("resource_type")
+  sport            String?
+  surface          String?
+  isIndoor         Boolean? @map("is_indoor")
+  hasLighting      Boolean? @map("has_lighting")
+  bookingPurposes  String[] @default([]) @map("booking_purposes")
+  description      String?
+  colour           String?
+  publicAttributes Json     @default("{}") @map("public_attributes")
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  venue  Venue          @relation(fields: [venueId], references: [id])
+  group  ResourceGroup? @relation(fields: [groupId], references: [id])
+  units  BookableUnit[]
 
   @@map("resources")
   @@schema("venue")
   @@index([tenantId])
   @@index([venueId])
+  @@index([groupId])
 }
 
 model BookableUnit {
@@ -74,10 +108,10 @@ model BookableUnit {
 }
 
 model UnitConflict {
-  unitId           String @map("unit_id") @db.Uuid
+  unitId            String @map("unit_id") @db.Uuid
   conflictingUnitId String @map("conflicting_unit_id") @db.Uuid
 
-  unit           BookableUnit @relation("UnitConflicts", fields: [unitId], references: [id])
+  unit            BookableUnit @relation("UnitConflicts", fields: [unitId], references: [id])
   conflictingUnit BookableUnit @relation("ConflictingUnit", fields: [conflictingUnitId], references: [id])
 
   @@id([unitId, conflictingUnitId])
@@ -109,4 +143,25 @@ model AddOn {
   @@index([tenantId])
   @@index([tenantId, venueId])
   @@index([tenantId, status])
+}
+
+model AvailabilityConfig {
+  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId               String   @map("tenant_id") @db.Uuid
+  scopeType              String   @map("scope_type")
+  scopeId                String   @map("scope_id") @db.Uuid
+  dayOfWeek              Int?     @map("day_of_week")
+  opensAt                String?  @map("opens_at")
+  closesAt               String?  @map("closes_at")
+  slotDurationMinutes    Int?     @map("slot_duration_minutes")
+  bookingIntervalMinutes Int?     @map("booking_interval_minutes")
+  newDayReleaseTime      String?  @map("new_day_release_time")
+  isActive               Boolean  @default(true) @map("is_active")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  @@map("availability_configs")
+  @@schema("venue")
+  @@index([tenantId])
+  @@index([tenantId, scopeType, scopeId])
 }

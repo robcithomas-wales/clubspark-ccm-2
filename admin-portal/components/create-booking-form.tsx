@@ -143,7 +143,8 @@ export function CreateBookingForm({ units }: CreateBookingFormProps) {
         }
 
         if (isMounted) {
-          setCustomers(Array.isArray(data) ? data : [])
+          const list = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : [])
+          setCustomers(list)
         }
       } catch {
         if (isMounted) {
