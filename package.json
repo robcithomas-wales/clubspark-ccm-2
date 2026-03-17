@@ -4,6 +4,7 @@
   "private": true,
   "workspaces": [
     "admin-portal",
+    "e2e",
     "services/*"
   ],
   "scripts": {
