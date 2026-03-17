@@ -12,6 +12,7 @@ import {
   CreditCard,
   LayoutDashboard,
   Layers,
+  MapPin,
   Search,
   Settings,
   ShieldCheck,
@@ -44,6 +45,7 @@ const navSections = [
     label: "Venue Setup",
     items: [
       { label: "Facilities", href: "/facilities", icon: Building2 },
+      { label: "Venues", href: "/venues", icon: MapPin },
       {
         label: "Resources",
         icon: Layers,
