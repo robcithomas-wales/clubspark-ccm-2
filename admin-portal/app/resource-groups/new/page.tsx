@@ -161,7 +161,7 @@ export default async function NewResourceGroupPage({
             </button>
             <a
               href="/resource-groups"
-              className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              className="inline-flex items-center rounded-xl border border-[#1857E0] bg-white px-5 py-2.5 text-sm font-medium text-[#1857E0] transition hover:bg-blue-50"
             >
               Cancel
             </a>

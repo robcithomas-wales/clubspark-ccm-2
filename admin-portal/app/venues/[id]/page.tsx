@@ -154,13 +154,13 @@ export default async function VenueDetailPage({
           </Link>
           <Link
             href={`/resource-groups/new?venueId=${encodeURIComponent(venue.id)}`}
-            className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            className="inline-flex h-11 items-center justify-center rounded-xl border border-[#1857E0] bg-white px-5 text-sm font-medium text-[#1857E0] transition hover:bg-blue-50"
           >
             Add resource group
           </Link>
           <Link
             href="/facilities"
-            className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            className="inline-flex h-11 items-center justify-center rounded-xl border border-[#1857E0] bg-white px-5 text-sm font-medium text-[#1857E0] transition hover:bg-blue-50"
           >
             Back to facilities
           </Link>

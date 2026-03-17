@@ -151,7 +151,7 @@ export default async function ResourceGroupDetailPage({
         <div className="flex gap-3">
           <Link
             href="/resource-groups"
-            className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            className="inline-flex h-11 items-center justify-center rounded-xl border border-[#1857E0] bg-white px-5 text-sm font-medium text-[#1857E0] transition hover:bg-blue-50"
           >
             Back to groups
           </Link>
