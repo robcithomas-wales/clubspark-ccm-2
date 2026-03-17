@@ -1,7 +1,7 @@
 import {
   IsString,
   IsOptional,
-  IsUUID,
+  IsNotEmpty,
   IsInt,
   Min,
   Max,
@@ -14,7 +14,8 @@ export class CreateAvailabilityConfigDto {
   @IsIn(['venue', 'resource_group', 'resource'])
   scopeType!: 'venue' | 'resource_group' | 'resource'
 
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   scopeId!: string
 
   /** 0 = Sunday … 6 = Saturday. Omit for a rule that applies every day. */

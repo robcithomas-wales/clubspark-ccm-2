@@ -1,7 +1,6 @@
 import {
   IsString,
   IsOptional,
-  IsUUID,
   IsNotEmpty,
   IsBoolean,
   IsArray,
@@ -9,7 +8,7 @@ import {
 
 export class UpdateResourceDto {
   @IsOptional()
-  @IsUUID()
+  @IsString()
   groupId?: string | null
 
   @IsOptional()

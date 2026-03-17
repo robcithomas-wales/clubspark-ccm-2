@@ -1,18 +1,18 @@
 import {
   IsString,
   IsOptional,
-  IsUUID,
   IsNotEmpty,
   IsBoolean,
   IsArray,
 } from 'class-validator'
 
 export class CreateResourceDto {
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   venueId!: string
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
   groupId?: string
 
   @IsString()

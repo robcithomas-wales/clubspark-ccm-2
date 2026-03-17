@@ -2,7 +2,6 @@ import {
   IsString,
   IsNotEmpty,
   IsOptional,
-  IsUUID,
   IsNumber,
   IsBoolean,
   IsInt,
@@ -10,10 +9,12 @@ import {
 } from 'class-validator'
 
 export class CreateBookableUnitDto {
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   venueId!: string
 
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   resourceId!: string
 
   @IsString()
@@ -43,6 +44,6 @@ export class CreateBookableUnitDto {
   isOptionalExtra?: boolean
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
   parentUnitId?: string
 }

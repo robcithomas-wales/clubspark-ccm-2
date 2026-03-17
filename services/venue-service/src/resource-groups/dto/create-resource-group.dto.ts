@@ -1,7 +1,8 @@
-import { IsString, IsOptional, IsUUID, IsNotEmpty, IsInt, Min } from 'class-validator'
+import { IsString, IsOptional, IsNotEmpty, IsInt, Min } from 'class-validator'
 
 export class CreateResourceGroupDto {
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   venueId!: string
 
   @IsString()

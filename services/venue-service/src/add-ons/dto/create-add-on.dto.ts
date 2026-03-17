@@ -2,7 +2,6 @@ import {
   IsString,
   IsNotEmpty,
   IsOptional,
-  IsUUID,
   IsNumber,
   IsArray,
   IsEnum,
@@ -38,7 +37,7 @@ export enum AddOnInventoryMode {
 
 export class CreateAddOnDto {
   @IsOptional()
-  @IsUUID()
+  @IsString()
   venueId?: string
 
   @IsString()
