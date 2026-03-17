@@ -1,0 +1,37 @@
+{
+  "name": "clubspark-platform",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "admin-portal",
+    "services/*"
+  ],
+  "scripts": {
+    "build:services": "npm run build --workspace=services/venue-service && npm run build --workspace=services/booking-service && npm run build --workspace=services/customer-service && npm run build --workspace=services/membership-service",
+    "start:services": "concurrently --names \"venue,booking,customer,membership\" --prefix-colors \"blue,green,yellow,magenta\" \"node services/venue-service/dist/main.js\" \"node services/booking-service/dist/main.js\" \"node services/customer-service/dist/main.js\" \"node services/membership-service/dist/main.js\"",
+    "start:all": "concurrently --names \"venue,booking,customer,membership,portal\" --prefix-colors \"blue,green,yellow,magenta,cyan\" \"node services/venue-service/dist/main.js\" \"node services/booking-service/dist/main.js\" \"node services/customer-service/dist/main.js\" \"node services/membership-service/dist/main.js\" \"npm run dev --workspace=admin-portal\"",
+    "dev:portal": "npm run dev --workspace=admin-portal",
+    "dev:booking": "npm run dev --workspace=services/booking-service",
+    "dev:venue": "npm run dev --workspace=services/venue-service",
+    "dev:customer": "npm run dev --workspace=services/customer-service",
+    "dev:membership": "npm run dev --workspace=services/membership-service",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\""
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "concurrently": "^9.2.1",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-prettier": "^5.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}

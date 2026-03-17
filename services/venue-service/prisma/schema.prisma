@@ -1,0 +1,112 @@
+// ClubSpark — Venue Service Prisma Schema
+// Owns the venue schema: venues, resources, bookable_units, unit_conflicts, add_ons
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+  output          = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["venue"]
+}
+
+model Venue {
+  id        String  @id @db.Uuid
+  tenantId  String  @map("tenant_id") @db.Uuid
+  name      String
+  timezone  String  @default("Europe/London")
+  city      String?
+  country   String  @default("GB")
+
+  resources Resource[]
+  units     BookableUnit[]
+
+  @@map("venues")
+  @@schema("venue")
+  @@index([tenantId])
+}
+
+model Resource {
+  id           String  @id @db.Uuid
+  tenantId     String  @map("tenant_id") @db.Uuid
+  venueId      String  @map("venue_id") @db.Uuid
+  name         String
+  resourceType String  @map("resource_type")
+  sport        String?
+  isActive     Boolean @default(true) @map("is_active")
+
+  venue Venue          @relation(fields: [venueId], references: [id])
+  units BookableUnit[]
+
+  @@map("resources")
+  @@schema("venue")
+  @@index([tenantId])
+  @@index([venueId])
+}
+
+model BookableUnit {
+  id              String  @id @db.Uuid
+  tenantId        String  @map("tenant_id") @db.Uuid
+  venueId         String  @map("venue_id") @db.Uuid
+  resourceId      String  @map("resource_id") @db.Uuid
+  parentUnitId    String? @map("parent_unit_id") @db.Uuid
+  name            String
+  unitType        String  @map("unit_type")
+  sortOrder       Int     @default(0) @map("sort_order")
+  capacity        Int?
+  isActive        Boolean @default(true) @map("is_active")
+  isOptionalExtra Boolean @default(false) @map("is_optional_extra")
+
+  venue    Venue    @relation(fields: [venueId], references: [id])
+  resource Resource @relation(fields: [resourceId], references: [id])
+
+  conflictsAsUnit        UnitConflict[] @relation("UnitConflicts")
+  conflictsAsConflicting UnitConflict[] @relation("ConflictingUnit")
+
+  @@map("bookable_units")
+  @@schema("venue")
+  @@index([tenantId])
+  @@index([venueId])
+  @@index([resourceId])
+}
+
+model UnitConflict {
+  unitId           String @map("unit_id") @db.Uuid
+  conflictingUnitId String @map("conflicting_unit_id") @db.Uuid
+
+  unit           BookableUnit @relation("UnitConflicts", fields: [unitId], references: [id])
+  conflictingUnit BookableUnit @relation("ConflictingUnit", fields: [conflictingUnitId], references: [id])
+
+  @@id([unitId, conflictingUnitId])
+  @@map("unit_conflicts")
+  @@schema("venue")
+}
+
+model AddOn {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId             String   @map("tenant_id") @db.Uuid
+  venueId              String?  @map("venue_id") @db.Uuid
+  name                 String
+  code                 String
+  description          String?
+  category             String
+  status               String   @default("active")
+  pricingType          String   @default("fixed") @map("pricing_type")
+  price                Decimal  @default(0) @db.Decimal(10, 2)
+  currency             String   @default("GBP") @db.Char(3)
+  inventoryMode        String   @default("unlimited") @map("inventory_mode")
+  totalInventory       Int?     @map("total_inventory")
+  allowedResourceTypes String[] @map("allowed_resource_types")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, code])
+  @@map("add_ons")
+  @@schema("venue")
+  @@index([tenantId])
+  @@index([tenantId, venueId])
+  @@index([tenantId, status])
+}

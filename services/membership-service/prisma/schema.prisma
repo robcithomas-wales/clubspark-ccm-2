@@ -1,0 +1,113 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["membership"]
+}
+
+model MembershipScheme {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  name           String
+  description    String?
+  status         String   @default("active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  plans MembershipPlan[]
+
+  @@map("membership_schemes")
+  @@schema("membership")
+}
+
+model MembershipPlan {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  schemeId       String   @map("scheme_id") @db.Uuid
+  name           String
+  code           String?
+  description    String?
+  ownershipType  String?  @map("ownership_type")
+  durationType   String?  @map("duration_type")
+  visibility     String?
+  status         String   @default("active")
+  sortOrder      Int?     @map("sort_order")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  scheme       MembershipScheme            @relation(fields: [schemeId], references: [id])
+  memberships  Membership[]
+  entitlements MembershipPlanEntitlement[]
+
+  @@map("membership_plans")
+  @@schema("membership")
+}
+
+model Membership {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  organisationId String    @map("organisation_id") @db.Uuid
+  planId         String    @map("plan_id") @db.Uuid
+  customerId     String?   @map("customer_id") @db.Uuid
+  ownerType      String?   @map("owner_type")
+  ownerId        String?   @map("owner_id") @db.Uuid
+  status         String    @default("active")
+  startDate      DateTime  @map("start_date") @db.Date
+  endDate        DateTime? @map("end_date") @db.Date
+  renewalDate    DateTime? @map("renewal_date") @db.Date
+  autoRenew      Boolean   @default(false) @map("auto_renew")
+  paymentStatus  String?   @map("payment_status")
+  reference      String?
+  source         String?
+  notes          String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  plan MembershipPlan @relation(fields: [planId], references: [id])
+
+  @@map("memberships")
+  @@schema("membership")
+}
+
+model EntitlementPolicy {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  name           String
+  policyType     String?  @map("policy_type")
+  description    String?
+  status         String   @default("active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  planEntitlements MembershipPlanEntitlement[]
+
+  @@map("entitlement_policies")
+  @@schema("membership")
+}
+
+model MembershipPlanEntitlement {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId            String   @map("tenant_id") @db.Uuid
+  planId              String   @map("plan_id") @db.Uuid
+  entitlementPolicyId String   @map("entitlement_policy_id") @db.Uuid
+  scopeType           String?  @map("scope_type")
+  scopeId             String?  @map("scope_id") @db.Uuid
+  configuration       Json     @default("{}")
+  priority            Int      @default(100)
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  plan              MembershipPlan    @relation(fields: [planId], references: [id])
+  entitlementPolicy EntitlementPolicy @relation(fields: [entitlementPolicyId], references: [id])
+
+  @@map("membership_plan_entitlements")
+  @@schema("membership")
+}

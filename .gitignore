@@ -1,0 +1,41 @@
+# Claude Code memory (machine-local)
+.claude/
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.next/
+out/
+
+# Environment files — never commit secrets
+.env
+.env.local
+.env.*.local
+
+# Keep examples committed
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# Database dumps
+*.dump
+*.sql.gz
+
+# Coverage
+coverage/
+
+# Prisma generated client (generated on install)
+**/prisma/generated/
+**/src/generated/

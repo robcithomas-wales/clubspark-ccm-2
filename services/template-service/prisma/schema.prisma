@@ -1,0 +1,35 @@
+// ClubSpark — Template Service Prisma Schema
+// Replace this with the service-specific schema.
+//
+// Convention:
+//   - Each service owns its own schema (booking.*, venue.*, customer.*, etc.)
+//   - Cross-service data access goes via HTTP API, never via direct DB query
+//   - Use @@map and @map to match existing PostgreSQL snake_case column names
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["public"] // Replace with service schema: ["booking"] or ["venue"] etc.
+}
+
+// ─── Add your models here ────────────────────────────────────────────────────
+// Example:
+//
+// model Booking {
+//   id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+//   tenantId    String   @map("tenant_id") @db.Uuid
+//   startsAt    DateTime @map("starts_at")
+//   endsAt      DateTime @map("ends_at")
+//   status      String   @default("active")
+//   createdAt   DateTime @default(now()) @map("created_at")
+//   updatedAt   DateTime @updatedAt @map("updated_at")
+//
+//   @@map("bookings")
+//   @@schema("booking")
+//   @@index([tenantId, startsAt, endsAt], name: "bookings_availability_idx")
+// }

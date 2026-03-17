@@ -1,0 +1,29 @@
+// ClubSpark — Customer Service Prisma Schema
+// Owns the customer schema: customers
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+  output          = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["customer"]
+}
+
+model Customer {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  firstName String?  @map("first_name")
+  lastName  String?  @map("last_name")
+  email     String?
+  phone     String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("customers")
+  @@schema("customer")
+  @@index([tenantId])
+  @@index([tenantId, email])
+}

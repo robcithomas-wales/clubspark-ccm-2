@@ -1,0 +1,83 @@
+// ClubSpark — Booking Service Prisma Schema
+// Owns: booking.bookings, booking.booking_add_ons
+// Read-only: venue.bookable_units, venue.unit_conflicts (for validation + availability)
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+  output          = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["booking", "venue"]
+}
+
+// ─── booking schema (owned) ───────────────────────────────────────────────────
+
+model Booking {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  organisationId   String?   @map("organisation_id") @db.Uuid
+  venueId          String    @map("venue_id") @db.Uuid
+  resourceId       String    @map("resource_id") @db.Uuid
+  bookableUnitId   String    @map("bookable_unit_id") @db.Uuid
+  customerId       String?   @map("customer_id") @db.Uuid
+  bookingSource    String?   @map("booking_source")
+  startsAt         DateTime  @map("starts_at")
+  endsAt           DateTime  @map("ends_at")
+  status           String    @default("active")
+  bookingReference String    @map("booking_reference")
+  notes            String?
+  cancelledAt      DateTime? @map("cancelled_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  addOns BookingAddOn[]
+
+  @@map("bookings")
+  @@schema("booking")
+  @@index([tenantId])
+  @@index([tenantId, startsAt, endsAt])
+  @@index([tenantId, bookableUnitId])
+  @@index([tenantId, customerId])
+  @@index([tenantId, status])
+}
+
+model BookingAddOn {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId String   @map("booking_id") @db.Uuid
+  addOnId   String   @map("add_on_id") @db.Uuid
+  quantity  Int      @default(1)
+  price     Decimal  @default(0) @db.Decimal(10, 2)
+  currency  String   @default("GBP") @db.Char(3)
+  startsAt  DateTime @map("starts_at")
+  endsAt    DateTime @map("ends_at")
+  status    String   @default("active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+
+  @@map("booking_add_ons")
+  @@schema("booking")
+  @@index([bookingId])
+}
+
+// ─── venue schema (read-only — for validation + availability) ─────────────────
+
+model BookableUnit {
+  id         String  @id @db.Uuid
+  tenantId   String  @map("tenant_id") @db.Uuid
+  venueId    String  @map("venue_id") @db.Uuid
+  resourceId String  @map("resource_id") @db.Uuid
+  name       String
+  unitType   String  @map("unit_type")
+  sortOrder  Int     @default(0) @map("sort_order")
+  capacity   Int?
+  isActive   Boolean @map("is_active")
+
+  @@map("bookable_units")
+  @@schema("venue")
+}
