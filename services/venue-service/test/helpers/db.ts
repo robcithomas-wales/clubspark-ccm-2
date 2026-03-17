@@ -35,6 +35,15 @@ export async function teardownFixtures(): Promise<void> {
     DELETE FROM venue.availability_configs WHERE tenant_id = ${TEST_TENANT_ID}::uuid
   `
   await prisma.$executeRaw`
+    DELETE FROM venue.blackout_dates WHERE tenant_id = ${TEST_TENANT_ID}::uuid
+  `
+  await prisma.$executeRaw`
+    DELETE FROM venue.bookable_units WHERE tenant_id = ${TEST_TENANT_ID}::uuid
+  `
+  await prisma.$executeRaw`
+    DELETE FROM venue.add_ons WHERE tenant_id = ${TEST_TENANT_ID}::uuid
+  `
+  await prisma.$executeRaw`
     DELETE FROM venue.resources WHERE tenant_id = ${TEST_TENANT_ID}::uuid
   `
   await prisma.$executeRaw`

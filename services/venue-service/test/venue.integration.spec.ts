@@ -418,4 +418,296 @@ describe('Venue service — integration', () => {
       expect(res.status).toBe(204)
     })
   })
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Venues
+  // ══════════════════════════════════════════════════════════════════════════
+
+  describe('Venues', () => {
+    it('lists venues for the tenant', async () => {
+      const res = await request.get('/venues').set(HEADERS)
+
+      expect(res.status).toBe(200)
+      expect(Array.isArray(res.body.data)).toBe(true)
+      expect(res.body.data.length).toBeGreaterThanOrEqual(1)
+    })
+
+    it('includes the seeded test venue', async () => {
+      const res = await request.get('/venues').set(HEADERS)
+
+      const match = res.body.data.find((v: any) => v.id === TEST_VENUE_ID)
+      expect(match).toBeDefined()
+      expect(match.name).toBe('Test Venue')
+    })
+
+    it('returns 400 when tenant headers are missing', async () => {
+      const res = await request.get('/venues')
+      expect(res.status).toBe(400)
+    })
+  })
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Bookable Units
+  // ══════════════════════════════════════════════════════════════════════════
+
+  describe('Bookable Units', () => {
+    let unitId: string
+
+    it('creates a bookable unit and returns 201', async () => {
+      const res = await request
+        .post('/bookable-units')
+        .set(JSON_HEADERS)
+        .send({
+          venueId: TEST_VENUE_ID,
+          resourceId: TEST_RESOURCE_ID,
+          name: 'Full Court',
+          unitType: 'full',
+          capacity: 4,
+          sortOrder: 1,
+        })
+
+      expect(res.status).toBe(201)
+      expect(res.body.data.id).toBeDefined()
+      expect(res.body.data.name).toBe('Full Court')
+      expect(res.body.data.isActive).toBe(true)
+      expect(res.body.data.isOptionalExtra).toBe(false)
+      unitId = res.body.data.id
+    })
+
+    it('creates an optional-extra unit', async () => {
+      const res = await request
+        .post('/bookable-units')
+        .set(JSON_HEADERS)
+        .send({
+          venueId: TEST_VENUE_ID,
+          resourceId: TEST_RESOURCE_ID,
+          name: 'Half Court A',
+          unitType: 'half',
+          isOptionalExtra: true,
+        })
+
+      expect(res.status).toBe(201)
+      expect(res.body.data.isOptionalExtra).toBe(true)
+    })
+
+    it('lists bookable units for the tenant', async () => {
+      const res = await request.get('/bookable-units').set(HEADERS)
+
+      expect(res.status).toBe(200)
+      expect(Array.isArray(res.body.data)).toBe(true)
+      expect(res.body.data.length).toBeGreaterThanOrEqual(1)
+    })
+
+    it('lists units for a specific venue', async () => {
+      const res = await request
+        .get(`/venues/${TEST_VENUE_ID}/units`)
+        .set(HEADERS)
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.every((u: any) => u.venueId === TEST_VENUE_ID)).toBe(true)
+    })
+
+    it('returns 400 when required fields are missing', async () => {
+      const res = await request
+        .post('/bookable-units')
+        .set(JSON_HEADERS)
+        .send({ venueId: TEST_VENUE_ID, name: 'No Type' })
+
+      expect(res.status).toBe(400)
+    })
+
+    it('returns 400 when resourceId is missing', async () => {
+      const res = await request
+        .post('/bookable-units')
+        .set(JSON_HEADERS)
+        .send({ venueId: TEST_VENUE_ID, name: 'No Resource', unitType: 'full' })
+
+      expect(res.status).toBe(400)
+    })
+  })
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Product Add-Ons
+  // ══════════════════════════════════════════════════════════════════════════
+
+  describe('Product Add-Ons', () => {
+    let addOnId: string
+
+    it('creates an add-on and returns 201', async () => {
+      const res = await request
+        .post('/add-ons')
+        .set(JSON_HEADERS)
+        .send({
+          name: 'Ball hire',
+          code: 'BALL-HIRE',
+          category: 'equipment',
+          pricingType: 'fixed',
+          price: 3.5,
+          currency: 'GBP',
+        })
+
+      expect(res.status).toBe(201)
+      expect(res.body.data.id).toBeDefined()
+      expect(res.body.data.name).toBe('Ball hire')
+      expect(res.body.data.status).toBe('active')
+      addOnId = res.body.data.id
+    })
+
+    it('creates an add-on without tenantId in body (regression — UUID v4 rejection)', async () => {
+      // tenantId must come from the header, NOT the body.
+      // This was a bug where @IsUUID() on a tenantId body field rejected demo tenant IDs.
+      const res = await request
+        .post('/add-ons')
+        .set(JSON_HEADERS)
+        .send({
+          name: 'Towel hire',
+          code: 'TOWEL-HIRE',
+          category: 'service',
+          pricingType: 'fixed',
+          price: 1.0,
+        })
+
+      expect(res.status).toBe(201)
+      expect(res.body.data.tenantId).toBe(TEST_TENANT_ID)
+    })
+
+    it('lists add-ons for the tenant', async () => {
+      const res = await request.get('/add-ons').set(HEADERS)
+
+      expect(res.status).toBe(200)
+      expect(Array.isArray(res.body.data)).toBe(true)
+      expect(res.body.data.length).toBeGreaterThanOrEqual(1)
+    })
+
+    it('gets an add-on by id', async () => {
+      const res = await request.get(`/add-ons/${addOnId}`).set(HEADERS)
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.id).toBe(addOnId)
+      expect(res.body.data.code).toBe('BALL-HIRE')
+    })
+
+    it('returns 404 for a non-existent add-on', async () => {
+      const res = await request.get(`/add-ons/${TEST_NONEXISTENT_ID}`).set(HEADERS)
+      expect(res.status).toBe(404)
+    })
+
+    it('returns 400 when name is missing', async () => {
+      const res = await request
+        .post('/add-ons')
+        .set(JSON_HEADERS)
+        .send({ code: 'NO-NAME', category: 'equipment' })
+
+      expect(res.status).toBe(400)
+    })
+
+    it('returns 400 when category is invalid', async () => {
+      const res = await request
+        .post('/add-ons')
+        .set(JSON_HEADERS)
+        .send({ name: 'Bad', code: 'BAD', category: 'not_a_category' })
+
+      expect(res.status).toBe(400)
+    })
+  })
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Blackout Dates
+  // ══════════════════════════════════════════════════════════════════════════
+
+  describe('Blackout Dates', () => {
+    let blackoutId: string
+
+    it('creates a venue-level blackout and returns 201', async () => {
+      const res = await request
+        .post('/blackout-dates')
+        .set(JSON_HEADERS)
+        .send({
+          venueId: TEST_VENUE_ID,
+          name: 'Christmas closure',
+          startDate: '2099-12-24',
+          endDate: '2099-12-26',
+        })
+
+      expect(res.status).toBe(201)
+      expect(res.body.data.id).toBeDefined()
+      expect(res.body.data.name).toBe('Christmas closure')
+      blackoutId = res.body.data.id
+    })
+
+    it('creates a resource-level blackout', async () => {
+      const res = await request
+        .post('/blackout-dates')
+        .set(JSON_HEADERS)
+        .send({
+          venueId: TEST_VENUE_ID,
+          resourceId: TEST_RESOURCE_ID,
+          name: 'Court maintenance',
+          startDate: '2099-11-01',
+          endDate: '2099-11-02',
+        })
+
+      expect(res.status).toBe(201)
+      expect(res.body.data.resourceId).toBe(TEST_RESOURCE_ID)
+    })
+
+    it('lists blackout dates for the tenant', async () => {
+      const res = await request.get('/blackout-dates').set(HEADERS)
+
+      expect(res.status).toBe(200)
+      expect(Array.isArray(res.body.data)).toBe(true)
+      expect(res.body.data.length).toBeGreaterThanOrEqual(2)
+    })
+
+    it('gets a blackout by id', async () => {
+      const res = await request.get(`/blackout-dates/${blackoutId}`).set(HEADERS)
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.id).toBe(blackoutId)
+    })
+
+    it('returns 404 for a non-existent blackout', async () => {
+      const res = await request
+        .get(`/blackout-dates/${TEST_NONEXISTENT_ID}`)
+        .set(HEADERS)
+
+      expect(res.status).toBe(404)
+    })
+
+    it('updates a blackout date', async () => {
+      const res = await request
+        .patch(`/blackout-dates/${blackoutId}`)
+        .set(JSON_HEADERS)
+        .send({ name: 'Extended Christmas closure', endDate: '2099-12-27' })
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.name).toBe('Extended Christmas closure')
+      expect(res.body.data.endDate).toMatch(/2099-12-27/)
+    })
+
+    it('deletes a blackout and returns 204', async () => {
+      const res = await request
+        .delete(`/blackout-dates/${blackoutId}`)
+        .set(HEADERS)
+
+      expect(res.status).toBe(204)
+    })
+
+    it('returns 404 when deleting a non-existent blackout', async () => {
+      const res = await request
+        .delete(`/blackout-dates/${TEST_NONEXISTENT_ID}`)
+        .set(HEADERS)
+
+      expect(res.status).toBe(404)
+    })
+
+    it('returns 400 when required fields are missing', async () => {
+      const res = await request
+        .post('/blackout-dates')
+        .set(JSON_HEADERS)
+        .send({ venueId: TEST_VENUE_ID, name: 'No dates' })
+
+      expect(res.status).toBe(400)
+    })
+  })
 })
