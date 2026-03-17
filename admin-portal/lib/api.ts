@@ -623,3 +623,199 @@ export async function createAddOnService(input: CreateAddOnServiceInput) {
 
   return res.json()
 }
+
+// ─── Resources ───────────────────────────────────────────────────────────────
+
+export async function getResourceById(id: string) {
+  const res = await fetch(`${FACILITY_SERVICE}/resources/${id}`, {
+    headers: FACILITY_HEADERS,
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error(`Failed to load resource: ${res.status}`)
+  const json = await res.json()
+  return (json.data ?? json) as any
+}
+
+export type CreateResourceInput = {
+  venueId: string
+  name: string
+  resourceType: string
+  groupId?: string
+  sport?: string
+  surface?: string
+  isIndoor?: boolean
+  hasLighting?: boolean
+  bookingPurposes?: string[]
+  description?: string
+  colour?: string
+  isActive?: boolean
+}
+
+export async function createResource(input: CreateResourceInput) {
+  const res = await fetch(`${FACILITY_SERVICE}/resources`, {
+    method: "POST",
+    headers: FACILITY_HEADERS,
+    body: JSON.stringify(input),
+  })
+  if (!res.ok) {
+    const errorText = await res.text()
+    throw new Error(`Failed to create resource: ${res.status} ${errorText}`)
+  }
+  return res.json()
+}
+
+export async function updateResource(id: string, input: Partial<CreateResourceInput> & { groupId?: string | null }) {
+  const res = await fetch(`${FACILITY_SERVICE}/resources/${id}`, {
+    method: "PATCH",
+    headers: FACILITY_HEADERS,
+    body: JSON.stringify(input),
+  })
+  if (!res.ok) {
+    const errorText = await res.text()
+    throw new Error(`Failed to update resource: ${res.status} ${errorText}`)
+  }
+  return res.json()
+}
+
+// ─── Resource Groups ──────────────────────────────────────────────────────────
+
+export async function getResourceGroups(params?: { venueId?: string }) {
+  const search = new URLSearchParams()
+  if (params?.venueId) search.set("venueId", params.venueId)
+  const query = search.toString()
+  const url = query ? `${FACILITY_SERVICE}/resource-groups?${query}` : `${FACILITY_SERVICE}/resource-groups`
+  const res = await fetch(url, { headers: FACILITY_HEADERS, cache: "no-store" })
+  if (!res.ok) throw new Error(`Failed to load resource groups: ${res.status}`)
+  const json = await res.json()
+  return (json.data ?? json) as any[]
+}
+
+export async function getResourceGroupById(id: string) {
+  const res = await fetch(`${FACILITY_SERVICE}/resource-groups/${id}`, {
+    headers: FACILITY_HEADERS,
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error(`Failed to load resource group: ${res.status}`)
+  const json = await res.json()
+  return (json.data ?? json) as any
+}
+
+export type CreateResourceGroupInput = {
+  venueId: string
+  name: string
+  sport?: string
+  description?: string
+  colour?: string
+  sortOrder?: number
+}
+
+export async function createResourceGroup(input: CreateResourceGroupInput) {
+  const res = await fetch(`${FACILITY_SERVICE}/resource-groups`, {
+    method: "POST",
+    headers: FACILITY_HEADERS,
+    body: JSON.stringify(input),
+  })
+  if (!res.ok) {
+    const errorText = await res.text()
+    throw new Error(`Failed to create resource group: ${res.status} ${errorText}`)
+  }
+  return res.json()
+}
+
+export async function updateResourceGroup(id: string, input: Partial<CreateResourceGroupInput>) {
+  const res = await fetch(`${FACILITY_SERVICE}/resource-groups/${id}`, {
+    method: "PATCH",
+    headers: FACILITY_HEADERS,
+    body: JSON.stringify(input),
+  })
+  if (!res.ok) {
+    const errorText = await res.text()
+    throw new Error(`Failed to update resource group: ${res.status} ${errorText}`)
+  }
+  return res.json()
+}
+
+export async function deleteResourceGroup(id: string) {
+  const res = await fetch(`${FACILITY_SERVICE}/resource-groups/${id}`, {
+    method: "DELETE",
+    headers: FACILITY_HEADERS,
+  })
+  if (!res.ok) throw new Error(`Failed to delete resource group: ${res.status}`)
+}
+
+// ─── Availability Configs ─────────────────────────────────────────────────────
+
+export type AvailabilityConfigScopeType = "venue" | "resource_group" | "resource"
+
+export async function getAvailabilityConfigs(params?: {
+  scopeType?: AvailabilityConfigScopeType
+  scopeId?: string
+}) {
+  const search = new URLSearchParams()
+  if (params?.scopeType) search.set("scopeType", params.scopeType)
+  if (params?.scopeId) search.set("scopeId", params.scopeId)
+  const query = search.toString()
+  const url = query
+    ? `${FACILITY_SERVICE}/availability-configs?${query}`
+    : `${FACILITY_SERVICE}/availability-configs`
+  const res = await fetch(url, { headers: FACILITY_HEADERS, cache: "no-store" })
+  if (!res.ok) throw new Error(`Failed to load availability configs: ${res.status}`)
+  const json = await res.json()
+  return (json.data ?? json) as any[]
+}
+
+export async function getAvailabilityConfigById(id: string) {
+  const res = await fetch(`${FACILITY_SERVICE}/availability-configs/${id}`, {
+    headers: FACILITY_HEADERS,
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error(`Failed to load availability config: ${res.status}`)
+  const json = await res.json()
+  return (json.data ?? json) as any
+}
+
+export type CreateAvailabilityConfigInput = {
+  scopeType: AvailabilityConfigScopeType
+  scopeId: string
+  dayOfWeek?: number
+  opensAt?: string
+  closesAt?: string
+  slotDurationMinutes?: number
+  bookingIntervalMinutes?: number
+  newDayReleaseTime?: string
+  isActive?: boolean
+}
+
+export async function createAvailabilityConfig(input: CreateAvailabilityConfigInput) {
+  const res = await fetch(`${FACILITY_SERVICE}/availability-configs`, {
+    method: "POST",
+    headers: FACILITY_HEADERS,
+    body: JSON.stringify(input),
+  })
+  if (!res.ok) {
+    const errorText = await res.text()
+    throw new Error(`Failed to create availability config: ${res.status} ${errorText}`)
+  }
+  return res.json()
+}
+
+export async function updateAvailabilityConfig(id: string, input: Partial<CreateAvailabilityConfigInput>) {
+  const res = await fetch(`${FACILITY_SERVICE}/availability-configs/${id}`, {
+    method: "PATCH",
+    headers: FACILITY_HEADERS,
+    body: JSON.stringify(input),
+  })
+  if (!res.ok) {
+    const errorText = await res.text()
+    throw new Error(`Failed to update availability config: ${res.status} ${errorText}`)
+  }
+  return res.json()
+}
+
+export async function deleteAvailabilityConfig(id: string) {
+  const res = await fetch(`${FACILITY_SERVICE}/availability-configs/${id}`, {
+    method: "DELETE",
+    headers: FACILITY_HEADERS,
+  })
+  if (!res.ok) throw new Error(`Failed to delete availability config: ${res.status}`)
+}

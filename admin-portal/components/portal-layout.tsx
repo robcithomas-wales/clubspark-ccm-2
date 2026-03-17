@@ -43,6 +43,14 @@ const navSections = [
     label: "Venue Setup",
     items: [
       { label: "Facilities", href: "/facilities", icon: Building2 },
+      {
+        label: "Resources",
+        icon: Layers,
+        children: [
+          { label: "All Resources", href: "/resources" },
+          { label: "Resource Groups", href: "/resource-groups" },
+        ],
+      },
       { label: "Bookable Units", href: "/bookable-units", icon: Layers },
       { label: "Product Add-Ons", href: "/add-ons", icon: ShoppingBag },
     ],
