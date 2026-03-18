@@ -15,7 +15,7 @@ export default async function ResourceGroupsPage() {
           <p className="text-sm text-slate-500">{groups.length} group{groups.length !== 1 ? "s" : ""}</p>
           <Link
             href="/resource-groups/new"
-            className="inline-flex h-10 items-center justify-center rounded-xl bg-[#1857E0] px-4 text-sm font-medium text-white transition hover:bg-[#1832A8]"
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
           >
             Add group
           </Link>

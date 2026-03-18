@@ -27,20 +27,34 @@ model MembershipScheme {
 }
 
 model MembershipPlan {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId       String   @map("tenant_id") @db.Uuid
-  organisationId String   @map("organisation_id") @db.Uuid
-  schemeId       String   @map("scheme_id") @db.Uuid
-  name           String
-  code           String?
-  description    String?
-  ownershipType  String?  @map("ownership_type")
-  durationType   String?  @map("duration_type")
-  visibility     String?
-  status         String   @default("active")
-  sortOrder      Int?     @map("sort_order")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String   @map("tenant_id") @db.Uuid
+  organisationId   String   @map("organisation_id") @db.Uuid
+  schemeId         String   @map("scheme_id") @db.Uuid
+  name             String
+  code             String?
+  description      String?
+  ownershipType    String?  @map("ownership_type")
+  durationType     String?  @map("duration_type")
+  visibility       String?
+  status           String   @default("active")
+  sortOrder        Int?     @map("sort_order")
+
+  // Phase 1: membership type & structure
+  membershipType   String?  @map("membership_type")   // individual | family | group | team | organisation
+  sportCategory    String?  @map("sport_category")
+  maxMembers       Int?     @map("max_members")        // for family/group/team plans
+  isPublic         Boolean  @default(false) @map("is_public")
+
+  // Phase 1: pricing model
+  pricingModel     String?  @map("pricing_model")     // fixed | instalment | recurring | variable
+  price            Decimal? @db.Decimal(10, 2)
+  currency         String   @default("GBP")
+  billingInterval  String?  @map("billing_interval")  // monthly | quarterly | annual
+  instalmentCount  Int?     @map("instalment_count")
+
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   scheme       MembershipScheme            @relation(fields: [schemeId], references: [id])
   memberships  Membership[]
@@ -58,7 +72,8 @@ model Membership {
   customerId     String?   @map("customer_id") @db.Uuid
   ownerType      String?   @map("owner_type")
   ownerId        String?   @map("owner_id") @db.Uuid
-  status         String    @default("active")
+  // status: pending | active | suspended | lapsed | cancelled | expired
+  status         String    @default("pending")
   startDate      DateTime  @map("start_date") @db.Date
   endDate        DateTime? @map("end_date") @db.Date
   renewalDate    DateTime? @map("renewal_date") @db.Date
@@ -67,12 +82,36 @@ model Membership {
   reference      String?
   source         String?
   notes          String?
+
+  // Phase 1: lifecycle timestamps
+  activatedAt    DateTime? @map("activated_at")
+  suspendedAt    DateTime? @map("suspended_at")
+  cancelledAt    DateTime? @map("cancelled_at")
+  lapsedAt       DateTime? @map("lapsed_at")
+  expiredAt      DateTime? @map("expired_at")
+
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
-  plan MembershipPlan @relation(fields: [planId], references: [id])
+  plan            MembershipPlan           @relation(fields: [planId], references: [id])
+  lifecycleEvents MembershipLifecycleEvent[]
 
   @@map("memberships")
+  @@schema("membership")
+}
+
+model MembershipLifecycleEvent {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  membershipId String   @map("membership_id") @db.Uuid
+  fromStatus   String   @map("from_status")
+  toStatus     String   @map("to_status")
+  reason       String?
+  createdBy    String?  @map("created_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  membership Membership @relation(fields: [membershipId], references: [id])
+
+  @@map("membership_lifecycle_events")
   @@schema("membership")
 }
 

@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { getBookingSeries } from "@/lib/api"
+import { getBookingSeries, getBookableUnits, getResources } from "@/lib/api"
 import { PortalLayout } from "@/components/portal-layout"
 import { Repeat2, ChevronRight, Plus } from "lucide-react"
 
@@ -12,6 +12,15 @@ function formatDate(value?: string | null) {
     month: "short",
     year: "numeric",
   }).format(date)
+}
+
+function formatSlotTime(value?: string | null) {
+  if (!value) return "—"
+  // Values are stored as time-only on epoch date (1970-01-01T14:00:00.000Z)
+  // Extract just HH:MM in UTC
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toISOString().slice(11, 16)
 }
 
 function statusBadge(status: string) {
@@ -30,7 +39,14 @@ function statusBadge(status: string) {
 }
 
 export default async function BookingSeriesPage() {
-  const series = await getBookingSeries()
+  const [series, units, resources] = await Promise.all([
+    getBookingSeries(),
+    getBookableUnits(),
+    getResources(),
+  ])
+
+  const unitMap = new Map(units.map((u: any) => [u.id, u.name]))
+  const resourceMap = new Map(resources.map((r: any) => [r.id, r.name]))
 
   return (
     <PortalLayout title="Recurring Series">
@@ -49,7 +65,7 @@ export default async function BookingSeriesPage() {
           </div>
           <Link
             href="/create-booking?recurring=1"
-            className="inline-flex h-10 items-center gap-2 rounded-2xl bg-[#1832A8] px-4 text-sm font-semibold text-white transition hover:bg-[#142a8c]"
+            className="inline-flex h-10 items-center gap-2 rounded-2xl bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
           >
             <Plus className="h-4 w-4" />
             New recurring series
@@ -84,15 +100,15 @@ export default async function BookingSeriesPage() {
                 >
                   <div>
                     <div className="text-sm font-semibold text-slate-900 truncate">
-                      {s.bookableUnitId}
+                      {unitMap.get(s.bookableUnitId) ?? s.bookableUnitId}
                     </div>
                     <div className="mt-0.5 text-xs text-slate-500 truncate">
-                      {s.resourceId}
+                      {resourceMap.get(s.resourceId) ?? s.resourceId}
                     </div>
                   </div>
                   <div className="font-mono text-xs text-slate-600 truncate">{s.rrule}</div>
                   <div className="text-sm text-slate-700 whitespace-nowrap">
-                    {s.slotStartsAt} – {s.slotEndsAt}
+                    {formatSlotTime(s.slotStartsAt)} – {formatSlotTime(s.slotEndsAt)}
                   </div>
                   <div className="text-sm text-slate-500 whitespace-nowrap">
                     {formatDate(s.createdAt)}

@@ -27,22 +27,19 @@ async function createPlanAction(formData: FormData) {
     | "archived"
     | "draft"
 
+  const membershipType = String(formData.get("membershipType") || "").trim() || undefined
+  const sportCategory = String(formData.get("sportCategory") || "").trim() || undefined
+  const pricingModel = String(formData.get("pricingModel") || "fixed").trim()
   const currency = String(formData.get("currency") || "GBP").trim()
-  const billingPeriod = String(formData.get("billingPeriod") || "monthly").trim() as
-    | "weekly"
-    | "monthly"
-    | "annual"
-    | "one_off"
-
-  const price = Number(formData.get("price") || 0)
-  const joiningFee = Number(formData.get("joiningFee") || 0)
-  const renewalFee = Number(formData.get("renewalFee") || 0)
+  const billingInterval = String(formData.get("billingInterval") || "").trim() || undefined
+  const priceRaw = String(formData.get("price") || "").trim()
+  const price = priceRaw ? Number(priceRaw) : undefined
+  const instalmentCountRaw = String(formData.get("instalmentCount") || "").trim()
+  const instalmentCount = instalmentCountRaw ? Number(instalmentCountRaw) : undefined
   const sortOrder = Number(formData.get("sortOrder") || 0)
-
-  const maxActiveMembersRaw = String(formData.get("maxActiveMembers") || "").trim()
-  const maxActiveMembers = maxActiveMembersRaw ? Number(maxActiveMembersRaw) : undefined
-
-  const isOnlineJoinable = formData.get("isOnlineJoinable") === "on"
+  const maxMembersRaw = String(formData.get("maxMembers") || "").trim()
+  const maxMembers = maxMembersRaw ? Number(maxMembersRaw) : undefined
+  const isPublic = formData.get("isPublic") === "on"
 
   const selectedPolicyIds = formData
     .getAll("policyIds")
@@ -64,13 +61,15 @@ async function createPlanAction(formData: FormData) {
     visibility,
     status,
     sortOrder,
+    membershipType,
+    sportCategory,
+    maxMembers,
+    isPublic,
+    pricingModel,
     price,
     currency,
-    billingPeriod,
-    joiningFee,
-    renewalFee,
-    isOnlineJoinable,
-    maxActiveMembers,
+    billingInterval,
+    instalmentCount,
   })
 
   const planId = created?.data?.id || created?.id
@@ -123,74 +122,52 @@ export default async function NewMembershipPlanPage() {
 
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label
-                  htmlFor="schemeId"
-                  className="mb-2 block text-sm font-medium text-slate-700"
-                >
-                  Scheme
-                </label>
-                <select
-                  id="schemeId"
-                  name="schemeId"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none"
-                  required
-                  defaultValue=""
-                >
-                  <option value="" disabled>
-                    Select a scheme
-                  </option>
+                <label htmlFor="schemeId" className="mb-2 block text-sm font-medium text-slate-700">Scheme</label>
+                <select id="schemeId" name="schemeId" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none" required defaultValue="">
+                  <option value="" disabled>Select a scheme</option>
                   {schemes.map((scheme: any) => (
-                    <option key={scheme.id} value={scheme.id}>
-                      {scheme.name}
-                    </option>
+                    <option key={scheme.id} value={scheme.id}>{scheme.name}</option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label htmlFor="name" className="mb-2 block text-sm font-medium text-slate-700">
-                  Name
-                </label>
-                <input
-                  id="name"
-                  name="name"
-                  type="text"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none"
-                  placeholder="Adult Annual"
-                  required
-                />
+                <label htmlFor="name" className="mb-2 block text-sm font-medium text-slate-700">Name</label>
+                <input id="name" name="name" type="text" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none" placeholder="Adult Annual" required />
               </div>
 
               <div>
-                <label htmlFor="code" className="mb-2 block text-sm font-medium text-slate-700">
-                  Code
-                </label>
-                <input
-                  id="code"
-                  name="code"
-                  type="text"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none"
-                  placeholder="ADULT_ANNUAL"
-                />
+                <label htmlFor="membershipType" className="mb-2 block text-sm font-medium text-slate-700">Membership Type</label>
+                <select id="membershipType" name="membershipType" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none" defaultValue="individual">
+                  <option value="individual">Individual</option>
+                  <option value="family">Family</option>
+                  <option value="group">Group</option>
+                  <option value="team">Team</option>
+                  <option value="organisation">Organisation</option>
+                </select>
               </div>
 
               <div>
-                <label
-                  htmlFor="ownershipType"
-                  className="mb-2 block text-sm font-medium text-slate-700"
-                >
-                  Ownership Type
-                </label>
-                <select
-                  id="ownershipType"
-                  name="ownershipType"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none"
-                  required
-                  defaultValue="person"
-                >
+                <label htmlFor="ownershipType" className="mb-2 block text-sm font-medium text-slate-700">Ownership</label>
+                <select id="ownershipType" name="ownershipType" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none" defaultValue="person">
                   <option value="person">Person</option>
                   <option value="household">Household</option>
                 </select>
+              </div>
+
+              <div>
+                <label htmlFor="code" className="mb-2 block text-sm font-medium text-slate-700">Code</label>
+                <input id="code" name="code" type="text" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none" placeholder="ADULT_ANNUAL" />
+              </div>
+
+              <div>
+                <label htmlFor="sportCategory" className="mb-2 block text-sm font-medium text-slate-700">Sport Category</label>
+                <input id="sportCategory" name="sportCategory" type="text" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none" placeholder="Tennis, Padel, Squash…" />
+              </div>
+
+              <div>
+                <label htmlFor="maxMembers" className="mb-2 block text-sm font-medium text-slate-700">Max Members <span className="text-slate-400 font-normal">(family / group / team)</span></label>
+                <input id="maxMembers" name="maxMembers" type="number" min="0" step="1" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none" placeholder="Optional" />
               </div>
             </div>
 
@@ -220,115 +197,51 @@ export default async function NewMembershipPlanPage() {
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <div>
-                <label
-                  htmlFor="price"
-                  className="mb-2 block text-sm font-medium text-slate-700"
-                >
-                  Price
-                </label>
-                <input
-                  id="price"
-                  name="price"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  defaultValue="0"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none"
-                />
+                <label htmlFor="pricingModel" className="mb-2 block text-sm font-medium text-slate-700">Pricing Model</label>
+                <select id="pricingModel" name="pricingModel" defaultValue="fixed" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none">
+                  <option value="fixed">Fixed (one-off)</option>
+                  <option value="recurring">Recurring</option>
+                  <option value="instalment">Instalment plan</option>
+                  <option value="variable">Variable (pay on account)</option>
+                </select>
               </div>
 
               <div>
-                <label
-                  htmlFor="currency"
-                  className="mb-2 block text-sm font-medium text-slate-700"
-                >
-                  Currency
-                </label>
-                <select
-                  id="currency"
-                  name="currency"
-                  defaultValue="GBP"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none"
-                >
+                <label htmlFor="price" className="mb-2 block text-sm font-medium text-slate-700">Price</label>
+                <input id="price" name="price" type="number" min="0" step="0.01" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none" placeholder="0.00" />
+              </div>
+
+              <div>
+                <label htmlFor="currency" className="mb-2 block text-sm font-medium text-slate-700">Currency</label>
+                <select id="currency" name="currency" defaultValue="GBP" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none">
                   <option value="GBP">GBP</option>
-                  <option value="USD">USD</option>
                   <option value="EUR">EUR</option>
+                  <option value="USD">USD</option>
                 </select>
               </div>
 
               <div>
-                <label
-                  htmlFor="billingPeriod"
-                  className="mb-2 block text-sm font-medium text-slate-700"
-                >
-                  Billing Period
-                </label>
-                <select
-                  id="billingPeriod"
-                  name="billingPeriod"
-                  defaultValue="monthly"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none"
-                >
+                <label htmlFor="billingInterval" className="mb-2 block text-sm font-medium text-slate-700">Billing Interval <span className="text-slate-400 font-normal">(recurring)</span></label>
+                <select id="billingInterval" name="billingInterval" defaultValue="" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none">
+                  <option value="">N/A</option>
                   <option value="monthly">Monthly</option>
+                  <option value="quarterly">Quarterly</option>
                   <option value="annual">Annual</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="one_off">One off</option>
                 </select>
               </div>
 
               <div>
-                <label
-                  htmlFor="durationType"
-                  className="mb-2 block text-sm font-medium text-slate-700"
-                >
-                  Duration Type
-                </label>
-                <select
-                  id="durationType"
-                  name="durationType"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none"
-                  required
-                  defaultValue="rolling"
-                >
+                <label htmlFor="instalmentCount" className="mb-2 block text-sm font-medium text-slate-700">Instalments <span className="text-slate-400 font-normal">(if instalment plan)</span></label>
+                <input id="instalmentCount" name="instalmentCount" type="number" min="2" step="1" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none" placeholder="e.g. 10" />
+              </div>
+
+              <div>
+                <label htmlFor="durationType" className="mb-2 block text-sm font-medium text-slate-700">Duration Type</label>
+                <select id="durationType" name="durationType" defaultValue="rolling" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none">
                   <option value="rolling">Rolling</option>
-                  <option value="fixed">Fixed</option>
+                  <option value="fixed">Fixed term</option>
+                  <option value="seasonal">Seasonal</option>
                 </select>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="joiningFee"
-                  className="mb-2 block text-sm font-medium text-slate-700"
-                >
-                  Joining Fee
-                </label>
-                <input
-                  id="joiningFee"
-                  name="joiningFee"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  defaultValue="0"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="renewalFee"
-                  className="mb-2 block text-sm font-medium text-slate-700"
-                >
-                  Renewal Fee
-                </label>
-                <input
-                  id="renewalFee"
-                  name="renewalFee"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  defaultValue="0"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none"
-                />
               </div>
             </div>
           </section>
@@ -419,13 +332,13 @@ export default async function NewMembershipPlanPage() {
             <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-700">
               <input
                 type="checkbox"
-                name="isOnlineJoinable"
+                name="isPublic"
                 className="h-4 w-4 rounded border-slate-300 text-slate-900"
               />
               <div>
-                <div className="font-medium text-slate-900">Available for online joining</div>
+                <div className="font-medium text-slate-900">Publicly available</div>
                 <div className="mt-1 text-xs text-slate-500">
-                  Allow customers to join this membership through the public journey.
+                  Show this plan in the public membership sign-up journey.
                 </div>
               </div>
             </label>

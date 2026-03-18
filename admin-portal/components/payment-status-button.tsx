@@ -44,7 +44,7 @@ export function PaymentStatusButton({
   }
 
   const current = paymentStatus as PaymentStatus
-  const isCancellable = current !== "free" && current !== "cancelled"
+  const isCancellable = current !== "free"
 
   return (
     <div className="space-y-4">
@@ -79,7 +79,7 @@ export function PaymentStatusButton({
               Send payment request
             </button>
           )}
-          {current !== "free" && current !== "refunded" && current === "paid" && (
+          {current !== "refunded" && current === "paid" && (
             <button
               type="button"
               disabled={isUpdating}
@@ -89,8 +89,7 @@ export function PaymentStatusButton({
               Mark refunded
             </button>
           )}
-          {current !== "free" && (
-            <button
+          <button
               type="button"
               disabled={isUpdating}
               onClick={() => update("free")}
@@ -98,7 +97,6 @@ export function PaymentStatusButton({
             >
               Mark free
             </button>
-          )}
         </div>
       )}
 

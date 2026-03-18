@@ -120,17 +120,32 @@ export default async function MembershipPlansPage({
                         <div className="mt-3 h-px w-24 bg-slate-200"></div>
 
                         <div className="mt-3 flex flex-wrap gap-2">
-                          <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 ring-1 ring-blue-200">
-                            {formatLabel(plan.ownershipType)}
-                          </span>
-
-                          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
-                            {formatLabel(plan.durationType)}
-                          </span>
-
-                          <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 ring-1 ring-amber-200">
-                            {formatLabel(plan.visibility)}
-                          </span>
+                          {plan.membershipType && (
+                            <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 ring-1 ring-blue-200">
+                              {formatLabel(plan.membershipType)}
+                            </span>
+                          )}
+                          {plan.pricingModel && (
+                            <span className="inline-flex items-center rounded-full bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700 ring-1 ring-violet-200">
+                              {formatLabel(plan.pricingModel)}
+                            </span>
+                          )}
+                          {plan.price != null && (
+                            <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
+                              {plan.currency ?? "GBP"} {Number(plan.price).toFixed(2)}
+                              {plan.billingInterval ? ` / ${plan.billingInterval}` : ""}
+                            </span>
+                          )}
+                          {plan.durationType && (
+                            <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 ring-1 ring-amber-200">
+                              {formatLabel(plan.durationType)}
+                            </span>
+                          )}
+                          {plan.sportCategory && (
+                            <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
+                              {plan.sportCategory}
+                            </span>
+                          )}
                         </div>
                       </div>
 

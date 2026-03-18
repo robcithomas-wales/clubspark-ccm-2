@@ -57,7 +57,7 @@ export class MembershipsRepository {
     const [rows, total] = await Promise.all([
       this.prisma.membership.findMany({
         where,
-        include: { plan: { select: { name: true, ownershipType: true } } },
+        include: { plan: { select: { name: true, ownershipType: true, membershipType: true, price: true, currency: true, pricingModel: true } } },
         orderBy: { createdAt: 'desc' },
         skip: input.offset,
         take: input.limit,
@@ -71,7 +71,7 @@ export class MembershipsRepository {
   async findById(tenantId: string, organisationId: string, id: string) {
     const m = await this.prisma.membership.findFirst({
       where: { id, tenantId, organisationId },
-      include: { plan: { select: { name: true, ownershipType: true } } },
+      include: { plan: { select: { name: true, ownershipType: true, membershipType: true, price: true, currency: true, pricingModel: true } } },
     })
     return m ? this.format(m) : null
   }
@@ -95,7 +95,7 @@ export class MembershipsRepository {
         source: input.source ?? null,
         notes: input.notes ?? null,
       },
-      include: { plan: { select: { name: true, ownershipType: true } } },
+      include: { plan: { select: { name: true, ownershipType: true, membershipType: true, price: true, currency: true, pricingModel: true } } },
     })
     return this.format(m)
   }
@@ -118,9 +118,37 @@ export class MembershipsRepository {
         source: input.source ?? null,
         notes: input.notes ?? null,
       },
-      include: { plan: { select: { name: true, ownershipType: true } } },
+      include: { plan: { select: { name: true, ownershipType: true, membershipType: true, price: true, currency: true, pricingModel: true } } },
     })
     return this.format(m)
+  }
+
+  async transition(
+    id: string,
+    toStatus: string,
+    timestamps: { activatedAt?: Date; suspendedAt?: Date; cancelledAt?: Date; lapsedAt?: Date; expiredAt?: Date },
+    fromStatus: string,
+    reason: string | null,
+    createdBy: string | null,
+  ) {
+    const [m] = await this.prisma.$transaction([
+      this.prisma.membership.update({
+        where: { id },
+        data: { status: toStatus, ...timestamps },
+        include: { plan: { select: { name: true, ownershipType: true, membershipType: true, price: true, currency: true, pricingModel: true } } },
+      }),
+      this.prisma.membershipLifecycleEvent.create({
+        data: { membershipId: id, fromStatus, toStatus, reason, createdBy },
+      }),
+    ])
+    return this.format(m)
+  }
+
+  async listHistory(membershipId: string) {
+    return this.prisma.membershipLifecycleEvent.findMany({
+      where: { membershipId },
+      orderBy: { createdAt: 'desc' },
+    })
   }
 
   async delete(id: string) {
@@ -133,6 +161,10 @@ export class MembershipsRepository {
       ...rest,
       planName: plan?.name ?? null,
       ownershipType: plan?.ownershipType ?? null,
+      membershipType: plan?.membershipType ?? null,
+      price: plan?.price != null ? Number(plan.price) : null,
+      currency: plan?.currency ?? null,
+      pricingModel: plan?.pricingModel ?? null,
       householdId: rest.ownerType === 'household' ? rest.ownerId : null,
     }
   }

@@ -9,265 +9,178 @@ type Customer = {
   firstName?: string | null
   lastName?: string | null
   email?: string | null
-  phone?: string | null
+}
+
+const STATUS_TABS = [
+  { label: "All", value: undefined },
+  { label: "Pending", value: "pending" },
+  { label: "Active", value: "active" },
+  { label: "Suspended", value: "suspended" },
+  { label: "Lapsed", value: "lapsed" },
+  { label: "Cancelled", value: "cancelled" },
+  { label: "Expired", value: "expired" },
+]
+
+const STATUS_BADGE: Record<string, string> = {
+  pending:   "bg-amber-100 text-amber-700 ring-amber-200",
+  active:    "bg-emerald-100 text-emerald-700 ring-emerald-200",
+  suspended: "bg-orange-100 text-orange-700 ring-orange-200",
+  lapsed:    "bg-slate-100 text-slate-600 ring-slate-200",
+  cancelled: "bg-rose-100 text-rose-700 ring-rose-200",
+  expired:   "bg-slate-200 text-slate-600 ring-slate-300",
+}
+
+const PAYMENT_BADGE: Record<string, string> = {
+  paid:      "bg-emerald-100 text-emerald-700",
+  part_paid: "bg-amber-100 text-amber-700",
+  failed:    "bg-rose-100 text-rose-700",
+  waived:    "bg-sky-100 text-sky-700",
+  unpaid:    "bg-slate-100 text-slate-600",
 }
 
 function formatLabel(value?: string | null) {
-  if (!value) return "Unknown"
-
-  return value
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase())
+  if (!value) return "—"
+  return value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
 function formatDate(value?: string | null) {
-  if (!value) return "Not set"
-
-  const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) {
-    return value
-  }
-
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(date)
+  if (!value) return "—"
+  const d = new Date(value)
+  if (isNaN(d.getTime())) return value
+  return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(d)
 }
 
-function getCustomerName(customer?: Customer | null) {
-  if (!customer) return "Unknown customer"
-
-  const firstName = customer.firstName?.trim() || ""
-  const lastName = customer.lastName?.trim() || ""
-  const fullName = `${firstName} ${lastName}`.trim()
-
-  return fullName || "Unnamed customer"
-}
-
-function getStatusBadgeClass(status?: string | null) {
-  switch (status) {
-    case "active":
-      return "bg-emerald-100 text-emerald-700"
-    case "pending":
-      return "bg-amber-100 text-amber-700"
-    case "expired":
-      return "bg-slate-200 text-slate-700"
-    case "cancelled":
-      return "bg-rose-100 text-rose-700"
-    default:
-      return "bg-slate-100 text-slate-700"
-  }
-}
-
-function getPaymentBadgeClass(status?: string | null) {
-  switch (status) {
-    case "paid":
-      return "bg-emerald-100 text-emerald-700"
-    case "part_paid":
-      return "bg-amber-100 text-amber-700"
-    case "failed":
-      return "bg-rose-100 text-rose-700"
-    case "waived":
-      return "bg-sky-100 text-sky-700"
-    case "unpaid":
-    default:
-      return "bg-slate-100 text-slate-700"
-  }
+function customerName(c?: Customer | null) {
+  if (!c) return "Unknown"
+  return `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || "Unnamed"
 }
 
 export default async function MembershipsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>
+  searchParams: Promise<{ page?: string; status?: string }>
 }) {
   const params = await searchParams
   const page = Math.max(1, Number(params.page) || 1)
+  const status = params.status || undefined
 
   const [membershipsResponse, customersResponse] = await Promise.all([
-    getMemberships(page),
+    getMemberships(page, 25, status),
     getCustomers(),
   ])
 
   const memberships = membershipsResponse.data || []
   const pagination = membershipsResponse.pagination
   const customers: Customer[] = customersResponse.data || []
-
-  const customerMap = new Map<string, Customer>(
-    customers.map((customer: Customer) => [customer.id, customer])
-  )
-
-  const activeCount = memberships.filter((m: any) => m.status === "active").length
-  const expiredCount = memberships.filter((m: any) => m.status === "expired").length
+  const customerMap = new Map(customers.map((c) => [c.id, c]))
 
   return (
-    <PortalLayout
-      title="Memberships"
-      description="Manage memberships assigned to customers or households."
-    >
+    <PortalLayout title="Memberships" description="Manage memberships assigned to customers.">
       <div className="space-y-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        {/* Header */}
+        <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">
-              Active Memberships
-            </h2>
+            <h2 className="text-lg font-semibold text-slate-900">All Memberships</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Memberships represent customers subscribed to a plan.
+              {pagination?.total ?? memberships.length} memberships
+              {status ? ` · ${formatLabel(status)}` : ""}
             </p>
           </div>
-
           <Link
             href="/membership/memberships/new"
-            className="inline-flex items-center gap-2 rounded-2xl bg-[#1832A8] px-5 py-3 text-sm font-semibold !text-white shadow-sm transition hover:bg-[#142a8c]"
+            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
           >
             <Plus className="h-4 w-4" />
             Create Membership
           </Link>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-              Total Memberships
-            </div>
-            <div className="mt-3 text-4xl font-semibold tracking-tight text-slate-900">
-              {pagination?.total ?? memberships.length}
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-              Active
-            </div>
-            <div className="mt-3 text-4xl font-semibold tracking-tight text-slate-900">
-              {activeCount}
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-              Expired
-            </div>
-            <div className="mt-3 text-4xl font-semibold tracking-tight text-slate-900">
-              {expiredCount}
-            </div>
-          </div>
+        {/* Status filter tabs */}
+        <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
+          {STATUS_TABS.map((tab) => {
+            const isActive = (status ?? undefined) === tab.value
+            const href = tab.value
+              ? `/membership/memberships?status=${tab.value}`
+              : `/membership/memberships`
+            return (
+              <Link
+                key={tab.label}
+                href={href}
+                className={[
+                  "rounded-lg px-3 py-1.5 text-sm font-medium transition",
+                  isActive
+                    ? "bg-blue-600 text-white"
+                    : "text-slate-600 hover:bg-slate-100",
+                ].join(" ")}
+              >
+                {tab.label}
+              </Link>
+            )
+          })}
         </div>
 
+        {/* List */}
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           {memberships.length === 0 ? (
-            <div className="flex flex-col items-start gap-4 px-6 py-12">
-              <div>
-                <div className="text-sm font-medium text-slate-900">
-                  No memberships found yet
-                </div>
-                <div className="mt-1 text-sm text-slate-500">
-                  Create your first membership to start assigning plans to customers.
-                </div>
-              </div>
-
-              <Link
-                href="/membership/memberships/new"
-                className="inline-flex items-center gap-2 rounded-2xl bg-[#1832A8] px-4 py-2.5 text-sm font-semibold !text-white shadow-sm transition hover:bg-[#142a8c]"
-              >
-                <Plus className="h-4 w-4" />
-                Create First Membership
-              </Link>
+            <div className="px-6 py-12 text-center text-sm text-slate-500">
+              No memberships found{status ? ` with status "${status}"` : ""}.
             </div>
           ) : (
             <>
-              <div className="divide-y divide-slate-200">
-                {memberships.map((membership: any) => {
-                  const customer = membership.customerId
-                    ? customerMap.get(membership.customerId)
-                    : null
+              <div className="divide-y divide-slate-100">
+                {memberships.map((m: any) => {
+                  const customer = m.customerId ? customerMap.get(m.customerId) : null
+                  const statusCls = STATUS_BADGE[m.status] ?? "bg-slate-100 text-slate-600 ring-slate-200"
+                  const paymentCls = PAYMENT_BADGE[m.paymentStatus] ?? "bg-slate-100 text-slate-600"
 
                   return (
                     <Link
-                      key={membership.id}
-                      href={`/membership/memberships/${membership.id}`}
-                      className="group block px-6 py-5 transition hover:bg-slate-50"
+                      key={m.id}
+                      href={`/membership/memberships/${m.id}`}
+                      className="group flex items-center justify-between gap-4 px-6 py-4 transition hover:bg-slate-50"
                     >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-3">
-                            <div className="text-xl font-semibold text-slate-900">
-                              {getCustomerName(customer)}
-                            </div>
-
-                            <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-                              {membership.planName || "Unknown plan"}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-semibold text-slate-900">
+                            {customerName(customer)}
+                          </span>
+                          <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                            {m.planName ?? "Unknown plan"}
+                          </span>
+                          {m.membershipType && (
+                            <span className="rounded-md bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
+                              {formatLabel(m.membershipType)}
                             </span>
-
-                            <span
-                              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadgeClass(
-                                membership.status
-                              )}`}
-                            >
-                              {formatLabel(membership.status)}
+                          )}
+                          <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ${statusCls}`}>
+                            {formatLabel(m.status)}
+                          </span>
+                          {m.paymentStatus && (
+                            <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${paymentCls}`}>
+                              {formatLabel(m.paymentStatus)}
                             </span>
-
-                            <span
-                              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${getPaymentBadgeClass(
-                                membership.paymentStatus
-                              )}`}
-                            >
-                              {formatLabel(membership.paymentStatus)}
-                            </span>
-                          </div>
-
-                          <div className="mt-4 grid gap-3 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-4">
-                            <div>
-                              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-                                Start
-                              </div>
-                              <div className="mt-1">{formatDate(membership.startDate)}</div>
-                            </div>
-
-                            <div>
-                              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-                                Renewal
-                              </div>
-                              <div className="mt-1">{formatDate(membership.renewalDate)}</div>
-                            </div>
-
-                            <div>
-                              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-                                Reference
-                              </div>
-                              <div className="mt-1">{membership.reference || "Not set"}</div>
-                            </div>
-
-                            <div>
-                              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-                                Source
-                              </div>
-                              <div className="mt-1">{formatLabel(membership.source) || "Not set"}</div>
-                            </div>
-                          </div>
-
-                          {membership.notes ? (
-                            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                              {membership.notes}
-                            </div>
-                          ) : null}
+                          )}
                         </div>
-
-                        <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-slate-300 group-hover:text-slate-500" />
+                        <div className="mt-1.5 flex flex-wrap gap-4 text-xs text-slate-500">
+                          <span>Start: {formatDate(m.startDate)}</span>
+                          {m.renewalDate && <span>Renews: {formatDate(m.renewalDate)}</span>}
+                          {m.price != null && (
+                            <span>{m.currency ?? "GBP"} {Number(m.price).toFixed(2)}{m.pricingModel === "recurring" && m.billingInterval ? ` / ${m.billingInterval}` : ""}</span>
+                          )}
+                        </div>
                       </div>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 group-hover:text-slate-500" />
                     </Link>
                   )
                 })}
               </div>
-
               {pagination && (
                 <PaginationBar
                   page={pagination.page}
                   totalPages={pagination.totalPages}
                   total={pagination.total}
                   limit={pagination.limit}
-                  basePath="/membership/memberships"
+                  basePath={status ? `/membership/memberships?status=${status}` : "/membership/memberships"}
                 />
               )}
             </>

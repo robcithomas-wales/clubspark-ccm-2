@@ -25,4 +25,22 @@ export class VenuesRepository {
       where: { tenantId, id },
     })
   }
+
+  async getSettings(venueId: string) {
+    return this.prisma.read.venueSetting.findUnique({ where: { venueId } })
+  }
+
+  async upsertSettings(venueId: string, data: {
+    openBookings?: boolean
+    addOnsEnabled?: boolean
+    pendingApprovals?: boolean
+    splitPayments?: boolean
+    publicBookingView?: string
+  }) {
+    return this.prisma.write.venueSetting.upsert({
+      where: { venueId },
+      create: { venueId, ...data },
+      update: { ...data, updatedAt: new Date() },
+    })
+  }
 }

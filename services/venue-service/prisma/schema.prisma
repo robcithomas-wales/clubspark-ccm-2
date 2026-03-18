@@ -25,6 +25,7 @@ model Venue {
   units          BookableUnit[]
   resourceGroups ResourceGroup[]
   blackoutDates  BlackoutDate[]
+  settings       VenueSetting?
 
   @@map("venues")
   @@schema("venue")
@@ -145,6 +146,22 @@ model AddOn {
   @@index([tenantId])
   @@index([tenantId, venueId])
   @@index([tenantId, status])
+}
+
+model VenueSetting {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  venueId            String   @unique @map("venue_id") @db.Uuid
+  openBookings       Boolean  @default(false) @map("open_bookings")
+  addOnsEnabled      Boolean  @default(true) @map("add_ons_enabled")
+  pendingApprovals   Boolean  @default(false) @map("pending_approvals")
+  splitPayments      Boolean  @default(false) @map("split_payments")
+  publicBookingView  String   @default("none") @map("public_booking_view")
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
+
+  venue Venue @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  @@map("venue_settings")
+  @@schema("venue")
 }
 
 model BlackoutDate {

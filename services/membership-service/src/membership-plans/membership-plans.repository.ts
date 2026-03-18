@@ -23,6 +23,15 @@ interface CreateInput {
   visibility?: string | null
   status?: string
   sortOrder?: number | null
+  membershipType?: string | null
+  sportCategory?: string | null
+  maxMembers?: number | null
+  isPublic?: boolean
+  pricingModel?: string | null
+  price?: number | null
+  currency?: string
+  billingInterval?: string | null
+  instalmentCount?: number | null
 }
 
 interface UpdateInput extends Partial<Omit<CreateInput, 'tenantId' | 'organisationId'>> {
@@ -60,10 +69,7 @@ export class MembershipPlansRepository {
       this.prisma.membershipPlan.count({ where }),
     ])
 
-    return {
-      rows: rows.map((p) => this.format(p)),
-      total,
-    }
+    return { rows: rows.map((p) => this.format(p)), total }
   }
 
   async findById(tenantId: string, organisationId: string, id: string) {
@@ -88,6 +94,15 @@ export class MembershipPlansRepository {
         visibility: input.visibility ?? null,
         status: input.status ?? 'active',
         sortOrder: input.sortOrder ?? null,
+        membershipType: input.membershipType ?? null,
+        sportCategory: input.sportCategory ?? null,
+        maxMembers: input.maxMembers ?? null,
+        isPublic: input.isPublic ?? false,
+        pricingModel: input.pricingModel ?? null,
+        price: input.price != null ? input.price : null,
+        currency: input.currency ?? 'GBP',
+        billingInterval: input.billingInterval ?? null,
+        instalmentCount: input.instalmentCount ?? null,
       },
       include: { scheme: { select: { name: true } } },
     })
@@ -112,6 +127,15 @@ export class MembershipPlansRepository {
         visibility: input.visibility !== undefined ? input.visibility : existing.visibility,
         status: input.status ?? existing.status,
         sortOrder: input.sortOrder !== undefined ? input.sortOrder : existing.sortOrder,
+        membershipType: input.membershipType !== undefined ? input.membershipType : existing.membershipType,
+        sportCategory: input.sportCategory !== undefined ? input.sportCategory : existing.sportCategory,
+        maxMembers: input.maxMembers !== undefined ? input.maxMembers : existing.maxMembers,
+        isPublic: input.isPublic !== undefined ? input.isPublic : existing.isPublic,
+        pricingModel: input.pricingModel !== undefined ? input.pricingModel : existing.pricingModel,
+        price: input.price !== undefined ? input.price : existing.price,
+        currency: input.currency ?? existing.currency,
+        billingInterval: input.billingInterval !== undefined ? input.billingInterval : existing.billingInterval,
+        instalmentCount: input.instalmentCount !== undefined ? input.instalmentCount : existing.instalmentCount,
       },
       include: { scheme: { select: { name: true } } },
     })
@@ -120,6 +144,10 @@ export class MembershipPlansRepository {
 
   private format(plan: any) {
     const { scheme, ...rest } = plan
-    return { ...rest, schemeName: scheme?.name ?? null }
+    return {
+      ...rest,
+      price: rest.price != null ? Number(rest.price) : null,
+      schemeName: scheme?.name ?? null,
+    }
   }
 }

@@ -1,43 +1,80 @@
 import {
   Injectable,
-  type CanActivate,
-  type ExecutionContext,
-  BadRequestException,
+  CanActivate,
+  ExecutionContext,
+  UnauthorizedException,
 } from '@nestjs/common'
+import { Reflector } from '@nestjs/core'
+import { createRemoteJWKSet, jwtVerify } from 'jose'
 import type { FastifyRequest } from 'fastify'
-import type { TenantContext } from '../decorators/tenant-context.decorator.js'
 
-/**
- * Extracts x-tenant-id and x-organisation-id from request headers
- * and attaches them to request.tenantContext.
- *
- * Applied globally in AppModule — every route is tenant-scoped.
- *
- * ASP.NET equivalent: a base controller with [Authorize] + reading
- * tenant claims from the JWT / request context.
- */
+export const SKIP_TENANT_KEY = 'skipTenant'
+
+// Lazy-initialised so the JWKS URL is read at runtime, not module load
+let jwks: ReturnType<typeof createRemoteJWKSet> | null = null
+function getJwks() {
+  if (!jwks) {
+    const url = process.env['SUPABASE_URL']
+    if (!url) throw new UnauthorizedException('SUPABASE_URL is not configured')
+    jwks = createRemoteJWKSet(new URL(`${url}/auth/v1/.well-known/jwks.json`))
+  }
+  return jwks
+}
+
+interface SupabasePayload {
+  sub: string
+  app_metadata?: {
+    tenantId?: string
+    organisationId?: string
+  }
+}
+
 @Injectable()
 export class TenantContextGuard implements CanActivate {
-  canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest<
-      FastifyRequest & { tenantContext: TenantContext }
-    >()
+  constructor(private readonly reflector: Reflector) {}
 
-    const tenantId = request.headers['x-tenant-id']
-    const organisationId = request.headers['x-organisation-id']
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const skip = this.reflector.getAllAndOverride<boolean>(SKIP_TENANT_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ])
+    if (skip) return true
 
-    if (!tenantId || typeof tenantId !== 'string') {
-      throw new BadRequestException({
-        error: 'TENANT_CONTEXT_MISSING',
-        message: 'Missing required header: x-tenant-id',
-      })
+    const request = context
+      .switchToHttp()
+      .getRequest<FastifyRequest & { tenantContext?: unknown }>()
+
+    const authHeader = request.headers['authorization'] as string | undefined
+
+    // ── JWT path (portal / real traffic) ───────────────────────────────────
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.slice(7)
+
+      let payload: SupabasePayload
+      try {
+        const result = await jwtVerify(token, getJwks())
+        payload = result.payload as unknown as SupabasePayload
+      } catch {
+        throw new UnauthorizedException('Invalid or expired token')
+      }
+
+      const tenantId = payload.app_metadata?.tenantId
+      const organisationId = payload.app_metadata?.organisationId
+
+      if (!tenantId) {
+        throw new UnauthorizedException('Token is missing tenantId claim')
+      }
+
+      request.tenantContext = { tenantId, organisationId }
+      return true
     }
 
-    if (!organisationId || typeof organisationId !== 'string') {
-      throw new BadRequestException({
-        error: 'ORGANISATION_CONTEXT_MISSING',
-        message: 'Missing required header: x-organisation-id',
-      })
+    // ── Header fallback (integration tests) ────────────────────────────────
+    const tenantId = request.headers['x-tenant-id'] as string | undefined
+    const organisationId = request.headers['x-organisation-id'] as string | undefined
+
+    if (!tenantId) {
+      throw new UnauthorizedException('Authentication required')
     }
 
     request.tenantContext = { tenantId, organisationId }

@@ -29,10 +29,12 @@ model BookingSeries {
   slotStartsAt   String    @map("slot_starts_at")
   slotEndsAt     String    @map("slot_ends_at")
   paymentStatus  String    @default("unpaid") @map("payment_status")
-  notes          String?
-  status         String    @default("active")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+  notes       String?
+  minSessions Int?      @map("min_sessions")
+  maxSessions Int?      @map("max_sessions")
+  status      String    @default("active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   bookings Booking[]
 
@@ -56,9 +58,13 @@ model Booking {
   status           String    @default("active")
   paymentStatus    String    @default("unpaid") @map("payment_status")
   bookingReference String    @map("booking_reference")
-  notes            String?
-  cancelledAt      DateTime? @map("cancelled_at")
-  seriesId         String?   @map("series_id") @db.Uuid
+  notes           String?
+  optionalUnitIds String[]  @default([]) @map("optional_unit_ids") @db.Uuid
+  adminOverride   Boolean   @default(false) @map("admin_override")
+  approvedBy      String?   @map("approved_by")
+  approvedAt      DateTime? @map("approved_at")
+  cancelledAt     DateTime? @map("cancelled_at")
+  seriesId        String?   @map("series_id") @db.Uuid
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
@@ -159,15 +165,16 @@ model BookingRulePurposePrice {
 // ─── venue schema (read-only — for validation + availability) ─────────────────
 
 model BookableUnit {
-  id         String  @id @db.Uuid
-  tenantId   String  @map("tenant_id") @db.Uuid
-  venueId    String  @map("venue_id") @db.Uuid
-  resourceId String  @map("resource_id") @db.Uuid
-  name       String
-  unitType   String  @map("unit_type")
-  sortOrder  Int     @default(0) @map("sort_order")
-  capacity   Int?
-  isActive   Boolean @map("is_active")
+  id              String  @id @db.Uuid
+  tenantId        String  @map("tenant_id") @db.Uuid
+  venueId         String  @map("venue_id") @db.Uuid
+  resourceId      String  @map("resource_id") @db.Uuid
+  name            String
+  unitType        String  @map("unit_type")
+  sortOrder       Int     @default(0) @map("sort_order")
+  capacity        Int?
+  isActive        Boolean @map("is_active")
+  isOptionalExtra Boolean @default(false) @map("is_optional_extra")
 
   @@map("bookable_units")
   @@schema("venue")

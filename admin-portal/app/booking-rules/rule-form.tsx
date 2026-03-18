@@ -658,7 +658,7 @@ export function BookingRuleForm({ mode, initialRule, ruleId }: Props) {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="inline-flex h-10 items-center rounded-2xl bg-[#1832A8] px-5 text-sm font-semibold text-white transition hover:bg-[#142a8c] disabled:opacity-60"
+          className="inline-flex h-10 items-center rounded-2xl bg-blue-600 px-5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
         >
           {isSubmitting
             ? mode === "create"

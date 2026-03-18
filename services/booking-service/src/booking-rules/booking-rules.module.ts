@@ -6,6 +6,6 @@ import { BookingRulesRepository } from './booking-rules.repository.js'
 @Module({
   controllers: [BookingRulesController],
   providers: [BookingRulesService, BookingRulesRepository],
-  exports: [BookingRulesRepository],
+  exports: [BookingRulesRepository, BookingRulesService],
 })
 export class BookingRulesModule {}

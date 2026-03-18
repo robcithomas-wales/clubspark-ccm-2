@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import Image from "next/image"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
 import {
   Bell,
@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   Layers,
   LayoutGrid,
+  LogOut,
   MapPin,
   Search,
   Settings,
@@ -23,32 +24,18 @@ import {
   Building2,
   Repeat2,
 } from "lucide-react"
+import { createClient } from "@/lib/supabase/client"
 
 const navSections = [
   {
-    label: "Operations",
+    label: null,
     items: [
       { label: "Dashboard", href: "/", icon: LayoutDashboard },
-      { label: "Bookings", href: "/bookings", icon: CalendarDays },
-      { label: "Recurring Series", href: "/booking-series", icon: Repeat2 },
-      { label: "Availability", href: "/availability", icon: CalendarClock },
-      { label: "Customers", href: "/customers", icon: Users },
-      {
-        label: "Membership",
-        icon: CreditCard,
-        children: [
-          { label: "Schemes", href: "/membership/schemes" },
-          { label: "Plans", href: "/membership/plans" },
-          { label: "Policies", href: "/membership/policies" },
-          { label: "Memberships", href: "/membership/memberships" },
-        ],
-      },
     ],
   },
   {
     label: "Venue Setup",
     items: [
-      { label: "Facilities", href: "/facilities", icon: Building2 },
       { label: "Venues", href: "/venues", icon: MapPin },
       {
         label: "Resources",
@@ -59,9 +46,39 @@ const navSections = [
         ],
       },
       { label: "Bookable Units", href: "/bookable-units", icon: LayoutGrid },
-      { label: "Product Add-Ons", href: "/add-ons", icon: ShoppingBag },
-      { label: "Blackout Dates", href: "/blackout-dates", icon: CalendarOff },
+      { label: "Add-Ons", href: "/add-ons", icon: ShoppingBag },
+    ],
+  },
+  {
+    label: "Operations",
+    items: [
+      { label: "Facilities", href: "/facilities", icon: Building2 },
+      {
+        label: "Bookings",
+        icon: CalendarDays,
+        children: [
+          { label: "All Bookings", href: "/bookings" },
+          { label: "Recurring Series", href: "/booking-series" },
+        ],
+      },
+      { label: "Availability", href: "/availability", icon: CalendarClock },
+      { label: "Customers", href: "/customers", icon: Users },
+    ],
+  },
+  {
+    label: "Membership",
+    items: [
+      { label: "Schemes", href: "/membership/schemes", icon: CreditCard },
+      { label: "Plans", href: "/membership/plans", icon: Layers },
+      { label: "Policies", href: "/membership/policies", icon: ShieldCheck },
+      { label: "Memberships", href: "/membership/memberships", icon: Users },
+    ],
+  },
+  {
+    label: "Scheduling & Rules",
+    items: [
       { label: "Availability Configs", href: "/availability-configs", icon: CalendarClock },
+      { label: "Blackout Dates", href: "/blackout-dates", icon: CalendarOff },
       { label: "Booking Rules", href: "/booking-rules", icon: ShieldCheck },
     ],
   },
@@ -101,6 +118,15 @@ export function PortalLayout({
   }
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(defaultOpen)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+  const router = useRouter()
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUserEmail(user?.email ?? null)
+    })
+  }, [])
 
   // Re-evaluate when pathname changes (e.g. navigation opens the right group)
   useEffect(() => {
@@ -288,18 +314,30 @@ export function PortalLayout({
                 <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-[#5EE082]" />
               </button>
 
-              <button className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm transition hover:bg-slate-50">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1857E0] text-sm font-bold text-white">
-                  RT
-                </div>
-                <div className="hidden text-left sm:block">
-                  <div className="text-sm font-semibold text-slate-900">
-                    Demo Sports Centre
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1857E0] text-sm font-bold text-white">
+                    {userEmail ? userEmail[0].toUpperCase() : '?'}
                   </div>
-                  <div className="text-xs text-slate-500">Venue Admin</div>
+                  <div className="hidden text-left sm:block">
+                    <div className="text-sm font-semibold text-slate-900">
+                      {userEmail ?? 'Loading…'}
+                    </div>
+                    <div className="text-xs text-slate-500">Admin</div>
+                  </div>
                 </div>
-                <ChevronDown className="h-4 w-4 text-slate-400" />
-              </button>
+                <button
+                  title="Sign out"
+                  onClick={async () => {
+                    const supabase = createClient()
+                    await supabase.auth.signOut()
+                    router.push('/login')
+                  }}
+                  className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:bg-red-50 hover:border-red-200"
+                >
+                  <LogOut className="h-5 w-5 text-slate-500 hover:text-red-600" />
+                </button>
+              </div>
             </div>
           </div>
         </header>

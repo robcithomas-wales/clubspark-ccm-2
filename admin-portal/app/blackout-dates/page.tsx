@@ -52,7 +52,7 @@ export default async function BlackoutDatesPage() {
             </div>
             <Link
               href="/blackout-dates/new"
-              className="inline-flex items-center gap-2 rounded-xl bg-[#1857E0] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1832A8]"
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 inline-flex items-center gap-2"
             >
               <Plus className="h-4 w-4" />
               Add blackout date

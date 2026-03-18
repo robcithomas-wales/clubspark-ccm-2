@@ -66,7 +66,7 @@ export default async function BookingRulesPage() {
           </div>
           <Link
             href="/booking-rules/new"
-            className="inline-flex h-10 items-center gap-2 rounded-2xl bg-[#1832A8] px-4 text-sm font-semibold text-white transition hover:bg-[#142a8c]"
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 inline-flex items-center gap-2"
           >
             <Plus className="h-4 w-4" />
             New rule
@@ -82,7 +82,7 @@ export default async function BookingRulesPage() {
             </p>
             <Link
               href="/booking-rules/new"
-              className="mt-4 inline-flex h-9 items-center gap-2 rounded-xl bg-[#1832A8] px-4 text-sm font-semibold text-white transition hover:bg-[#142a8c]"
+              className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 inline-flex items-center gap-2"
             >
               <Plus className="h-4 w-4" />
               Create first rule

@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from "next/server"
+import { createClient } from '@/lib/supabase/server'
+
+async function getAuthHeaders() {
+  const supabase = await createClient()
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error("Not authenticated")
+  return {
+    'Authorization': `Bearer ${session.access_token}`,
+    'Content-Type': 'application/json',
+  }
+}
 
 const customerServiceBaseUrl = "http://127.0.0.1:4004"
-
-const CUSTOMER_HEADERS = {
-  "x-tenant-id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-  "x-organisation-id": "11111111-1111-1111-1111-111111111111",
-}
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -23,7 +29,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const response = await fetch(url, {
-      headers: CUSTOMER_HEADERS,
+      headers: await getAuthHeaders(),
       cache: "no-store",
     })
 
@@ -44,10 +50,7 @@ export async function POST(request: NextRequest) {
 
     const response = await fetch(`${customerServiceBaseUrl}/customers`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...CUSTOMER_HEADERS,
-      },
+      headers: await getAuthHeaders(),
       body: JSON.stringify(body),
     })
 

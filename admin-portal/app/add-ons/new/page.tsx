@@ -59,7 +59,7 @@ async function createAddOnAction(formData: FormData) {
 
 export default async function NewAddOnPage() {
   const venuesResponse = await getVenues()
-  const venues = venuesResponse.data || venuesResponse || []
+  const venues = Array.isArray(venuesResponse) ? venuesResponse : (venuesResponse as any)?.data ?? []
 
   return (
     <PortalLayout

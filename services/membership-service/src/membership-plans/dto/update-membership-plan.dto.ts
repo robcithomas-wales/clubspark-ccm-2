@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber } from 'class-validator'
+import { IsString, IsOptional, IsNumber, IsBoolean } from 'class-validator'
 
 export class UpdateMembershipPlanDto {
   @IsOptional()
@@ -36,4 +36,42 @@ export class UpdateMembershipPlanDto {
   @IsOptional()
   @IsNumber()
   sortOrder?: number
+
+  // Phase 1: membership type & structure
+  @IsOptional()
+  @IsString()
+  membershipType?: string
+
+  @IsOptional()
+  @IsString()
+  sportCategory?: string
+
+  @IsOptional()
+  @IsNumber()
+  maxMembers?: number
+
+  @IsOptional()
+  @IsBoolean()
+  isPublic?: boolean
+
+  // Phase 1: pricing model
+  @IsOptional()
+  @IsString()
+  pricingModel?: string
+
+  @IsOptional()
+  @IsNumber()
+  price?: number
+
+  @IsOptional()
+  @IsString()
+  currency?: string
+
+  @IsOptional()
+  @IsString()
+  billingInterval?: string
+
+  @IsOptional()
+  @IsNumber()
+  instalmentCount?: number
 }

@@ -7,6 +7,16 @@ import { MembershipsRepository } from './memberships.repository'
 import { MembershipPlansRepository } from '../membership-plans/membership-plans.repository'
 import { CreateMembershipDto } from './dto/create-membership.dto'
 import { UpdateMembershipDto } from './dto/update-membership.dto'
+import { TransitionMembershipDto } from './dto/transition-membership.dto'
+
+// State machine: action → { requiredFromStatuses, toStatus }
+const TRANSITIONS: Record<string, { from: string[]; to: string }> = {
+  activate: { from: ['pending', 'suspended', 'lapsed'], to: 'active' },
+  suspend:  { from: ['active'],                          to: 'suspended' },
+  cancel:   { from: ['pending', 'active', 'suspended', 'lapsed'], to: 'cancelled' },
+  lapse:    { from: ['active', 'suspended'],             to: 'lapsed' },
+  expire:   { from: ['active', 'lapsed'],                to: 'expired' },
+}
 
 @Injectable()
 export class MembershipsService {
@@ -84,7 +94,7 @@ export class MembershipsService {
       customerId: dto.customerId ?? null,
       ownerType,
       ownerId,
-      status: dto.status ?? 'active',
+      status: dto.status ?? 'pending',
       startDate: dto.startDate,
       endDate: dto.endDate ?? null,
       renewalDate: dto.renewalDate ?? null,
@@ -146,6 +156,52 @@ export class MembershipsService {
     })
 
     return { data: m }
+  }
+
+  async transition(
+    tenantId: string,
+    organisationId: string,
+    id: string,
+    dto: TransitionMembershipDto,
+    actorEmail: string | null,
+  ) {
+    const existing = await this.repo.findById(tenantId, organisationId, id)
+    if (!existing) throw new NotFoundException('Membership not found')
+
+    const rule = TRANSITIONS[dto.action]
+    if (!rule) throw new BadRequestException(`Unknown action: ${dto.action}`)
+    if (!rule.from.includes(existing.status)) {
+      throw new BadRequestException(
+        `Cannot ${dto.action} a membership that is currently '${existing.status}'. ` +
+        `Valid from statuses: ${rule.from.join(', ')}.`,
+      )
+    }
+
+    const now = new Date()
+    const timestamps: Record<string, Date> = {}
+    if (rule.to === 'active')    timestamps['activatedAt'] = now
+    if (rule.to === 'suspended') timestamps['suspendedAt'] = now
+    if (rule.to === 'cancelled') timestamps['cancelledAt'] = now
+    if (rule.to === 'lapsed')    timestamps['lapsedAt']    = now
+    if (rule.to === 'expired')   timestamps['expiredAt']   = now
+
+    const m = await this.repo.transition(
+      id,
+      rule.to,
+      timestamps,
+      existing.status,
+      dto.reason ?? null,
+      actorEmail,
+    )
+
+    return { data: m }
+  }
+
+  async getHistory(tenantId: string, organisationId: string, id: string) {
+    const existing = await this.repo.findById(tenantId, organisationId, id)
+    if (!existing) throw new NotFoundException('Membership not found')
+    const events = await this.repo.listHistory(id)
+    return { data: events }
   }
 
   async remove(tenantId: string, organisationId: string, id: string) {
