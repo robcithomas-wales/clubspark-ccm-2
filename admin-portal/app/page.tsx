@@ -7,13 +7,17 @@ import {
   Crown,
   LayoutGrid,
   Package,
+  PoundSterling,
   ShieldCheck,
+  TrendingUp,
   Users,
 } from "lucide-react"
 import { PortalLayout } from "@/components/portal-layout"
 import {
   getAddOnServices,
   getBookableUnits,
+  getBookingDailyStats,
+  getBookingStats,
   getBookings,
   getCustomers,
   getEntitlementPolicies,
@@ -144,6 +148,8 @@ export default async function DashboardPage() {
     policiesResult,
     membershipsResult,
     addOnsResult,
+    statsResult,
+    dailyStatsResult,
   ] = await Promise.allSettled([
     getVenues(),
     getResources(),
@@ -156,6 +162,8 @@ export default async function DashboardPage() {
     getEntitlementPolicies(),
     getMemberships(),
     getAddOnServices(),
+    getBookingStats(),
+    getBookingDailyStats(30),
   ])
 
   const venuesResponse = venuesResult.status === "fulfilled" ? venuesResult.value : null
@@ -169,6 +177,8 @@ export default async function DashboardPage() {
   const policiesResponse = policiesResult.status === "fulfilled" ? policiesResult.value : null
   const membershipsResponse = membershipsResult.status === "fulfilled" ? membershipsResult.value : null
   const addOnsResponse = addOnsResult.status === "fulfilled" ? addOnsResult.value : null
+  const bookingStats = statsResult.status === "fulfilled" ? statsResult.value : null
+  const dailyStats = dailyStatsResult.status === "fulfilled" ? dailyStatsResult.value : []
 
   function extractData(r: any): any[] {
     if (!r) return []
@@ -202,13 +212,22 @@ export default async function DashboardPage() {
     )
     .slice(0, 6)
 
+  const today = new Date().toISOString().slice(0, 10)
   const bookingsToday = bookings.filter((booking: any) => {
     const startsAt = booking.startsAt
     if (!startsAt) return false
-
-    const bookingDate = new Date(startsAt).toISOString().slice(0, 10)
-    return bookingDate === "2026-03-15"
+    return new Date(startsAt).toISOString().slice(0, 10) === today
   })
+
+  const totalBookedHours = bookingStats?.totalBookedHours ?? 0
+  const addOnRevenue = bookingStats?.addOnRevenue ?? 0
+  const uniqueCustomers = bookingStats?.uniqueCustomers ?? 0
+  const activeUnitCount = units.filter((u: any) => u.isActive !== false).length
+  // 12 operating hours/day × 30 days
+  const availableHours = activeUnitCount * 12 * 30
+  const utilisationPct = availableHours > 0
+    ? Math.min(100, Math.round((totalBookedHours / availableHours) * 100))
+    : 0
 
   const sportMix = Array.from(
     resources.reduce((map: Map<string, number>, resource: any) => {
@@ -274,7 +293,7 @@ export default async function DashboardPage() {
       description="Operational overview of the ClubSpark pilot platform across facilities, bookings, customers, membership and add ons."
     >
       <div className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <StatCard
             title="Facilities"
             value={resources.length}
@@ -298,6 +317,24 @@ export default async function DashboardPage() {
             value={pendingBookingsTotal}
             description={`Bookings awaiting admin approval. ${activeMemberships.length} active memberships.`}
             icon={Crown}
+          />
+          <StatCard
+            title="Add-on revenue"
+            value={`£${addOnRevenue.toFixed(2)}`}
+            description="Total revenue from active booking add-ons across all bookings."
+            icon={PoundSterling}
+          />
+          <StatCard
+            title="Utilisation"
+            value={`${utilisationPct}%`}
+            description={`${Math.round(totalBookedHours)} booked hours across ${activeUnitCount} active units (30-day window).`}
+            icon={TrendingUp}
+          />
+          <StatCard
+            title="Participants"
+            value={uniqueCustomers}
+            description="Unique customers with at least one active booking."
+            icon={Users}
           />
         </div>
 
@@ -465,6 +502,76 @@ export default async function DashboardPage() {
             </div>
           </SectionCard>
         </div>
+
+        {/* Revenue & utilisation trend charts (from daily stats API) */}
+        {dailyStats.length > 0 && (() => {
+          const chartH = 80
+          const n = dailyStats.length
+          const barW = Math.floor(560 / n) - 2
+
+          const maxRev = Math.max(...dailyStats.map((d) => d.addOnRevenue), 1)
+          const maxHrs = Math.max(...dailyStats.map((d) => d.bookedHours), 1)
+
+          return (
+            <div className="grid gap-6 xl:grid-cols-2">
+              <SectionCard
+                title="Add-on revenue (30 days)"
+                description="Daily add-on revenue from active booking add-ons."
+                actionHref="/bookings"
+                actionLabel="View bookings"
+              >
+                <div className="overflow-x-auto">
+                  <svg viewBox={`0 0 560 ${chartH + 28}`} className="w-full" aria-label="Daily add-on revenue bar chart">
+                    {dailyStats.map((d, i) => {
+                      const barH = Math.max(4, Math.round((d.addOnRevenue / maxRev) * chartH))
+                      const x = i * (barW + 2)
+                      const y = chartH - barH
+                      return (
+                        <g key={d.date}>
+                          <rect x={x} y={y} width={barW} height={barH} rx={3} fill="#10b981" opacity={0.8} />
+                          <title>{d.date}: £{d.addOnRevenue.toFixed(2)}</title>
+                          {barW >= 20 && (
+                            <text x={x + barW / 2} y={chartH + 16} textAnchor="middle" fontSize={9} fill="#94a3b8">
+                              {d.date.slice(5)}
+                            </text>
+                          )}
+                        </g>
+                      )
+                    })}
+                  </svg>
+                </div>
+              </SectionCard>
+
+              <SectionCard
+                title="Booked hours (30 days)"
+                description="Daily booked hours across all active bookings."
+                actionHref="/bookings"
+                actionLabel="View bookings"
+              >
+                <div className="overflow-x-auto">
+                  <svg viewBox={`0 0 560 ${chartH + 28}`} className="w-full" aria-label="Daily booked hours bar chart">
+                    {dailyStats.map((d, i) => {
+                      const barH = Math.max(4, Math.round((d.bookedHours / maxHrs) * chartH))
+                      const x = i * (barW + 2)
+                      const y = chartH - barH
+                      return (
+                        <g key={d.date}>
+                          <rect x={x} y={y} width={barW} height={barH} rx={3} fill="#1857E0" opacity={0.7} />
+                          <title>{d.date}: {d.bookedHours.toFixed(1)}h</title>
+                          {barW >= 20 && (
+                            <text x={x + barW / 2} y={chartH + 16} textAnchor="middle" fontSize={9} fill="#94a3b8">
+                              {d.date.slice(5)}
+                            </text>
+                          )}
+                        </g>
+                      )
+                    })}
+                  </svg>
+                </div>
+              </SectionCard>
+            </div>
+          )
+        })()}
 
         {/* Bookings trend chart */}
         {bookingsByDate.length > 0 && (() => {

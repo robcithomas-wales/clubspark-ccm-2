@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
 import {
   Bell,
+  BarChart2,
   CalendarDays,
   CalendarClock,
   CalendarOff,
@@ -58,6 +59,8 @@ const navSections = [
         icon: CalendarDays,
         children: [
           { label: "All Bookings", href: "/bookings" },
+          { label: "Pending Approvals", href: "/bookings/pending" },
+          { label: "Calendar", href: "/bookings/calendar" },
           { label: "Recurring Series", href: "/booking-series" },
         ],
       },
@@ -80,6 +83,23 @@ const navSections = [
       { label: "Availability Configs", href: "/availability-configs", icon: CalendarClock },
       { label: "Blackout Dates", href: "/blackout-dates", icon: CalendarOff },
       { label: "Booking Rules", href: "/booking-rules", icon: ShieldCheck },
+    ],
+  },
+  {
+    label: "Reports",
+    items: [
+      {
+        label: "Reports",
+        icon: BarChart2,
+        children: [
+          { label: "Bookings", href: "/reports/bookings" },
+          { label: "Revenue", href: "/reports/revenue" },
+          { label: "Utilisation", href: "/reports/utilisation" },
+          { label: "Customers", href: "/reports/customers" },
+          { label: "Membership", href: "/reports/membership" },
+          { label: "Series", href: "/reports/series" },
+        ],
+      },
     ],
   },
   {

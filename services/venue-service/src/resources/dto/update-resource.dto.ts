@@ -4,6 +4,7 @@ import {
   IsNotEmpty,
   IsBoolean,
   IsArray,
+  IsObject,
 } from 'class-validator'
 
 export class UpdateResourceDto {
@@ -52,4 +53,8 @@ export class UpdateResourceDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean
+
+  @IsOptional()
+  @IsObject()
+  publicAttributes?: Record<string, unknown>
 }

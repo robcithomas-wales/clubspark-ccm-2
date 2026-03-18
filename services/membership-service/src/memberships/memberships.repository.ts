@@ -155,6 +155,71 @@ export class MembershipsRepository {
     await this.prisma.membership.delete({ where: { id } })
   }
 
+  // ─── Reporting aggregations ─────────────────────────────────────────────────
+
+  async getStats(tenantId: string, organisationId: string): Promise<{
+    byStatus: { status: string; count: number }[]
+    byPlan: { planName: string; membershipType: string; count: number; revenue: number }[]
+    byType: { membershipType: string; count: number }[]
+    totalActive: number
+    totalRevenue: number
+  }> {
+    const [byStatus, byPlan] = await Promise.all([
+      this.prisma.$queryRaw<{ status: string; count: number }[]>`
+        SELECT status, COUNT(*)::int AS count
+        FROM membership.memberships
+        WHERE tenant_id = ${tenantId}::uuid AND organisation_id = ${organisationId}::uuid
+        GROUP BY status
+        ORDER BY count DESC
+      `,
+      this.prisma.$queryRaw<{ planName: string; membershipType: string; count: number; revenue: number }[]>`
+        SELECT
+          p.name                                                             AS "planName",
+          p.membership_type                                                  AS "membershipType",
+          COUNT(m.id)::int                                                   AS count,
+          COALESCE(SUM(CASE WHEN m.status = 'active' THEN p.price::float ELSE 0 END), 0) AS revenue
+        FROM membership.memberships m
+        JOIN membership.membership_plans p ON p.id = m.plan_id
+        WHERE m.tenant_id = ${tenantId}::uuid AND m.organisation_id = ${organisationId}::uuid
+        GROUP BY p.id, p.name, p.membership_type
+        ORDER BY count DESC
+      `,
+    ])
+
+    const byTypeMap = new Map<string, number>()
+    let totalActive = 0
+    let totalRevenue = 0
+    for (const row of byPlan) {
+      byTypeMap.set(row.membershipType, (byTypeMap.get(row.membershipType) ?? 0) + row.count)
+      totalRevenue += row.revenue
+    }
+    for (const row of byStatus) {
+      if (row.status === 'active') totalActive = row.count
+    }
+
+    const byType = Array.from(byTypeMap.entries()).map(([membershipType, count]) => ({ membershipType, count }))
+    return { byStatus, byPlan, byType, totalActive, totalRevenue }
+  }
+
+  async getDailyStats(tenantId: string, organisationId: string, months = 12): Promise<{
+    month: string
+    newCount: number
+    activeCount: number
+  }[]> {
+    return this.prisma.$queryRaw<{ month: string; newCount: number; activeCount: number }[]>`
+      SELECT
+        TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS month,
+        COUNT(*)::int                                        AS "newCount",
+        COUNT(*) FILTER (WHERE status = 'active')::int       AS "activeCount"
+      FROM membership.memberships
+      WHERE tenant_id      = ${tenantId}::uuid
+        AND organisation_id = ${organisationId}::uuid
+        AND created_at     >= DATE_TRUNC('month', CURRENT_TIMESTAMP) - (${months - 1} || ' months')::interval
+      GROUP BY DATE_TRUNC('month', created_at)
+      ORDER BY month
+    `
+  }
+
   private format(m: any) {
     const { plan, ...rest } = m
     return {

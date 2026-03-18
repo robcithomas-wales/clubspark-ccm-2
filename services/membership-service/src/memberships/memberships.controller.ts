@@ -20,6 +20,18 @@ import { TransitionMembershipDto } from './dto/transition-membership.dto'
 export class MembershipsController {
   constructor(private readonly service: MembershipsService) {}
 
+  @Get('stats')
+  getStats(@Req() req: any) {
+    const { tenantId, organisationId } = req.tenantContext
+    return this.service.getStats(tenantId, organisationId).then((data) => ({ data }))
+  }
+
+  @Get('stats/daily')
+  getDailyStats(@Req() req: any, @Query('months') months?: number) {
+    const { tenantId, organisationId } = req.tenantContext
+    return this.service.getDailyStats(tenantId, organisationId, Number(months) || 12).then((data) => ({ data }))
+  }
+
   @Get()
   list(
     @Req() req: any,

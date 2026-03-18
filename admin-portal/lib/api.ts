@@ -101,6 +101,26 @@ export async function getBookings(
   return res.json() as Promise<{ data: any[]; pagination: PaginationMeta }>
 }
 
+export async function getBookingStats(): Promise<{ totalBookedHours: number; addOnRevenue: number; uniqueCustomers: number }> {
+  const res = await fetch(`${BOOKING_SERVICE}/bookings/stats`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to load booking stats")
+  const json = await res.json()
+  return json.data ?? { totalBookedHours: 0, addOnRevenue: 0, uniqueCustomers: 0 }
+}
+
+export async function getBookingDailyStats(days = 30): Promise<{ date: string; bookingCount: number; bookedHours: number; addOnRevenue: number }[]> {
+  const res = await fetch(`${BOOKING_SERVICE}/bookings/stats/daily?days=${days}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data ?? []
+}
+
 export async function updateBooking(
   id: string,
   data: {
@@ -1072,4 +1092,96 @@ export async function upsertVenueSettings(venueId: string, data: {
   }
   const json = await res.json()
   return (json.data ?? json) as any
+}
+
+// ─── Reporting API ────────────────────────────────────────────────────────────
+
+export async function getBookingStatsSummary(): Promise<{
+  byStatus: { status: string; count: number }[]
+  bySource: { source: string; count: number }[]
+  byPaymentStatus: { paymentStatus: string; count: number }[]
+}> {
+  const res = await fetch(`${BOOKING_SERVICE}/bookings/stats/summary`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return { byStatus: [], bySource: [], byPaymentStatus: [] }
+  const json = await res.json()
+  return json.data ?? { byStatus: [], bySource: [], byPaymentStatus: [] }
+}
+
+export async function getBookingStatsByUnit(): Promise<{
+  bookableUnitId: string
+  bookingCount: number
+  bookedHours: number
+}[]> {
+  const res = await fetch(`${BOOKING_SERVICE}/bookings/stats/by-unit`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data ?? []
+}
+
+export async function getBookingStatsByDow(): Promise<{
+  dow: number
+  hour: number
+  count: number
+}[]> {
+  const res = await fetch(`${BOOKING_SERVICE}/bookings/stats/by-dow`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data ?? []
+}
+
+export async function getTopCustomers(limit = 20): Promise<{
+  customerId: string
+  firstName: string | null
+  lastName: string | null
+  email: string | null
+  bookingCount: number
+  totalHours: number
+  addOnSpend: number
+}[]> {
+  const res = await fetch(`${BOOKING_SERVICE}/bookings/stats/customers?limit=${limit}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data ?? []
+}
+
+export async function getMembershipStats(): Promise<{
+  byStatus: { status: string; count: number }[]
+  byPlan: { planName: string; membershipType: string; count: number; revenue: number }[]
+  byType: { membershipType: string; count: number }[]
+  totalActive: number
+  totalRevenue: number
+}> {
+  const res = await fetch(`${MEMBERSHIP_SERVICE}/memberships/stats`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return { byStatus: [], byPlan: [], byType: [], totalActive: 0, totalRevenue: 0 }
+  const json = await res.json()
+  return json.data ?? { byStatus: [], byPlan: [], byType: [], totalActive: 0, totalRevenue: 0 }
+}
+
+export async function getMembershipDailyStats(months = 12): Promise<{
+  month: string
+  newCount: number
+  activeCount: number
+}[]> {
+  const res = await fetch(`${MEMBERSHIP_SERVICE}/memberships/stats/daily?months=${months}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data ?? []
 }

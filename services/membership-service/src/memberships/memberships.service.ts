@@ -209,4 +209,12 @@ export class MembershipsService {
     if (!existing) throw new NotFoundException('Membership not found')
     await this.repo.delete(id)
   }
+
+  async getStats(tenantId: string, organisationId: string) {
+    return this.repo.getStats(tenantId, organisationId)
+  }
+
+  async getDailyStats(tenantId: string, organisationId: string, months: number) {
+    return this.repo.getDailyStats(tenantId, organisationId, months)
+  }
 }

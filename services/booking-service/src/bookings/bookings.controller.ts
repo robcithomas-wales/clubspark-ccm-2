@@ -50,6 +50,44 @@ export class BookingsController {
     }
   }
 
+  @Get('stats')
+  async getStats(@TenantCtx() ctx: TenantContext) {
+    const stats = await this.service.getStats(ctx)
+    return { data: stats }
+  }
+
+  @Get('stats/daily')
+  @ApiQuery({ name: 'days', required: false, type: Number })
+  async getDailyStats(@TenantCtx() ctx: TenantContext, @Query('days') days = 30) {
+    const stats = await this.service.getDailyStats(ctx, Number(days))
+    return { data: stats }
+  }
+
+  @Get('stats/summary')
+  async getStatsSummary(@TenantCtx() ctx: TenantContext) {
+    const stats = await this.service.getStatsSummary(ctx)
+    return { data: stats }
+  }
+
+  @Get('stats/by-unit')
+  async getStatsByUnit(@TenantCtx() ctx: TenantContext) {
+    const stats = await this.service.getStatsByUnit(ctx)
+    return { data: stats }
+  }
+
+  @Get('stats/by-dow')
+  async getStatsByDow(@TenantCtx() ctx: TenantContext) {
+    const stats = await this.service.getStatsByDow(ctx)
+    return { data: stats }
+  }
+
+  @Get('stats/customers')
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  async getTopCustomers(@TenantCtx() ctx: TenantContext, @Query('limit') limit = 20) {
+    const stats = await this.service.getTopCustomers(ctx, Number(limit))
+    return { data: stats }
+  }
+
   @Get(':id')
   async getById(@Param('id') id: string, @TenantCtx() ctx: TenantContext) {
     const booking = await this.service.getById(ctx, id)

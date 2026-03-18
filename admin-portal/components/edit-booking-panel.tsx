@@ -11,6 +11,8 @@ interface EditBookingPanelProps {
   endsAt: string
   notes?: string | null
   bookingSource?: string | null
+  bookableUnitId: string
+  availableUnits: { id: string; name: string }[]
 }
 
 export function EditBookingPanel({
@@ -20,6 +22,8 @@ export function EditBookingPanel({
   endsAt,
   notes,
   bookingSource,
+  bookableUnitId,
+  availableUnits,
 }: EditBookingPanelProps) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -37,6 +41,7 @@ export function EditBookingPanel({
     endsAt: toDatetimeLocal(endsAt),
     notes: notes ?? "",
     bookingSource: bookingSource ?? "",
+    bookableUnitId: bookableUnitId,
   })
 
   if (status === "cancelled") return null
@@ -45,15 +50,21 @@ export function EditBookingPanel({
     setSaving(true)
     setError(null)
     try {
+      const body: Record<string, unknown> = {
+        startsAt: new Date(form.startsAt).toISOString(),
+        endsAt: new Date(form.endsAt).toISOString(),
+        notes: form.notes || undefined,
+        bookingSource: form.bookingSource || undefined,
+      }
+
+      if (form.bookableUnitId !== bookableUnitId) {
+        body.bookableUnitId = form.bookableUnitId
+      }
+
       const res = await fetch(`/api/bookings/${bookingId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          startsAt: new Date(form.startsAt).toISOString(),
-          endsAt: new Date(form.endsAt).toISOString(),
-          notes: form.notes || undefined,
-          bookingSource: form.bookingSource || undefined,
-        }),
+        body: JSON.stringify(body),
       })
 
       if (!res.ok) {
@@ -111,6 +122,22 @@ export function EditBookingPanel({
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-slate-600">
+                Bookable unit
+              </label>
+              <select
+                value={form.bookableUnitId}
+                onChange={(e) => setForm((f) => ({ ...f, bookableUnitId: e.target.value }))}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#1857E0]"
+              >
+                {availableUnits.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div>
               <label className="mb-1.5 block text-xs font-medium text-slate-600">
                 Booking source

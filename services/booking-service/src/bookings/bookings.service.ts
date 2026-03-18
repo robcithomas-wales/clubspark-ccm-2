@@ -90,7 +90,27 @@ export class BookingsService {
     if (dto.startsAt && dto.endsAt && new Date(dto.endsAt) <= new Date(dto.startsAt)) {
       throw new BadRequestException('endsAt must be after startsAt')
     }
-    const booking = await this.repo.update(ctx.tenantId, id, dto)
+
+    let newUnit: { resourceId: string; venueId: string } | undefined
+    if (dto.bookableUnitId) {
+      const unit = await this.repo.findBookableUnit(ctx.tenantId, dto.bookableUnitId)
+      if (!unit) throw new NotFoundException('Bookable unit not found')
+      if (!unit.isActive) throw new ConflictException('Bookable unit is inactive')
+      newUnit = { resourceId: unit.resourceId, venueId: unit.venueId }
+    }
+
+    let booking: Awaited<ReturnType<typeof this.repo.update>>
+    try {
+      booking = await this.repo.update(ctx.tenantId, id, dto, newUnit)
+    } catch (err) {
+      if (err instanceof ConflictException) throw err
+      const pg = err as { code?: string }
+      if (pg.code === '23P01' || pg.code === '40001') {
+        throw new ConflictException('Booking conflicts with an existing booking for the selected time slot')
+      }
+      throw err
+    }
+
     if (!booking) {
       const exists = await this.repo.exists(ctx.tenantId, id)
       if (!exists) throw new NotFoundException('Booking not found')
@@ -98,6 +118,30 @@ export class BookingsService {
     }
     this.logger.log({ id, organisationId: ctx.organisationId }, 'Booking updated')
     return booking
+  }
+
+  async getStats(ctx: TenantContext) {
+    return this.repo.getStats(ctx.tenantId)
+  }
+
+  async getDailyStats(ctx: TenantContext, days: number) {
+    return this.repo.getDailyStats(ctx.tenantId, days)
+  }
+
+  async getStatsSummary(ctx: TenantContext) {
+    return this.repo.getStatsSummary(ctx.tenantId)
+  }
+
+  async getStatsByUnit(ctx: TenantContext) {
+    return this.repo.getStatsByUnit(ctx.tenantId)
+  }
+
+  async getStatsByDow(ctx: TenantContext) {
+    return this.repo.getStatsByDow(ctx.tenantId)
+  }
+
+  async getTopCustomers(ctx: TenantContext, limit: number) {
+    return this.repo.getTopCustomers(ctx.tenantId, limit)
   }
 
   async cancel(ctx: TenantContext, id: string) {

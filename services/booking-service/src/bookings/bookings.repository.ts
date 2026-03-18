@@ -352,20 +352,13 @@ export class BookingsRepository {
     return rows[0] ?? null
   }
 
-  async update(tenantId: string, id: string, dto: UpdateBookingDto): Promise<BookingRow | null> {
-    const rows = await this.prisma.write.$queryRaw<BookingRow[]>`
-      UPDATE booking.bookings
-      SET
-        starts_at         = COALESCE(${dto.startsAt ?? null}::timestamptz, starts_at),
-        ends_at           = COALESCE(${dto.endsAt ?? null}::timestamptz,   ends_at),
-        notes             = CASE WHEN ${dto.notes !== undefined} THEN ${dto.notes ?? null} ELSE notes END,
-        booking_source    = CASE WHEN ${dto.bookingSource !== undefined} THEN ${dto.bookingSource ?? null} ELSE booking_source END,
-        customer_id       = CASE WHEN ${dto.customerId !== undefined} THEN ${dto.customerId ?? null}::uuid ELSE customer_id END,
-        optional_unit_ids = CASE WHEN ${dto.optionalUnitIds !== undefined} THEN ${dto.optionalUnitIds ?? []}::uuid[] ELSE optional_unit_ids END,
-        updated_at        = now()
-      WHERE tenant_id = ${tenantId}::uuid
-        AND id        = ${id}::uuid
-        AND status   <> 'cancelled'
+  async update(
+    tenantId: string,
+    id: string,
+    dto: UpdateBookingDto,
+    newUnit?: { resourceId: string; venueId: string },
+  ): Promise<BookingRow | null> {
+    const returning = Prisma.sql`
       RETURNING
         id,
         tenant_id         AS "tenantId",
@@ -390,7 +383,169 @@ export class BookingsRepository {
         created_at        AS "createdAt",
         updated_at        AS "updatedAt"
     `
+
+    // Unit change requires a conflict-checked atomic transaction
+    if (dto.bookableUnitId && newUnit) {
+      try {
+        return await this.prisma.write.$transaction(
+          async (tx) => {
+            // Read current times to use as fallback if not overridden
+            const current = await tx.$queryRaw<{ startsAt: Date; endsAt: Date }[]>`
+              SELECT starts_at AS "startsAt", ends_at AS "endsAt"
+              FROM booking.bookings
+              WHERE tenant_id = ${tenantId}::uuid AND id = ${id}::uuid AND status <> 'cancelled'
+            `
+            if (current.length === 0) return null
+
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            const startsAt = dto.startsAt ?? current[0]!.startsAt.toISOString()
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            const endsAt   = dto.endsAt   ?? current[0]!.endsAt.toISOString()
+
+            const conflicts = await tx.$queryRaw<{ id: string }[]>`
+              SELECT id FROM booking.bookings
+              WHERE tenant_id        = ${tenantId}::uuid
+                AND status          <> 'cancelled'
+                AND id              <> ${id}::uuid
+                AND bookable_unit_id = ${dto.bookableUnitId}::uuid
+                AND starts_at        < ${endsAt}::timestamptz
+                AND ends_at          > ${startsAt}::timestamptz
+            `
+            if (conflicts.length > 0) {
+              throw new ConflictException('Unit is not available for the selected time slot')
+            }
+
+            const rows = await tx.$queryRaw<BookingRow[]>(
+              Prisma.sql`
+                UPDATE booking.bookings
+                SET
+                  bookable_unit_id  = ${dto.bookableUnitId}::uuid,
+                  resource_id       = ${newUnit.resourceId}::uuid,
+                  venue_id          = ${newUnit.venueId}::uuid,
+                  starts_at         = COALESCE(${dto.startsAt ?? null}::timestamptz, starts_at),
+                  ends_at           = COALESCE(${dto.endsAt ?? null}::timestamptz,   ends_at),
+                  notes             = CASE WHEN ${dto.notes !== undefined} THEN ${dto.notes ?? null} ELSE notes END,
+                  booking_source    = CASE WHEN ${dto.bookingSource !== undefined} THEN ${dto.bookingSource ?? null} ELSE booking_source END,
+                  customer_id       = CASE WHEN ${dto.customerId !== undefined} THEN ${dto.customerId ?? null}::uuid ELSE customer_id END,
+                  optional_unit_ids = CASE WHEN ${dto.optionalUnitIds !== undefined} THEN ${dto.optionalUnitIds ?? []}::uuid[] ELSE optional_unit_ids END,
+                  updated_at        = now()
+                WHERE tenant_id = ${tenantId}::uuid
+                  AND id        = ${id}::uuid
+                  AND status   <> 'cancelled'
+                ${returning}
+              `,
+            )
+            return rows[0] ?? null
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        )
+      } catch (err) {
+        if (err instanceof ConflictException) throw err
+        const pg = err as { code?: string }
+        if (pg.code === '40001' || pg.code === '23P01') {
+          throw new ConflictException('Unit is not available for the selected time slot')
+        }
+        throw err
+      }
+    }
+
+    const rows = await this.prisma.write.$queryRaw<BookingRow[]>(
+      Prisma.sql`
+        UPDATE booking.bookings
+        SET
+          starts_at         = COALESCE(${dto.startsAt ?? null}::timestamptz, starts_at),
+          ends_at           = COALESCE(${dto.endsAt ?? null}::timestamptz,   ends_at),
+          notes             = CASE WHEN ${dto.notes !== undefined} THEN ${dto.notes ?? null} ELSE notes END,
+          booking_source    = CASE WHEN ${dto.bookingSource !== undefined} THEN ${dto.bookingSource ?? null} ELSE booking_source END,
+          customer_id       = CASE WHEN ${dto.customerId !== undefined} THEN ${dto.customerId ?? null}::uuid ELSE customer_id END,
+          optional_unit_ids = CASE WHEN ${dto.optionalUnitIds !== undefined} THEN ${dto.optionalUnitIds ?? []}::uuid[] ELSE optional_unit_ids END,
+          updated_at        = now()
+        WHERE tenant_id = ${tenantId}::uuid
+          AND id        = ${id}::uuid
+          AND status   <> 'cancelled'
+        ${returning}
+      `,
+    )
     return rows[0] ?? null
+  }
+
+  async getStats(tenantId: string): Promise<{
+    totalBookedHours: number
+    addOnRevenue: number
+    uniqueCustomers: number
+  }> {
+    const [bookingRows, addOnRows, customerRows] = await Promise.all([
+      this.prisma.read.$queryRaw<[{ totalBookedHours: number }]>`
+        SELECT COALESCE(
+          SUM(EXTRACT(EPOCH FROM (ends_at - starts_at)) / 3600)
+          FILTER (WHERE status = 'active'), 0
+        )::float AS "totalBookedHours"
+        FROM booking.bookings
+        WHERE tenant_id = ${tenantId}::uuid
+      `,
+      this.prisma.read.$queryRaw<[{ total: number }]>`
+        SELECT COALESCE(SUM(ba.price * ba.quantity), 0)::float AS total
+        FROM booking.booking_add_ons ba
+        JOIN booking.bookings b ON b.id = ba.booking_id
+        WHERE b.tenant_id = ${tenantId}::uuid
+          AND ba.status   = 'active'
+      `,
+      this.prisma.read.$queryRaw<[{ count: number }]>`
+        SELECT COUNT(DISTINCT customer_id)::int AS count
+        FROM booking.bookings
+        WHERE tenant_id  = ${tenantId}::uuid
+          AND status     = 'active'
+          AND customer_id IS NOT NULL
+      `,
+    ])
+
+    return {
+      totalBookedHours: bookingRows[0]?.totalBookedHours ?? 0,
+      addOnRevenue: addOnRows[0]?.total ?? 0,
+      uniqueCustomers: customerRows[0]?.count ?? 0,
+    }
+  }
+
+  async getDailyStats(
+    tenantId: string,
+    days = 30,
+  ): Promise<{ date: string; bookingCount: number; bookedHours: number; addOnRevenue: number }[]> {
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+
+    const [bookingRows, addOnRows] = await Promise.all([
+      this.prisma.read.$queryRaw<{ date: string; bookingCount: number; bookedHours: number }[]>`
+        SELECT
+          starts_at::date::text                                                   AS date,
+          COUNT(*)::int                                                           AS "bookingCount",
+          COALESCE(SUM(EXTRACT(EPOCH FROM (ends_at - starts_at)) / 3600), 0)::float AS "bookedHours"
+        FROM booking.bookings
+        WHERE tenant_id = ${tenantId}::uuid
+          AND status    = 'active'
+          AND starts_at >= ${cutoff}::timestamptz
+        GROUP BY starts_at::date
+        ORDER BY starts_at::date
+      `,
+      this.prisma.read.$queryRaw<{ date: string; addOnRevenue: number }[]>`
+        SELECT
+          b.starts_at::date::text                             AS date,
+          COALESCE(SUM(ba.price * ba.quantity), 0)::float    AS "addOnRevenue"
+        FROM booking.bookings b
+        JOIN booking.booking_add_ons ba ON ba.booking_id = b.id AND ba.status = 'active'
+        WHERE b.tenant_id = ${tenantId}::uuid
+          AND b.status    = 'active'
+          AND b.starts_at >= ${cutoff}::timestamptz
+        GROUP BY b.starts_at::date
+        ORDER BY b.starts_at::date
+      `,
+    ])
+
+    const revenueByDate = new Map(addOnRows.map((r) => [r.date, r.addOnRevenue]))
+    return bookingRows.map((r) => ({
+      date: r.date,
+      bookingCount: r.bookingCount,
+      bookedHours: r.bookedHours,
+      addOnRevenue: revenueByDate.get(r.date) ?? 0,
+    }))
   }
 
   async approve(tenantId: string, id: string, approvedBy: string): Promise<BookingRow | null> {
@@ -433,6 +588,130 @@ export class BookingsRepository {
       `
     }
     return rows[0] ?? null
+  }
+
+  /**
+   * Cancels all pending bookings whose created_at is older than `olderThanHours`.
+   * Returns the number of bookings expired.
+   */
+  async expirePending(olderThanHours: number): Promise<number> {
+    const cutoff = new Date(Date.now() - olderThanHours * 60 * 60 * 1000).toISOString()
+    const rows = await this.prisma.write.$queryRaw<{ id: string }[]>`
+      UPDATE booking.bookings
+      SET status       = 'cancelled',
+          cancelled_at = now(),
+          notes        = COALESCE(notes || chr(10), '') || 'Auto-cancelled: pending approval timed out',
+          updated_at   = now()
+      WHERE status     = 'pending'
+        AND created_at < ${cutoff}::timestamptz
+      RETURNING id
+    `
+    return rows.length
+  }
+
+  // ─── Reporting aggregations ─────────────────────────────────────────────────
+
+  /** Breakdowns by status, booking source and payment status for the summary report. */
+  async getStatsSummary(tenantId: string): Promise<{
+    byStatus: { status: string; count: number }[]
+    bySource: { source: string; count: number }[]
+    byPaymentStatus: { paymentStatus: string; count: number }[]
+  }> {
+    const [byStatus, bySource, byPaymentStatus] = await Promise.all([
+      this.prisma.read.$queryRaw<{ status: string; count: number }[]>`
+        SELECT status, COUNT(*)::int AS count
+        FROM booking.bookings
+        WHERE tenant_id = ${tenantId}::uuid
+        GROUP BY status
+        ORDER BY count DESC
+      `,
+      this.prisma.read.$queryRaw<{ source: string; count: number }[]>`
+        SELECT COALESCE(booking_source, 'unknown') AS source, COUNT(*)::int AS count
+        FROM booking.bookings
+        WHERE tenant_id = ${tenantId}::uuid
+        GROUP BY booking_source
+        ORDER BY count DESC
+      `,
+      this.prisma.read.$queryRaw<{ paymentStatus: string; count: number }[]>`
+        SELECT payment_status AS "paymentStatus", COUNT(*)::int AS count
+        FROM booking.bookings
+        WHERE tenant_id = ${tenantId}::uuid AND status <> 'cancelled'
+        GROUP BY payment_status
+        ORDER BY count DESC
+      `,
+    ])
+    return { byStatus, bySource, byPaymentStatus }
+  }
+
+  /** Booked hours and booking count per bookable unit (active bookings only). */
+  async getStatsByUnit(tenantId: string): Promise<{
+    bookableUnitId: string
+    bookingCount: number
+    bookedHours: number
+  }[]> {
+    return this.prisma.read.$queryRaw<{ bookableUnitId: string; bookingCount: number; bookedHours: number }[]>`
+      SELECT
+        bookable_unit_id                                                        AS "bookableUnitId",
+        COUNT(*)::int                                                           AS "bookingCount",
+        COALESCE(SUM(EXTRACT(EPOCH FROM (ends_at - starts_at)) / 3600), 0)::float AS "bookedHours"
+      FROM booking.bookings
+      WHERE tenant_id = ${tenantId}::uuid AND status = 'active'
+      GROUP BY bookable_unit_id
+      ORDER BY "bookedHours" DESC
+    `
+  }
+
+  /** Booking counts by day-of-week (0=Sun) and hour-of-day, for a heatmap. */
+  async getStatsByDow(tenantId: string): Promise<{ dow: number; hour: number; count: number }[]> {
+    return this.prisma.read.$queryRaw<{ dow: number; hour: number; count: number }[]>`
+      SELECT
+        EXTRACT(DOW  FROM starts_at)::int  AS dow,
+        EXTRACT(HOUR FROM starts_at)::int  AS hour,
+        COUNT(*)::int                      AS count
+      FROM booking.bookings
+      WHERE tenant_id = ${tenantId}::uuid AND status = 'active'
+      GROUP BY dow, hour
+      ORDER BY dow, hour
+    `
+  }
+
+  /** Top customers ranked by booking count, with total hours and add-on spend. */
+  async getTopCustomers(tenantId: string, limit = 20): Promise<{
+    customerId: string
+    firstName: string | null
+    lastName: string | null
+    email: string | null
+    bookingCount: number
+    totalHours: number
+    addOnSpend: number
+  }[]> {
+    return this.prisma.read.$queryRaw<{
+      customerId: string
+      firstName: string | null
+      lastName: string | null
+      email: string | null
+      bookingCount: number
+      totalHours: number
+      addOnSpend: number
+    }[]>`
+      SELECT
+        b.customer_id                                                                AS "customerId",
+        c.first_name                                                                 AS "firstName",
+        c.last_name                                                                  AS "lastName",
+        c.email,
+        COUNT(DISTINCT b.id)::int                                                    AS "bookingCount",
+        COALESCE(SUM(EXTRACT(EPOCH FROM (b.ends_at - b.starts_at)) / 3600), 0)::float AS "totalHours",
+        COALESCE(SUM(ba.price * ba.quantity), 0)::float                             AS "addOnSpend"
+      FROM booking.bookings b
+      JOIN customer.customers c ON c.id = b.customer_id
+      LEFT JOIN booking.booking_add_ons ba ON ba.booking_id = b.id AND ba.status = 'active'
+      WHERE b.tenant_id    = ${tenantId}::uuid
+        AND b.status       = 'active'
+        AND b.customer_id IS NOT NULL
+      GROUP BY b.customer_id, c.first_name, c.last_name, c.email
+      ORDER BY "bookingCount" DESC
+      LIMIT ${limit}
+    `
   }
 
   // ─── Booking add-ons ────────────────────────────────────────────────────────

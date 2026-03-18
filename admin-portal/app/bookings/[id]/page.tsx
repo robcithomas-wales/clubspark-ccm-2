@@ -407,6 +407,10 @@ export default async function BookingDetailPage({
               endsAt={booking.endsAt}
               notes={booking.notes}
               bookingSource={booking.bookingSource}
+              bookableUnitId={booking.bookableUnitId}
+              availableUnits={units
+                .filter((u: any) => u.resourceId === booking.resourceId && u.isActive !== false)
+                .map((u: any) => ({ id: u.id, name: u.name }))}
             />
 
             <div className="border-t border-slate-200 pt-6">

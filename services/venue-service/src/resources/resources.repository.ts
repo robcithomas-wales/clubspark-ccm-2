@@ -87,6 +87,7 @@ export class ResourcesRepository {
         description: dto.description !== undefined ? dto.description : existing.description,
         colour: dto.colour !== undefined ? dto.colour : existing.colour,
         isActive: dto.isActive !== undefined ? dto.isActive : existing.isActive,
+        publicAttributes: dto.publicAttributes !== undefined ? (dto.publicAttributes as object) : (existing.publicAttributes as object ?? {}),
       },
       select: RESOURCE_SELECT,
     })
