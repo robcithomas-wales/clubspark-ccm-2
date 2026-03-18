@@ -26,6 +26,18 @@ export class CustomersService {
   }
 
   async create(tenantId: string, dto: CreateCustomerDto) {
+    // If a Supabase user ID is provided, check whether this email already exists.
+    // If it does, rehome the existing record to the new ID so everything stays linked.
+    if (dto.id && dto.email) {
+      const existing = await this.repo.findByEmail(tenantId, dto.email)
+      if (existing && existing.id !== dto.id) {
+        const customer = await this.repo.rehome(tenantId, existing.id, dto.id)
+        return { data: customer }
+      }
+      if (existing) {
+        return { data: existing }
+      }
+    }
     const customer = await this.repo.create(tenantId, dto)
     return { data: customer }
   }

@@ -37,8 +37,9 @@ export class BookingsController {
     @Query('status') status?: string,
     @Query('fromDate') fromDate?: string,
     @Query('toDate') toDate?: string,
+    @Query('customerId') customerId?: string,
   ) {
-    const result = await this.service.list(ctx, Number(page), Number(limit), { status, fromDate, toDate })
+    const result = await this.service.list(ctx, Number(page), Number(limit), { status, fromDate, toDate, customerId })
     return {
       data: result.rows,
       pagination: {

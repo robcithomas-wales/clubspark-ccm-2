@@ -69,6 +69,12 @@ export class ResourcesRepository {
     })
   }
 
+  async delete(tenantId: string, id: string) {
+    const existing = await this.prisma.read.resource.findFirst({ where: { id, tenantId } })
+    if (!existing) return null
+    return this.prisma.write.resource.delete({ where: { id } })
+  }
+
   async update(tenantId: string, id: string, dto: UpdateResourceDto) {
     const existing = await this.prisma.read.resource.findFirst({ where: { id, tenantId } })
     if (!existing) return null

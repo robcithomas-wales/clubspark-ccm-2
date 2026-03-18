@@ -48,6 +48,8 @@ async function bootstrap(): Promise<void> {
     logger.log(`Swagger docs: http://localhost:${port}/api/docs`)
   }
 
+  app.enableCors()
+
   await app.listen(port, '0.0.0.0')
   logger.log(`Venue service running on http://localhost:${port} [${nodeEnv}]`)
 }

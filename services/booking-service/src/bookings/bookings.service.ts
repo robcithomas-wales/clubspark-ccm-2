@@ -29,7 +29,7 @@ export class BookingsService {
     ctx: TenantContext,
     page: number,
     limit: number,
-    filters: { status?: string; fromDate?: string; toDate?: string } = {},
+    filters: { status?: string; fromDate?: string; toDate?: string; customerId?: string } = {},
   ) {
     return this.repo.list(ctx.tenantId, page, limit, filters)
   }

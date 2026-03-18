@@ -1185,3 +1185,33 @@ export async function getMembershipDailyStats(months = 12): Promise<{
   const json = await res.json()
   return json.data ?? []
 }
+
+export type Organisation = {
+  id: string
+  tenantId: string
+  name: string
+  slug: string
+  customDomain: string | null
+  primaryColour: string
+  logoUrl: string | null
+  about: string | null
+  address: string | null
+  phone: string | null
+  email: string | null
+  mapsEmbedUrl: string | null
+  isPublished: boolean
+}
+
+export async function getOrganisation(): Promise<Organisation | null> {
+  try {
+    const res = await fetch(`${FACILITY_SERVICE}/organisations/me`, {
+      headers: await getAuthHeaders(),
+      cache: "no-store",
+    })
+    if (!res.ok) return null
+    const json = await res.json()
+    return json.data ?? null
+  } catch {
+    return null
+  }
+}

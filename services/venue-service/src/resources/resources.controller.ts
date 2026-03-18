@@ -3,9 +3,12 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Param,
   Body,
   Query,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common'
 import { ApiTags, ApiSecurity } from '@nestjs/swagger'
 import { ResourcesService } from './resources.service.js'
@@ -38,6 +41,12 @@ export class ResourcesController {
   @Post()
   create(@TenantCtx() ctx: TenantContext, @Body() dto: CreateResourceDto) {
     return this.service.create(ctx.tenantId, dto)
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  delete(@TenantCtx() ctx: TenantContext, @Param('id') id: string) {
+    return this.service.delete(ctx.tenantId, id)
   }
 
   @Patch(':id')

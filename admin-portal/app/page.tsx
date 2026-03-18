@@ -24,6 +24,7 @@ import {
   getMembershipPlans,
   getMembershipSchemes,
   getMemberships,
+  getOrganisation,
   getResources,
   getVenues,
 } from "@/lib/api"
@@ -136,6 +137,8 @@ function StatusPill({
 }
 
 export default async function DashboardPage() {
+  const org = await getOrganisation()
+
   const [
     venuesResult,
     resourcesResult,
@@ -289,8 +292,8 @@ export default async function DashboardPage() {
 
   return (
     <PortalLayout
-      title="Dashboard"
-      description="Operational overview of the ClubSpark pilot platform across facilities, bookings, customers, membership and add ons."
+      title={org?.name ?? "Dashboard"}
+      description={org?.about ?? "Operational overview across facilities, bookings, customers, membership and add-ons."}
     >
       <div className="space-y-6">
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

@@ -156,6 +156,11 @@ model VenueSetting {
   pendingApprovals   Boolean  @default(false) @map("pending_approvals")
   splitPayments      Boolean  @default(false) @map("split_payments")
   publicBookingView  String   @default("none") @map("public_booking_view")
+  // Mobile app branding
+  clubCode           String?  @unique @map("club_code")
+  primaryColour      String   @default("#1857E0") @map("primary_colour")
+  logoUrl            String?  @map("logo_url")
+  appName            String?  @map("app_name")
   updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
 
   venue Venue @relation(fields: [venueId], references: [id], onDelete: Cascade)
@@ -183,6 +188,29 @@ model BlackoutDate {
   @@schema("venue")
   @@index([tenantId])
   @@index([tenantId, venueId])
+}
+
+model Organisation {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String   @unique @map("tenant_id") @db.Uuid
+  name           String
+  slug           String   @unique
+  customDomain   String?  @unique @map("custom_domain")
+  primaryColour  String   @default("#1857E0") @map("primary_colour")
+  logoUrl        String?  @map("logo_url")
+  about          String?
+  address        String?
+  phone          String?
+  email          String?
+  mapsEmbedUrl   String?  @map("maps_embed_url")
+  isPublished    Boolean  @default(false) @map("is_published")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("organisations")
+  @@schema("venue")
+  @@index([tenantId])
+  @@index([slug])
 }
 
 model AvailabilityConfig {

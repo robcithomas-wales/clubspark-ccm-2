@@ -1,14 +1,5 @@
-import { PortalLayout } from "@/components/portal-layout"
+import { redirect } from "next/navigation"
 
 export default function SettingsPage() {
-  return (
-    <PortalLayout
-      title="Settings"
-      description="Tenant level settings and configuration will be added later."
-    >
-      <div className="card p-6 text-[var(--text-muted)]">
-        Settings page placeholder.
-      </div>
-    </PortalLayout>
-  )
+  redirect("/settings/organisation")
 }

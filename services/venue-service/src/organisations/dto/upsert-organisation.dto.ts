@@ -1,0 +1,56 @@
+import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsEmail, Matches, MinLength } from 'class-validator'
+
+export class PublicRegisterDto {
+  @IsString() @IsNotEmpty() tenantId!: string
+  @IsEmail()               email!: string
+  @IsString() @MinLength(8) password!: string
+  @IsString() @IsNotEmpty() firstName!: string
+  @IsString() @IsNotEmpty() lastName!: string
+}
+
+export class UpsertOrganisationDto {
+  @IsString()
+  @IsNotEmpty()
+  name!: string
+
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/^[a-z0-9-]+$/, { message: 'Slug may only contain lowercase letters, numbers and hyphens' })
+  slug!: string
+
+  @IsOptional()
+  @IsString()
+  customDomain?: string | null
+
+  @IsOptional()
+  @IsString()
+  primaryColour?: string
+
+  @IsOptional()
+  @IsString()
+  logoUrl?: string | null
+
+  @IsOptional()
+  @IsString()
+  about?: string | null
+
+  @IsOptional()
+  @IsString()
+  address?: string | null
+
+  @IsOptional()
+  @IsString()
+  phone?: string | null
+
+  @IsOptional()
+  @IsEmail()
+  email?: string | null
+
+  @IsOptional()
+  @IsString()
+  mapsEmbedUrl?: string | null
+
+  @IsOptional()
+  @IsBoolean()
+  isPublished?: boolean
+}

@@ -14,6 +14,7 @@ import { AddOnsModule } from './add-ons/add-ons.module.js'
 import { ResourceGroupsModule } from './resource-groups/resource-groups.module.js'
 import { AvailabilityConfigsModule } from './availability-configs/availability-configs.module.js'
 import { BlackoutDatesModule } from './blackout-dates/blackout-dates.module.js'
+import { OrganisationsModule } from './organisations/organisations.module.js'
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { BlackoutDatesModule } from './blackout-dates/blackout-dates.module.js'
     AddOnsModule,
     AvailabilityConfigsModule,
     BlackoutDatesModule,
+    OrganisationsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: TenantContextGuard },

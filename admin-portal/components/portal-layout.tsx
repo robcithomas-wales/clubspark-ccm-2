@@ -105,7 +105,13 @@ const navSections = [
   {
     label: null,
     items: [
-      { label: "Settings", href: "/settings", icon: Settings },
+      {
+        label: "Settings",
+        icon: Settings,
+        children: [
+          { label: "Organisation", href: "/settings/organisation" },
+        ],
+      },
     ],
   },
 ]

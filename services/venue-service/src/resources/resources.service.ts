@@ -28,6 +28,11 @@ export class ResourcesService {
     return { data: resource }
   }
 
+  async delete(tenantId: string, id: string) {
+    const result = await this.repo.delete(tenantId, id)
+    if (!result) throw new NotFoundException('Resource not found')
+  }
+
   async update(tenantId: string, id: string, dto: UpdateResourceDto) {
     const resource = await this.repo.update(tenantId, id, dto)
     if (!resource) throw new NotFoundException('Resource not found')

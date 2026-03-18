@@ -39,6 +39,9 @@ export interface BookingRow {
   customerLastName: string | null
   customerEmail: string | null
   customerPhone: string | null
+  venueName: string | null
+  resourceName: string | null
+  unitName: string | null
 }
 
 @Injectable()
@@ -49,7 +52,7 @@ export class BookingsRepository {
     tenantId: string,
     page: number,
     limit: number,
-    filters: { status?: string; fromDate?: string; toDate?: string } = {},
+    filters: { status?: string; fromDate?: string; toDate?: string; customerId?: string } = {},
   ) {
     const offset = (page - 1) * limit
 
@@ -63,6 +66,10 @@ export class BookingsRepository {
 
     const toFilter = filters.toDate
       ? Prisma.sql`AND b.starts_at < ${filters.toDate}::timestamptz`
+      : Prisma.empty
+
+    const customerFilter = filters.customerId
+      ? Prisma.sql`AND b.customer_id = ${filters.customerId}::uuid`
       : Prisma.empty
 
     const rows = await this.prisma.read.$queryRaw<Array<BookingRow & { totalCount: number }>>(
@@ -94,13 +101,20 @@ export class BookingsRepository {
           c.last_name          AS "customerLastName",
           c.email              AS "customerEmail",
           c.phone              AS "customerPhone",
+          v.name               AS "venueName",
+          r.name               AS "resourceName",
+          u.name               AS "unitName",
           COUNT(*) OVER()::int AS "totalCount"
         FROM booking.bookings b
         LEFT JOIN customer.customers c ON c.id = b.customer_id
+        LEFT JOIN venue.venues v ON v.id = b.venue_id
+        LEFT JOIN venue.resources r ON r.id = b.resource_id
+        LEFT JOIN venue.bookable_units u ON u.id = b.bookable_unit_id
         WHERE b.tenant_id = ${tenantId}::uuid
         ${statusFilter}
         ${fromFilter}
         ${toFilter}
+        ${customerFilter}
         ORDER BY b.starts_at DESC
         LIMIT ${limit} OFFSET ${offset}
       `,
@@ -140,9 +154,15 @@ export class BookingsRepository {
           c.first_name         AS "customerFirstName",
           c.last_name          AS "customerLastName",
           c.email              AS "customerEmail",
-          c.phone              AS "customerPhone"
+          c.phone              AS "customerPhone",
+          v.name               AS "venueName",
+          r.name               AS "resourceName",
+          u.name               AS "unitName"
         FROM booking.bookings b
         LEFT JOIN customer.customers c ON c.id = b.customer_id
+        LEFT JOIN venue.venues v ON v.id = b.venue_id
+        LEFT JOIN venue.resources r ON r.id = b.resource_id
+        LEFT JOIN venue.bookable_units u ON u.id = b.bookable_unit_id
         WHERE b.tenant_id = ${tenantId}::uuid
           AND b.id = ${id}::uuid
       `,

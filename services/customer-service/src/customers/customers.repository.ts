@@ -41,9 +41,43 @@ export class CustomersRepository {
     })
   }
 
+  async findByEmail(tenantId: string, email: string) {
+    return this.prisma.customer.findFirst({
+      where: { tenantId, email },
+    })
+  }
+
+  async rehome(tenantId: string, oldId: string, newId: string) {
+    // Update the customer ID and cascade to bookings + memberships across schemas.
+    // FK checks are disabled for this transaction to avoid ordering constraints.
+    await this.prisma.$transaction([
+      this.prisma.$executeRaw`SET LOCAL session_replication_role = replica`,
+      this.prisma.$executeRaw`
+        UPDATE booking.bookings
+        SET customer_id = ${newId}::uuid
+        WHERE customer_id = ${oldId}::uuid
+          AND tenant_id = ${tenantId}::uuid
+      `,
+      this.prisma.$executeRaw`
+        UPDATE membership.memberships
+        SET customer_id = ${newId}::uuid
+        WHERE customer_id = ${oldId}::uuid
+          AND tenant_id = ${tenantId}::uuid
+      `,
+      this.prisma.$executeRaw`
+        UPDATE customer.customers
+        SET id = ${newId}::uuid
+        WHERE id = ${oldId}::uuid
+          AND tenant_id = ${tenantId}::uuid
+      `,
+    ])
+    return this.prisma.customer.findFirst({ where: { tenantId, id: newId } })
+  }
+
   async create(tenantId: string, dto: CreateCustomerDto) {
     return this.prisma.customer.create({
       data: {
+        ...(dto.id ? { id: dto.id } : {}),
         tenantId,
         firstName: dto.firstName,
         lastName: dto.lastName,

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation"
 import { PortalLayout } from "@/components/portal-layout"
 import { getResourceById, getAvailabilityConfigs } from "@/lib/api"
 import { ResourcePublicAttributesPanel } from "@/components/resource-public-attributes-panel"
+import { DeleteResourceButton } from "@/components/delete-resource-button"
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
@@ -157,13 +158,14 @@ export default async function ResourceDetailPage({
           )}
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex items-center justify-between">
           <Link
             href="/resources"
             className="inline-flex h-11 items-center justify-center rounded-xl border border-[#1857E0] bg-white px-5 text-sm font-medium text-[#1857E0] transition hover:bg-blue-50"
           >
             Back to resources
           </Link>
+          <DeleteResourceButton id={resource.id} name={resource.name} />
         </div>
       </div>
     </PortalLayout>
