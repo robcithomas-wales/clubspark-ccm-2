@@ -18,35 +18,42 @@ export async function GET(
   const { id } = await params
 
   try {
-    const response = await fetch(`http://127.0.0.1:4005/bookings/${id}/add-ons`, {
+    const response = await fetch(`http://127.0.0.1:4003/venues/${id}/settings`, {
       headers: await getAuthHeaders(),
       cache: "no-store",
     })
 
-    const data = await response.json()
+    const text = await response.text()
+    let data: any = null
+    try { data = text ? JSON.parse(text) : null } catch { data = { error: text } }
     return NextResponse.json(data, { status: response.status })
-  } catch {
-    return NextResponse.json({ error: "Failed to load booking add-ons" }, { status: 500 })
+  } catch (error) {
+    console.error("Get venue settings proxy failed:", error)
+    return NextResponse.json({ error: "Failed to get venue settings" }, { status: 500 })
   }
 }
 
-export async function POST(
+export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const body = await request.json()
 
   try {
-    const response = await fetch(`http://127.0.0.1:4005/bookings/${id}/add-ons`, {
-      method: "POST",
+    const body = await request.json()
+    const response = await fetch(`http://127.0.0.1:4003/venues/${id}/settings`, {
+      method: "PUT",
       headers: await getAuthHeaders(),
       body: JSON.stringify(body),
+      cache: "no-store",
     })
 
-    const data = await response.json()
+    const text = await response.text()
+    let data: any = null
+    try { data = text ? JSON.parse(text) : null } catch { data = { error: text } }
     return NextResponse.json(data, { status: response.status })
-  } catch {
-    return NextResponse.json({ error: "Failed to create booking add-on" }, { status: 500 })
+  } catch (error) {
+    console.error("Update venue settings proxy failed:", error)
+    return NextResponse.json({ error: "Failed to update venue settings" }, { status: 500 })
   }
 }

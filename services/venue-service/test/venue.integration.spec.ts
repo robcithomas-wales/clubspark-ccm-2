@@ -161,9 +161,9 @@ describe('Venue service — integration', () => {
       expect(res.body.data.isActive).toBe(false)
     })
 
-    it('returns 400 when auth headers are missing', async () => {
+    it('returns 401 when auth headers are missing', async () => {
       const res = await request.get('/resources')
-      expect(res.status).toBe(400)
+      expect(res.status).toBe(401)
     })
   })
 
@@ -440,9 +440,74 @@ describe('Venue service — integration', () => {
       expect(match.name).toBe('Test Venue')
     })
 
-    it('returns 400 when tenant headers are missing', async () => {
+    it('returns 401 when tenant headers are missing', async () => {
       const res = await request.get('/venues')
-      expect(res.status).toBe(400)
+      expect(res.status).toBe(401)
+    })
+  })
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Venue Settings
+  // ══════════════════════════════════════════════════════════════════════════
+
+  describe('Venue Settings', () => {
+    it('returns default empty settings when none have been saved', async () => {
+      const res = await request
+        .get(`/venues/${TEST_VENUE_ID}/settings`)
+        .set(HEADERS)
+
+      expect(res.status).toBe(200)
+      // Either a settings record with the venueId, or {venueId} fallback
+      expect(res.body.data.venueId).toBe(TEST_VENUE_ID)
+    })
+
+    it('upserts venue settings and returns the saved record', async () => {
+      const res = await request
+        .put(`/venues/${TEST_VENUE_ID}/settings`)
+        .set(JSON_HEADERS)
+        .send({
+          openBookings: true,
+          addOnsEnabled: true,
+          pendingApprovals: true,
+          splitPayments: false,
+          publicBookingView: 'availability',
+        })
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.venueId).toBe(TEST_VENUE_ID)
+      expect(res.body.data.openBookings).toBe(true)
+      expect(res.body.data.pendingApprovals).toBe(true)
+      expect(res.body.data.publicBookingView).toBe('availability')
+    })
+
+    it('reads back updated settings after upsert', async () => {
+      await request
+        .put(`/venues/${TEST_VENUE_ID}/settings`)
+        .set(JSON_HEADERS)
+        .send({ openBookings: false, addOnsEnabled: false })
+
+      const res = await request
+        .get(`/venues/${TEST_VENUE_ID}/settings`)
+        .set(HEADERS)
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.openBookings).toBe(false)
+      expect(res.body.data.addOnsEnabled).toBe(false)
+    })
+
+    it('accepts a partial update (only fields provided are changed)', async () => {
+      await request
+        .put(`/venues/${TEST_VENUE_ID}/settings`)
+        .set(JSON_HEADERS)
+        .send({ openBookings: true, splitPayments: true })
+
+      const res = await request
+        .put(`/venues/${TEST_VENUE_ID}/settings`)
+        .set(JSON_HEADERS)
+        .send({ splitPayments: false })
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.splitPayments).toBe(false)
     })
   })
 

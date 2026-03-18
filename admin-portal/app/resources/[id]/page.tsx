@@ -2,6 +2,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { PortalLayout } from "@/components/portal-layout"
 import { getResourceById, getAvailabilityConfigs } from "@/lib/api"
+import { ResourcePublicAttributesPanel } from "@/components/resource-public-attributes-panel"
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
@@ -105,6 +106,12 @@ export default async function ResourceDetailPage({
           </div>
         </div>
 
+        {/* Public attributes */}
+        <ResourcePublicAttributesPanel
+          resourceId={resource.id}
+          initial={resource.publicAttributes}
+        />
+
         {/* Availability configs */}
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
@@ -113,7 +120,7 @@ export default async function ResourceDetailPage({
             </h2>
             <Link
               href={`/availability-configs/new?scopeType=resource&scopeId=${resource.id}`}
-              className="inline-flex h-8 items-center rounded-lg bg-[#1857E0] px-3 text-xs font-medium text-white transition hover:bg-[#1832A8]"
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 inline-flex items-center"
             >
               Add override
             </Link>

@@ -8,11 +8,12 @@ import {
   FileText,
   Repeat2,
 } from "lucide-react"
-import { getBookableUnits } from "@/lib/api"
+import { getBookableUnits, getAddOnServices } from "@/lib/api"
 import { PortalLayout } from "@/components/portal-layout"
 import { CancelBookingButton } from "@/components/cancel-booking-button"
 import { PaymentStatusButton } from "@/components/payment-status-button"
 import { EditBookingPanel } from "@/components/edit-booking-panel"
+import { ApproveRejectButtons } from "@/components/approve-reject-buttons"
 
 function formatDate(value?: string | null) {
   if (!value) return "n/a"
@@ -197,10 +198,11 @@ export default async function BookingDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const [booking, units, bookingAddOns] = await Promise.all([
+  const [booking, units, bookingAddOns, addOnServices] = await Promise.all([
     getBooking(id),
     getBookableUnits(),
     getBookingAddOns(id),
+    getAddOnServices().catch(() => []),
   ])
 
   if (!booking) {
@@ -208,7 +210,14 @@ export default async function BookingDetailPage({
   }
 
   const unitMap = new Map(units.map((unit: any) => [unit.id, unit]))
+  const addOnServiceMap = new Map<string, any>(
+    (Array.isArray(addOnServices) ? addOnServices : (addOnServices as any)?.data ?? [])
+      .map((a: any) => [a.id, a])
+  )
   const unit = unitMap.get(booking.bookableUnitId)
+  const optionalUnits: any[] = (booking.optionalUnitIds ?? [])
+    .map((uid: string) => unitMap.get(uid))
+    .filter(Boolean)
 
   return (
     <PortalLayout
@@ -351,7 +360,7 @@ export default async function BookingDetailPage({
                     <div key={addOn.id} className="flex items-center justify-between px-4 py-3">
                       <div>
                         <div className="text-sm font-medium text-slate-900">
-                          {addOn.addOnId}
+                          {addOnServiceMap.get(addOn.addOnId)?.name ?? addOn.addOnId}
                         </div>
                         <div className="mt-0.5 text-xs text-slate-500">
                           {addOn.startsAt ? formatTime(addOn.startsAt) : ""}{addOn.endsAt ? ` – ${formatTime(addOn.endsAt)}` : ""}
@@ -367,6 +376,28 @@ export default async function BookingDetailPage({
                   ))}
                 </div>
               </div>
+            )}
+
+            {optionalUnits.length > 0 && (
+              <div className="border-t border-slate-200 pt-6">
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  Optional extras
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {optionalUnits.map((u: any) => (
+                    <span
+                      key={u.id}
+                      className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200"
+                    >
+                      {u.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {booking.status === "pending" && (
+              <ApproveRejectButtons bookingId={booking.id} />
             )}
 
             <EditBookingPanel

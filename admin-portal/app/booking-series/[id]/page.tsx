@@ -94,6 +94,8 @@ export default async function BookingSeriesDetailPage({
             { label: "Slot", value: `${series.slotStartsAt} – ${series.slotEndsAt}` },
             { label: "Payment", value: series.paymentStatus },
             { label: "Occurrences", value: String(bookings.length) },
+            ...(series.minSessions != null ? [{ label: "Min sessions", value: String(series.minSessions) }] : []),
+            ...(series.maxSessions != null ? [{ label: "Max sessions", value: String(series.maxSessions) }] : []),
           ].map(({ label, value }) => (
             <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4">
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">

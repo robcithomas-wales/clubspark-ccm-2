@@ -67,10 +67,46 @@ export async function cleanBookings(): Promise<void> {
 }
 
 /**
+ * Remove all booking rules created during tests.
+ */
+export async function cleanBookingRules(): Promise<void> {
+  await prisma.$executeRaw`
+    DELETE FROM booking.booking_rule_purpose_prices
+    WHERE rule_id IN (
+      SELECT id FROM booking.booking_rules WHERE tenant_id = ${TEST_TENANT_ID}::uuid
+    )
+  `
+  await prisma.$executeRaw`
+    DELETE FROM booking.booking_rules WHERE tenant_id = ${TEST_TENANT_ID}::uuid
+  `
+}
+
+/**
+ * Remove all booking series and their associated bookings.
+ */
+export async function cleanBookingSeries(): Promise<void> {
+  await prisma.$executeRaw`
+    DELETE FROM booking.booking_add_ons
+    WHERE booking_id IN (
+      SELECT id FROM booking.bookings WHERE tenant_id = ${TEST_TENANT_ID}::uuid
+    )
+  `
+  await prisma.$executeRaw`
+    DELETE FROM booking.bookings WHERE tenant_id = ${TEST_TENANT_ID}::uuid
+  `
+  await prisma.$executeRaw`
+    DELETE FROM booking.booking_series WHERE tenant_id = ${TEST_TENANT_ID}::uuid
+  `
+}
+
+/**
  * Remove all fixture rows. Call in afterAll.
  */
 export async function teardownFixtures(): Promise<void> {
   await cleanBookings()
+  await prisma.$executeRaw`
+    DELETE FROM booking.booking_series WHERE tenant_id = ${TEST_TENANT_ID}::uuid
+  `
   await prisma.$executeRaw`
     DELETE FROM venue.bookable_units WHERE tenant_id = ${TEST_TENANT_ID}::uuid
   `

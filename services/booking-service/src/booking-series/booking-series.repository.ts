@@ -26,6 +26,8 @@ export interface SeriesRow {
   paymentStatus: string
   notes: string | null
   status: string
+  minSessions: number | null
+  maxSessions: number | null
   createdAt: Date
   updatedAt: Date
 }
@@ -81,6 +83,8 @@ export class BookingSeriesRepository {
         payment_status     AS "paymentStatus",
         notes,
         status,
+        min_sessions       AS "minSessions",
+        max_sessions       AS "maxSessions",
         created_at         AS "createdAt",
         updated_at         AS "updatedAt"
       FROM booking.booking_series
@@ -106,6 +110,8 @@ export class BookingSeriesRepository {
         payment_status     AS "paymentStatus",
         notes,
         status,
+        min_sessions       AS "minSessions",
+        max_sessions       AS "maxSessions",
         created_at         AS "createdAt",
         updated_at         AS "updatedAt"
       FROM booking.booking_series
@@ -177,7 +183,7 @@ export class BookingSeriesRepository {
             tenant_id, organisation_id, venue_id, resource_id,
             bookable_unit_id, customer_id, booking_source,
             rrule, slot_starts_at, slot_ends_at,
-            payment_status, notes, status
+            payment_status, notes, status, min_sessions, max_sessions
           ) VALUES (
             ${tenantId}::uuid,
             ${organisationId}::uuid,
@@ -191,7 +197,9 @@ export class BookingSeriesRepository {
             ${slotEndsAt}::time,
             ${paymentStatus},
             ${dto.notes ?? null},
-            'active'
+            'active',
+            ${dto.minSessions ?? null},
+            ${dto.maxSessions ?? null}
           )
           RETURNING
             id,
@@ -208,6 +216,8 @@ export class BookingSeriesRepository {
             payment_status   AS "paymentStatus",
             notes,
             status,
+            min_sessions     AS "minSessions",
+            max_sessions     AS "maxSessions",
             created_at       AS "createdAt",
             updated_at       AS "updatedAt"
         `

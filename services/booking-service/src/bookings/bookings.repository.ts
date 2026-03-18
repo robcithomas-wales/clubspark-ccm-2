@@ -27,6 +27,10 @@ export interface BookingRow {
   paymentStatus: string
   bookingReference: string
   notes: string | null
+  optionalUnitIds: string[]
+  adminOverride: boolean
+  approvedBy: string | null
+  approvedAt: Date | null
   seriesId: string | null
   cancelledAt: Date | null
   createdAt: Date
@@ -78,6 +82,10 @@ export class BookingsRepository {
           b.payment_status     AS "paymentStatus",
           b.booking_reference  AS "bookingReference",
           b.notes,
+          b.optional_unit_ids  AS "optionalUnitIds",
+          b.admin_override     AS "adminOverride",
+          b.approved_by        AS "approvedBy",
+          b.approved_at        AS "approvedAt",
           b.series_id          AS "seriesId",
           b.cancelled_at       AS "cancelledAt",
           b.created_at         AS "createdAt",
@@ -121,6 +129,10 @@ export class BookingsRepository {
           b.payment_status     AS "paymentStatus",
           b.booking_reference  AS "bookingReference",
           b.notes,
+          b.optional_unit_ids  AS "optionalUnitIds",
+          b.admin_override     AS "adminOverride",
+          b.approved_by        AS "approvedBy",
+          b.approved_at        AS "approvedAt",
           b.series_id          AS "seriesId",
           b.cancelled_at       AS "cancelledAt",
           b.created_at         AS "createdAt",
@@ -166,6 +178,16 @@ export class BookingsRepository {
     return rows[0] ?? null
   }
 
+  async findResourceGroupId(resourceId: string): Promise<string | null> {
+    const rows = await this.prisma.read.$queryRaw<{ groupId: string | null }[]>`
+      SELECT group_id AS "groupId"
+      FROM venue.resources
+      WHERE id = ${resourceId}::uuid
+      LIMIT 1
+    `
+    return rows[0]?.groupId ?? null
+  }
+
   /**
    * Atomically creates a booking inside a SERIALIZABLE transaction.
    *
@@ -207,11 +229,14 @@ export class BookingsRepository {
             })
           }
 
+          const optionalUnitIds = dto.optionalUnitIds ?? []
+          const initialStatus = dto.status === 'pending' ? 'pending' : 'active'
           const rows = await tx.$queryRaw<BookingRow[]>`
             INSERT INTO booking.bookings (
               tenant_id, organisation_id, venue_id, resource_id,
               bookable_unit_id, customer_id, booking_source,
-              starts_at, ends_at, status, payment_status, booking_reference, notes
+              starts_at, ends_at, status, payment_status, booking_reference, notes,
+              optional_unit_ids, admin_override
             ) VALUES (
               ${tenantId}::uuid,
               ${organisationId}::uuid,
@@ -222,29 +247,35 @@ export class BookingsRepository {
               ${dto.bookingSource ?? null},
               ${dto.startsAt}::timestamptz,
               ${dto.endsAt}::timestamptz,
-              'active',
+              ${initialStatus},
               ${dto.paymentStatus ?? 'unpaid'},
               ${bookingReference},
-              ${dto.notes ?? null}
+              ${dto.notes ?? null},
+              ${optionalUnitIds}::uuid[],
+              ${dto.adminOverride ?? false}
             )
             RETURNING
               id,
-              tenant_id        AS "tenantId",
-              organisation_id  AS "organisationId",
-              venue_id         AS "venueId",
-              resource_id      AS "resourceId",
-              bookable_unit_id AS "bookableUnitId",
-              customer_id      AS "customerId",
-              booking_source   AS "bookingSource",
-              starts_at        AS "startsAt",
-              ends_at          AS "endsAt",
+              tenant_id         AS "tenantId",
+              organisation_id   AS "organisationId",
+              venue_id          AS "venueId",
+              resource_id       AS "resourceId",
+              bookable_unit_id  AS "bookableUnitId",
+              customer_id       AS "customerId",
+              booking_source    AS "bookingSource",
+              starts_at         AS "startsAt",
+              ends_at           AS "endsAt",
               status,
-              payment_status   AS "paymentStatus",
+              payment_status    AS "paymentStatus",
               booking_reference AS "bookingReference",
               notes,
-              cancelled_at     AS "cancelledAt",
-              created_at       AS "createdAt",
-              updated_at       AS "updatedAt"
+              optional_unit_ids AS "optionalUnitIds",
+              admin_override    AS "adminOverride",
+              approved_by       AS "approvedBy",
+              approved_at       AS "approvedAt",
+              cancelled_at      AS "cancelledAt",
+              created_at        AS "createdAt",
+              updated_at        AS "updatedAt"
           `
 
           return rows[0]
@@ -325,35 +356,82 @@ export class BookingsRepository {
     const rows = await this.prisma.write.$queryRaw<BookingRow[]>`
       UPDATE booking.bookings
       SET
-        starts_at      = COALESCE(${dto.startsAt ?? null}::timestamptz,   starts_at),
-        ends_at        = COALESCE(${dto.endsAt ?? null}::timestamptz,     ends_at),
-        notes          = CASE WHEN ${dto.notes !== undefined} THEN ${dto.notes ?? null}      ELSE notes          END,
-        booking_source = CASE WHEN ${dto.bookingSource !== undefined} THEN ${dto.bookingSource ?? null} ELSE booking_source END,
-        customer_id    = CASE WHEN ${dto.customerId !== undefined} THEN ${dto.customerId ?? null}::uuid ELSE customer_id END,
-        updated_at     = now()
+        starts_at         = COALESCE(${dto.startsAt ?? null}::timestamptz, starts_at),
+        ends_at           = COALESCE(${dto.endsAt ?? null}::timestamptz,   ends_at),
+        notes             = CASE WHEN ${dto.notes !== undefined} THEN ${dto.notes ?? null} ELSE notes END,
+        booking_source    = CASE WHEN ${dto.bookingSource !== undefined} THEN ${dto.bookingSource ?? null} ELSE booking_source END,
+        customer_id       = CASE WHEN ${dto.customerId !== undefined} THEN ${dto.customerId ?? null}::uuid ELSE customer_id END,
+        optional_unit_ids = CASE WHEN ${dto.optionalUnitIds !== undefined} THEN ${dto.optionalUnitIds ?? []}::uuid[] ELSE optional_unit_ids END,
+        updated_at        = now()
       WHERE tenant_id = ${tenantId}::uuid
         AND id        = ${id}::uuid
         AND status   <> 'cancelled'
       RETURNING
         id,
-        tenant_id        AS "tenantId",
-        organisation_id  AS "organisationId",
-        venue_id         AS "venueId",
-        resource_id      AS "resourceId",
-        bookable_unit_id AS "bookableUnitId",
-        customer_id      AS "customerId",
-        booking_source   AS "bookingSource",
-        starts_at        AS "startsAt",
-        ends_at          AS "endsAt",
+        tenant_id         AS "tenantId",
+        organisation_id   AS "organisationId",
+        venue_id          AS "venueId",
+        resource_id       AS "resourceId",
+        bookable_unit_id  AS "bookableUnitId",
+        customer_id       AS "customerId",
+        booking_source    AS "bookingSource",
+        starts_at         AS "startsAt",
+        ends_at           AS "endsAt",
         status,
-        payment_status   AS "paymentStatus",
+        payment_status    AS "paymentStatus",
         booking_reference AS "bookingReference",
         notes,
-        series_id        AS "seriesId",
-        cancelled_at     AS "cancelledAt",
-        created_at       AS "createdAt",
-        updated_at       AS "updatedAt"
+        optional_unit_ids AS "optionalUnitIds",
+        admin_override    AS "adminOverride",
+        approved_by       AS "approvedBy",
+        approved_at       AS "approvedAt",
+        series_id         AS "seriesId",
+        cancelled_at      AS "cancelledAt",
+        created_at        AS "createdAt",
+        updated_at        AS "updatedAt"
     `
+    return rows[0] ?? null
+  }
+
+  async approve(tenantId: string, id: string, approvedBy: string): Promise<BookingRow | null> {
+    const rows = await this.prisma.write.$queryRaw<BookingRow[]>`
+      UPDATE booking.bookings
+      SET status      = 'active',
+          approved_by = ${approvedBy},
+          approved_at = now(),
+          updated_at  = now()
+      WHERE tenant_id = ${tenantId}::uuid
+        AND id        = ${id}::uuid
+        AND status    = 'pending'
+      RETURNING
+        id, tenant_id AS "tenantId", status,
+        approved_by AS "approvedBy", approved_at AS "approvedAt",
+        updated_at  AS "updatedAt"
+    `
+    return rows[0] ?? null
+  }
+
+  async reject(tenantId: string, id: string, reason?: string): Promise<BookingRow | null> {
+    const rows = await this.prisma.write.$queryRaw<BookingRow[]>`
+      UPDATE booking.bookings
+      SET status       = 'cancelled',
+          cancelled_at = now(),
+          updated_at   = now()
+      WHERE tenant_id = ${tenantId}::uuid
+        AND id        = ${id}::uuid
+        AND status    = 'pending'
+      RETURNING
+        id, tenant_id AS "tenantId", status,
+        cancelled_at AS "cancelledAt", updated_at AS "updatedAt"
+    `
+    if (rows[0] && reason) {
+      await this.prisma.write.$queryRaw`
+        UPDATE booking.bookings
+        SET notes      = COALESCE(notes || chr(10), '') || ${'Rejected: ' + reason},
+            updated_at = now()
+        WHERE id = ${rows[0].id}::uuid
+      `
+    }
     return rows[0] ?? null
   }
 

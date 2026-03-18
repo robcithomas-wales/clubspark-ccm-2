@@ -12,35 +12,26 @@ async function getAuthHeaders() {
 }
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
 
   try {
-    const response = await fetch(`http://127.0.0.1:4005/bookings/${id}/cancel`, {
+    const body = await request.json().catch(() => ({}))
+    const response = await fetch(`http://127.0.0.1:4005/bookings/${id}/reject`, {
       method: "POST",
       headers: await getAuthHeaders(),
+      body: JSON.stringify(body),
       cache: "no-store",
     })
 
     const text = await response.text()
-
     let data: any = null
-
-    try {
-      data = text ? JSON.parse(text) : null
-    } catch {
-      data = { error: text || "Unknown response from booking service" }
-    }
-
+    try { data = text ? JSON.parse(text) : null } catch { data = { error: text } }
     return NextResponse.json(data, { status: response.status })
   } catch (error) {
-    console.error("Cancel booking proxy failed:", error)
-
-    return NextResponse.json(
-      { error: "Failed to cancel booking" },
-      { status: 500 }
-    )
+    console.error("Reject booking proxy failed:", error)
+    return NextResponse.json({ error: "Failed to reject booking" }, { status: 500 })
   }
 }

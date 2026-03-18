@@ -3,10 +3,12 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Logger,
 } from '@nestjs/common'
 import { BookingsRepository } from './bookings.repository.js'
 import { AvailabilityRepository } from '../availability/availability.repository.js'
+import { BookingRulesService } from '../booking-rules/booking-rules.service.js'
 import type { CreateBookingDto } from './dto/create-booking.dto.js'
 import type { CreateBookingAddOnDto } from './dto/create-booking-add-on.dto.js'
 import type { UpdatePaymentStatusDto } from './dto/update-payment-status.dto.js'
@@ -20,6 +22,7 @@ export class BookingsService {
   constructor(
     private readonly repo: BookingsRepository,
     private readonly availabilityRepo: AvailabilityRepository,
+    private readonly rulesService: BookingRulesService,
   ) {}
 
   async list(
@@ -47,6 +50,21 @@ export class BookingsService {
       throw new BadRequestException('Bookable unit does not belong to the specified venue')
     if (unit.resourceId !== dto.resourceId)
       throw new BadRequestException('Bookable unit does not belong to the specified resource')
+
+    // Enforce booking rules — admin bookings bypass (CPO decision)
+    if (dto.bookingSource !== 'admin') {
+      const resourceGroupId = await this.repo.findResourceGroupId(dto.resourceId)
+      const decision = await this.rulesService.enforceRules(
+        ctx.tenantId,
+        dto.resourceId,
+        resourceGroupId,
+        new Date(dto.startsAt),
+        new Date(dto.endsAt),
+      )
+      if (!decision.allowed) {
+        throw new ForbiddenException(decision.reason ?? 'Booking not permitted by access rule')
+      }
+    }
 
     // Batch-load all conflicting unit IDs in a single query (fixes the N+1)
     const conflictMap = await this.availabilityRepo.getConflictMapForUnits([dto.bookableUnitId])
@@ -94,6 +112,28 @@ export class BookingsService {
     if (!exists) throw new NotFoundException('Booking not found')
 
     throw new ConflictException('Booking is already cancelled')
+  }
+
+  async approve(ctx: TenantContext, id: string, approvedBy: string) {
+    const booking = await this.repo.approve(ctx.tenantId, id, approvedBy)
+    if (!booking) {
+      const exists = await this.repo.exists(ctx.tenantId, id)
+      if (!exists) throw new NotFoundException('Booking not found')
+      throw new ConflictException('Booking is not in pending status')
+    }
+    this.logger.log({ id, approvedBy }, 'Booking approved')
+    return booking
+  }
+
+  async reject(ctx: TenantContext, id: string, reason?: string) {
+    const booking = await this.repo.reject(ctx.tenantId, id, reason)
+    if (!booking) {
+      const exists = await this.repo.exists(ctx.tenantId, id)
+      if (!exists) throw new NotFoundException('Booking not found')
+      throw new ConflictException('Booking is not in pending status')
+    }
+    this.logger.log({ id }, 'Booking rejected')
+    return booking
   }
 
   async listAddOns(ctx: TenantContext, bookingId: string) {

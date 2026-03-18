@@ -6,8 +6,9 @@ export default defineConfig({
     environment: 'node',
     include: ['test/**/*.spec.ts'],
     testTimeout: 30_000,
-    // Run all integration tests in a single worker to avoid concurrent DB writes
+    // Run all integration tests sequentially to avoid concurrent DB writes
     pool: 'forks',
     singleFork: true,
+    fileParallelism: false,
   },
 })

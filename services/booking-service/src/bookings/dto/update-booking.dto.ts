@@ -1,4 +1,4 @@
-import { IsDateString, IsOptional, IsString } from 'class-validator'
+import { IsDateString, IsOptional, IsString, IsArray } from 'class-validator'
 
 export class UpdateBookingDto {
   @IsOptional()
@@ -20,4 +20,9 @@ export class UpdateBookingDto {
   @IsOptional()
   @IsString()
   customerId?: string | null
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  optionalUnitIds?: string[]
 }

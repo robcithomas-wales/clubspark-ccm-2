@@ -137,6 +137,7 @@ export default async function DashboardPage() {
     resourcesResult,
     unitsResult,
     bookingsResult,
+    pendingBookingsResult,
     customersResult,
     schemesResult,
     plansResult,
@@ -148,6 +149,7 @@ export default async function DashboardPage() {
     getResources(),
     getBookableUnits(),
     getBookings(),
+    getBookings(1, 100, { status: "pending" }),
     getCustomers(),
     getMembershipSchemes(),
     getMembershipPlans(),
@@ -160,6 +162,7 @@ export default async function DashboardPage() {
   const resourcesResponse = resourcesResult.status === "fulfilled" ? resourcesResult.value : null
   const unitsResponse = unitsResult.status === "fulfilled" ? unitsResult.value : null
   const bookingsResponse = bookingsResult.status === "fulfilled" ? bookingsResult.value : null
+  const pendingBookingsResponse = pendingBookingsResult.status === "fulfilled" ? pendingBookingsResult.value : null
   const customersResponse = customersResult.status === "fulfilled" ? customersResult.value : null
   const schemesResponse = schemesResult.status === "fulfilled" ? schemesResult.value : null
   const plansResponse = plansResult.status === "fulfilled" ? plansResult.value : null
@@ -167,16 +170,23 @@ export default async function DashboardPage() {
   const membershipsResponse = membershipsResult.status === "fulfilled" ? membershipsResult.value : null
   const addOnsResponse = addOnsResult.status === "fulfilled" ? addOnsResult.value : null
 
-  const venues = venuesResponse?.data || venuesResponse || []
-  const resources = resourcesResponse?.data || resourcesResponse || []
-  const units = unitsResponse?.data || unitsResponse || []
-  const bookings = bookingsResponse?.data || bookingsResponse || []
-  const customers = customersResponse?.data || customersResponse || []
-  const schemes = schemesResponse?.data || schemesResponse || []
-  const plans = plansResponse?.data || plansResponse || []
-  const policies = policiesResponse?.data || policiesResponse || []
-  const memberships = membershipsResponse?.data || membershipsResponse || []
-  const addOns = addOnsResponse?.data || addOnsResponse || []
+  function extractData(r: any): any[] {
+    if (!r) return []
+    if (Array.isArray(r)) return r
+    return r.data ?? []
+  }
+
+  const venues = extractData(venuesResponse)
+  const resources = extractData(resourcesResponse)
+  const units = extractData(unitsResponse)
+  const bookings = extractData(bookingsResponse)
+  const pendingBookingsTotal = (pendingBookingsResponse as any)?.pagination?.total ?? extractData(pendingBookingsResponse).length
+  const customers = extractData(customersResponse)
+  const schemes = extractData(schemesResponse)
+  const plans = extractData(plansResponse)
+  const policies = extractData(policiesResponse)
+  const memberships = extractData(membershipsResponse)
+  const addOns = extractData(addOnsResponse)
 
   const activeBookings = bookings.filter((booking: any) => booking.status === "active")
   const activeMemberships = memberships.filter(
@@ -207,6 +217,17 @@ export default async function DashboardPage() {
       return map
     }, new Map<string, number>())
   )
+
+  // Bookings by date (last 14 days based on startsAt)
+  const bookingsByDate = (() => {
+    const counts = new Map<string, number>()
+    bookings.forEach((b: any) => {
+      if (!b.startsAt) return
+      const day = new Date(b.startsAt).toISOString().slice(0, 10)
+      counts.set(day, (counts.get(day) || 0) + 1)
+    })
+    return Array.from(counts.entries()).sort(([a], [b]) => a.localeCompare(b)).slice(-14)
+  })()
 
   const domainCards = [
     {
@@ -273,9 +294,9 @@ export default async function DashboardPage() {
             icon={Users}
           />
           <StatCard
-            title="Membership"
-            value={activeMemberships.length}
-            description={`${plans.length} plans and ${policies.length} policies now support entitlement led growth.`}
+            title="Pending approvals"
+            value={pendingBookingsTotal}
+            description={`Bookings awaiting admin approval. ${activeMemberships.length} active memberships.`}
             icon={Crown}
           />
         </div>
@@ -444,6 +465,53 @@ export default async function DashboardPage() {
             </div>
           </SectionCard>
         </div>
+
+        {/* Bookings trend chart */}
+        {bookingsByDate.length > 0 && (() => {
+          const maxCount = Math.max(...bookingsByDate.map(([, c]) => c), 1)
+          const chartH = 80
+          const barW = Math.floor(560 / bookingsByDate.length) - 2
+
+          return (
+            <SectionCard
+              title="Bookings over time"
+              description="Booking volume by date from the current data set."
+              actionHref="/bookings"
+              actionLabel="View all"
+            >
+              <div className="overflow-x-auto">
+                <svg
+                  viewBox={`0 0 560 ${chartH + 28}`}
+                  className="w-full"
+                  aria-label="Bookings per day bar chart"
+                >
+                  {bookingsByDate.map(([date, count], i) => {
+                    const barH = Math.max(4, Math.round((count / maxCount) * chartH))
+                    const x = i * (barW + 2)
+                    const y = chartH - barH
+                    const label = date.slice(5) // MM-DD
+                    return (
+                      <g key={date}>
+                        <rect x={x} y={y} width={barW} height={barH} rx={3} fill="#1857E0" opacity={0.8} />
+                        <title>{date}: {count} booking{count !== 1 ? "s" : ""}</title>
+                        {barW >= 20 && (
+                          <text x={x + barW / 2} y={chartH + 16} textAnchor="middle" fontSize={9} fill="#94a3b8">
+                            {label}
+                          </text>
+                        )}
+                        {count > 0 && barH > 16 && (
+                          <text x={x + barW / 2} y={y + barH - 5} textAnchor="middle" fontSize={9} fill="white" fontWeight="600">
+                            {count}
+                          </text>
+                        )}
+                      </g>
+                    )
+                  })}
+                </svg>
+              </div>
+            </SectionCard>
+          )
+        })()}
 
         <div className="grid gap-6 xl:grid-cols-3">
           <SectionCard

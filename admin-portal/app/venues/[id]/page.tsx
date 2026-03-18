@@ -1,7 +1,8 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { PortalLayout } from "@/components/portal-layout"
-import { getVenues, getResourceGroups, getAvailabilityConfigs, getBlackoutDates } from "@/lib/api"
+import { getVenues, getResourceGroups, getAvailabilityConfigs, getBlackoutDates, getVenueSettings } from "@/lib/api"
+import { VenueSettingsPanel } from "@/components/venue-settings-panel"
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
@@ -18,10 +19,11 @@ export default async function VenueDetailPage({
     notFound()
   }
 
-  const [groups, configs, blackouts] = await Promise.all([
+  const [groups, configs, blackouts, venueSettings] = await Promise.all([
     getResourceGroups({ venueId: id }),
     getAvailabilityConfigs({ scopeType: "venue", scopeId: id }),
     getBlackoutDates({ venueId: id }).catch(() => []),
+    getVenueSettings(id).catch(() => ({})),
   ])
 
   return (
@@ -56,6 +58,9 @@ export default async function VenueDetailPage({
             </div>
           </div>
         </div>
+
+        {/* Venue settings */}
+        <VenueSettingsPanel venueId={id} initial={venueSettings ?? {}} />
 
         {/* Resource groups */}
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

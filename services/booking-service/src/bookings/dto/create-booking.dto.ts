@@ -1,4 +1,4 @@
-import { IsDateString, IsOptional, IsString, IsNotEmpty, IsIn } from 'class-validator'
+import { IsDateString, IsOptional, IsString, IsNotEmpty, IsIn, IsArray, IsBoolean } from 'class-validator'
 import { PAYMENT_STATUSES } from './update-payment-status.dto.js'
 
 export class CreateBookingDto {
@@ -35,4 +35,17 @@ export class CreateBookingDto {
   @IsOptional()
   @IsIn(PAYMENT_STATUSES)
   paymentStatus?: string
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  optionalUnitIds?: string[]
+
+  @IsOptional()
+  @IsIn(['active', 'pending'])
+  status?: 'active' | 'pending'
+
+  @IsOptional()
+  @IsBoolean()
+  adminOverride?: boolean
 }

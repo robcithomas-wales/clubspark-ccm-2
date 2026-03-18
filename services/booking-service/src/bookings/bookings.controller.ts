@@ -15,6 +15,7 @@ import { CreateBookingDto } from './dto/create-booking.dto.js'
 import { CreateBookingAddOnDto } from './dto/create-booking-add-on.dto.js'
 import { UpdatePaymentStatusDto } from './dto/update-payment-status.dto.js'
 import { UpdateBookingDto } from './dto/update-booking.dto.js'
+import { ApproveBookingDto, RejectBookingDto } from './dto/approve-booking.dto.js'
 import { TenantCtx, type TenantContext } from '../common/decorators/tenant-context.decorator.js'
 
 @ApiTags('bookings')
@@ -81,6 +82,28 @@ export class BookingsController {
     @TenantCtx() ctx: TenantContext,
   ) {
     const booking = await this.service.update(ctx, id, dto)
+    return { data: booking }
+  }
+
+  @Post(':id/approve')
+  @HttpCode(HttpStatus.OK)
+  async approve(
+    @Param('id') id: string,
+    @Body() dto: ApproveBookingDto,
+    @TenantCtx() ctx: TenantContext,
+  ) {
+    const booking = await this.service.approve(ctx, id, dto.approvedBy)
+    return { data: booking }
+  }
+
+  @Post(':id/reject')
+  @HttpCode(HttpStatus.OK)
+  async reject(
+    @Param('id') id: string,
+    @Body() dto: RejectBookingDto,
+    @TenantCtx() ctx: TenantContext,
+  ) {
+    const booking = await this.service.reject(ctx, id, dto.reason)
     return { data: booking }
   }
 

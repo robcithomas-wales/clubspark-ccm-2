@@ -126,8 +126,13 @@ export function CreateBookingForm({ units, addOns = [] }: CreateBookingFormProps
   const [paymentStatus, setPaymentStatus] = React.useState("unpaid")
   const [notes, setNotes] = React.useState("")
   const [selectedAddOnIds, setSelectedAddOnIds] = React.useState<Set<string>>(new Set())
+  const [selectedOptionalUnitIds, setSelectedOptionalUnitIds] = React.useState<Set<string>>(new Set())
+  const [bookingStatus, setBookingStatus] = React.useState<"active" | "pending">("active")
+  const [adminOverride, setAdminOverride] = React.useState(false)
   const [isRecurring, setIsRecurring] = React.useState(initialRecurring)
   const [rrule, setRrule] = React.useState("FREQ=WEEKLY;COUNT=10")
+  const [minSessions, setMinSessions] = React.useState("")
+  const [maxSessions, setMaxSessions] = React.useState("")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [isLoadingCustomers, setIsLoadingCustomers] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
@@ -179,7 +184,9 @@ export function CreateBookingForm({ units, addOns = [] }: CreateBookingFormProps
     }
   }, [])
 
-  const selectedUnit = units.find((unit) => unit.id === bookableUnitId) || null
+  const primaryUnits = units.filter((u) => !(u as any).isOptionalExtra)
+  const optionalExtraUnits = units.filter((u) => (u as any).isOptionalExtra)
+  const selectedUnit = primaryUnits.find((unit) => unit.id === bookableUnitId) || null
   const selectedCustomer =
     customers.find((customer) => customer.id === selectedCustomerId) || null
 
@@ -252,16 +259,24 @@ export function CreateBookingForm({ units, addOns = [] }: CreateBookingFormProps
         customerId: selectedCustomerId || null,
         bookingSource,
         paymentStatus,
+        status: bookingStatus,
+        adminOverride: adminOverride || undefined,
         startsAt: startsAtIso,
         endsAt: endsAtIso,
         notes: notes.trim() || null,
+        optionalUnitIds: Array.from(selectedOptionalUnitIds),
       }
 
       if (isRecurring) {
         const response = await fetch("/api/booking-series", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...commonPayload, rrule }),
+          body: JSON.stringify({
+            ...commonPayload,
+            rrule,
+            ...(minSessions ? { minSessions: Number(minSessions) } : {}),
+            ...(maxSessions ? { maxSessions: Number(maxSessions) } : {}),
+          }),
         })
         const result = await response.json().catch(() => null)
         if (!response.ok) {
@@ -555,7 +570,7 @@ export function CreateBookingForm({ units, addOns = [] }: CreateBookingFormProps
               className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none"
             >
               <option value="">Select a unit</option>
-              {units.map((unit) => (
+              {primaryUnits.map((unit) => (
                 <option key={unit.id} value={unit.id}>
                   {unit.name}
                 </option>
@@ -583,6 +598,56 @@ export function CreateBookingForm({ units, addOns = [] }: CreateBookingFormProps
           )}
         </div>
       </section>
+
+      {optionalExtraUnits.length > 0 && (
+        <section className="space-y-4">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Extras
+            </div>
+            <h3 className="mt-1 text-lg font-semibold text-slate-900">
+              Optional extras
+            </h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Add bookable resources alongside the main unit — e.g. ball machines, changing rooms.
+            </p>
+          </div>
+          <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            {optionalExtraUnits.map((unit) => {
+              const checked = selectedOptionalUnitIds.has(unit.id)
+              return (
+                <label
+                  key={unit.id}
+                  className="flex cursor-pointer items-center gap-4 px-4 py-3 transition hover:bg-slate-50"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => {
+                      setSelectedOptionalUnitIds((prev) => {
+                        const next = new Set(prev)
+                        if (next.has(unit.id)) next.delete(unit.id)
+                        else next.add(unit.id)
+                        return next
+                      })
+                    }}
+                    className="h-4 w-4 rounded border-slate-300 text-[#1857E0]"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-slate-900">{unit.name}</div>
+                    {unit.unitType && (
+                      <div className="mt-0.5 text-xs text-slate-500">{unit.unitType}</div>
+                    )}
+                  </div>
+                  {unit.capacity != null && (
+                    <div className="shrink-0 text-xs text-slate-500">Cap {unit.capacity}</div>
+                  )}
+                </label>
+              )
+            })}
+          </div>
+        </section>
+      )}
 
       <section className="space-y-4">
         <div>
@@ -673,6 +738,36 @@ export function CreateBookingForm({ units, addOns = [] }: CreateBookingFormProps
               <div><code>FREQ=WEEKLY;BYDAY=MO,WE,FR;COUNT=12</code> — Mon/Wed/Fri for 4 weeks</div>
               <div><code>FREQ=MONTHLY;BYMONTHDAY=1;COUNT=6</code> — 1st of month for 6 months</div>
               <div><code>FREQ=WEEKLY;UNTIL=20261231T000000Z</code> — weekly until 31 Dec 2026</div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label htmlFor="minSessions" className="mb-2 block text-sm font-medium text-slate-700">
+                  Min sessions <span className="text-slate-400 font-normal">(optional)</span>
+                </label>
+                <input
+                  id="minSessions"
+                  type="number"
+                  min={1}
+                  value={minSessions}
+                  onChange={(e) => setMinSessions(e.target.value)}
+                  placeholder="e.g. 4"
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none"
+                />
+              </div>
+              <div>
+                <label htmlFor="maxSessions" className="mb-2 block text-sm font-medium text-slate-700">
+                  Max sessions <span className="text-slate-400 font-normal">(optional)</span>
+                </label>
+                <input
+                  id="maxSessions"
+                  type="number"
+                  min={1}
+                  value={maxSessions}
+                  onChange={(e) => setMaxSessions(e.target.value)}
+                  placeholder="e.g. 10"
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none"
+                />
+              </div>
             </div>
           </div>
         )}
@@ -803,6 +898,50 @@ export function CreateBookingForm({ units, addOns = [] }: CreateBookingFormProps
           </div>
         </section>
       )}
+
+      <section className="space-y-4">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+            Admin options
+          </div>
+          <h3 className="mt-1 text-lg font-semibold text-slate-900">
+            Booking status &amp; overrides
+          </h3>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label htmlFor="bookingStatus" className="mb-2 block text-sm font-medium text-slate-700">
+              Initial status
+            </label>
+            <select
+              id="bookingStatus"
+              value={bookingStatus}
+              onChange={(e) => setBookingStatus(e.target.value as "active" | "pending")}
+              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none"
+            >
+              <option value="active">Active (confirmed immediately)</option>
+              <option value="pending">Pending (requires approval)</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-4 pt-7">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={adminOverride}
+              onClick={() => setAdminOverride((v) => !v)}
+              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none ${adminOverride ? "bg-[#1857E0]" : "bg-slate-300"}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${adminOverride ? "translate-x-6" : "translate-x-1"}`} />
+            </button>
+            <div>
+              <div className="text-sm font-medium text-slate-900">Admin override</div>
+              <div className="text-xs text-slate-500">Bypass booking rules for this booking.</div>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {error && (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">

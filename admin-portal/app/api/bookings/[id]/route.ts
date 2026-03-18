@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server"
+import { createClient } from '@/lib/supabase/server'
 
-const BOOKING_HEADERS = {
-  "x-tenant-id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-  "x-organisation-id": "11111111-1111-1111-1111-111111111111",
+async function getAuthHeaders() {
+  const supabase = await createClient()
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error("Not authenticated")
+  return {
+    'Authorization': `Bearer ${session.access_token}`,
+    'Content-Type': 'application/json',
+  }
 }
 
 export async function PATCH(
@@ -15,10 +21,7 @@ export async function PATCH(
   try {
     const response = await fetch(`http://127.0.0.1:4005/bookings/${id}`, {
       method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        ...BOOKING_HEADERS,
-      },
+      headers: await getAuthHeaders(),
       body: JSON.stringify(body),
     })
 

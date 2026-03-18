@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest'
 import supertest from 'supertest'
 import { getApp, closeApp } from './helpers/app.js'
-import { prisma, seedFixtures, cleanBookings, teardownFixtures } from './helpers/db.js'
+import { prisma, seedFixtures, cleanBookings, cleanBookingRules, teardownFixtures } from './helpers/db.js'
 import {
   TEST_TENANT_ID,
   TEST_ORG_ID,
@@ -327,6 +327,145 @@ describe('Bookings — integration', () => {
     expect(res.status).toBe(404)
   })
 
+  // ── Pending status & approval workflow ───────────────────────────────────
+
+  it('creates a booking with status=pending when requested', async () => {
+    const res = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload({ status: 'pending' }))
+
+    expect(res.status).toBe(201)
+    expect(res.body.data.status).toBe('pending')
+  })
+
+  it('approves a pending booking and sets status to active', async () => {
+    const created = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload({ status: 'pending' }))
+    const id = created.body.data.id
+
+    const res = await request
+      .post(`/bookings/${id}/approve`)
+      .set(JSON_HEADERS)
+      .send({ approvedBy: 'admin-user' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.status).toBe('active')
+    expect(res.body.data.approvedBy).toBe('admin-user')
+    expect(res.body.data.approvedAt).not.toBeNull()
+  })
+
+  it('returns 409 when approving a non-pending booking', async () => {
+    const created = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload())
+    const id = created.body.data.id
+
+    const res = await request
+      .post(`/bookings/${id}/approve`)
+      .set(JSON_HEADERS)
+      .send({ approvedBy: 'admin-user' })
+
+    expect(res.status).toBe(409)
+  })
+
+  it('rejects a pending booking and sets status to cancelled', async () => {
+    const created = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload({ status: 'pending' }))
+    const id = created.body.data.id
+
+    const res = await request
+      .post(`/bookings/${id}/reject`)
+      .set(JSON_HEADERS)
+      .send({ reason: 'Slot unavailable' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.status).toBe('cancelled')
+  })
+
+  it('rejects a pending booking without a reason', async () => {
+    const created = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload({ status: 'pending' }))
+    const id = created.body.data.id
+
+    const res = await request
+      .post(`/bookings/${id}/reject`)
+      .set(JSON_HEADERS)
+      .send({})
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.status).toBe('cancelled')
+  })
+
+  it('returns 409 when rejecting a non-pending booking', async () => {
+    const created = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload())
+    const id = created.body.data.id
+
+    const res = await request
+      .post(`/bookings/${id}/reject`)
+      .set(JSON_HEADERS)
+      .send({})
+
+    expect(res.status).toBe(409)
+  })
+
+  it('returns 400 when approving without approvedBy field', async () => {
+    const created = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload({ status: 'pending' }))
+    const id = created.body.data.id
+
+    const res = await request
+      .post(`/bookings/${id}/approve`)
+      .set(JSON_HEADERS)
+      .send({})
+
+    expect(res.status).toBe(400)
+  })
+
+  it('filters bookings by status=pending', async () => {
+    await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload({ status: 'pending' }))
+    await request.post('/bookings').set(JSON_HEADERS).send(
+      bookingPayload({ status: 'active', startsAt: SLOT_ADJACENT_START, endsAt: SLOT_ADJACENT_END }),
+    )
+
+    const res = await request.get('/bookings?status=pending').set(HEADERS)
+    expect(res.status).toBe(200)
+    expect(res.body.data).toHaveLength(1)
+    expect(res.body.data[0].status).toBe('pending')
+  })
+
+  it('creates a booking with adminOverride=true', async () => {
+    const res = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload({ adminOverride: true }))
+
+    expect(res.status).toBe(201)
+    expect(res.body.data.adminOverride).toBe(true)
+  })
+
+  it('creates a booking with optionalUnitIds', async () => {
+    const res = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload({ optionalUnitIds: [TEST_UNIT_ID] }))
+
+    expect(res.status).toBe(201)
+    expect(res.body.data.optionalUnitIds).toContain(TEST_UNIT_ID)
+  })
+
   // ── Payment status ────────────────────────────────────────────────────────
 
   it('updates payment status to paid', async () => {
@@ -353,5 +492,157 @@ describe('Bookings — integration', () => {
       .send({ paymentStatus: 'paid' })
 
     expect(res.status).toBe(409)
+  })
+})
+
+// ─── Booking rules enforcement ───────────────────────────────────────────────
+
+describe('Booking rules — enforcement', () => {
+  let request: ReturnType<typeof supertest>
+
+  beforeAll(async () => {
+    await seedFixtures()
+    const app = await getApp()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    request = supertest(app.getHttpServer() as any)
+  })
+
+  afterEach(async () => {
+    await cleanBookings()
+    await cleanBookingRules()
+  })
+
+  afterAll(async () => {
+    await teardownFixtures()
+    await prisma.$disconnect()
+    await closeApp()
+  })
+
+  interface RuleOverrides {
+    can_book?: boolean
+    scope_type?: string
+    scope_id?: string
+    min_slot_minutes?: number | null
+    max_slot_minutes?: number | null
+    advance_days?: number | null
+    priority?: number
+    is_active?: boolean
+  }
+
+  async function insertRule(overrides: RuleOverrides = {}) {
+    const tenantId = TEST_TENANT_ID
+    const canBook = overrides.can_book ?? true
+    const scopeType = overrides.scope_type ?? 'organisation'
+    const scopeId = (overrides.scope_id ?? null) as string | null
+    const minSlot = (overrides.min_slot_minutes ?? null) as number | null
+    const maxSlot = (overrides.max_slot_minutes ?? null) as number | null
+    const advanceDays = (overrides.advance_days ?? null) as number | null
+    const priority = overrides.priority ?? 0
+
+    await prisma.$executeRaw`
+      INSERT INTO booking.booking_rules
+        (tenant_id, name, subject_type, scope_type, scope_id, can_book, requires_approval,
+         allow_series, priority, is_active, min_slot_minutes, max_slot_minutes, advance_days)
+      VALUES (
+        ${tenantId}::uuid,
+        'Test Rule',
+        'everyone',
+        ${scopeType},
+        ${scopeId}::uuid,
+        ${canBook},
+        false,
+        true,
+        ${priority},
+        true,
+        ${minSlot},
+        ${maxSlot},
+        ${advanceDays}
+      )
+    `
+  }
+
+  it('allows a non-admin booking when no rules exist (permissive default)', async () => {
+    const res = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload({ bookingSource: 'online' }))
+
+    expect(res.status).toBe(201)
+  })
+
+  it('allows a non-admin booking when a matching canBook=true rule exists', async () => {
+    await insertRule({ can_book: true })
+
+    const res = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload({ bookingSource: 'online' }))
+
+    expect(res.status).toBe(201)
+  })
+
+  it('blocks a non-admin booking when canBook=false rule exists', async () => {
+    await insertRule({ can_book: false })
+
+    const res = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload({ bookingSource: 'online' }))
+
+    expect(res.status).toBe(403)
+  })
+
+  it('admin booking bypasses a canBook=false rule', async () => {
+    await insertRule({ can_book: false })
+
+    const res = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload({ bookingSource: 'admin' }))
+
+    expect(res.status).toBe(201)
+  })
+
+  it('blocks a non-admin booking when slot duration is below minSlotMinutes', async () => {
+    // SLOT_START→SLOT_END = 60 min; require at least 90 min
+    await insertRule({ can_book: true, min_slot_minutes: 90 })
+
+    const res = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload({ bookingSource: 'online' }))
+
+    expect(res.status).toBe(403)
+  })
+
+  it('blocks a non-admin booking when slot duration exceeds maxSlotMinutes', async () => {
+    // SLOT_START→SLOT_END = 60 min; allow at most 30 min
+    await insertRule({ can_book: true, max_slot_minutes: 30 })
+
+    const res = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload({ bookingSource: 'online' }))
+
+    expect(res.status).toBe(403)
+  })
+
+  it('resource-scope rule takes precedence over organisation-scope rule', async () => {
+    // Organisation-wide: allow
+    await insertRule({ can_book: true, scope_type: 'organisation', priority: 0 })
+    // Resource-specific: deny (higher specificity wins)
+    await insertRule({
+      can_book: false,
+      scope_type: 'resource',
+      scope_id: TEST_RESOURCE_ID,
+      priority: 0,
+    })
+
+    const res = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload({ bookingSource: 'online' }))
+
+    expect(res.status).toBe(403)
   })
 })

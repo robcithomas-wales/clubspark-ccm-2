@@ -1,3 +1,5 @@
+import { createClient } from './supabase/server'
+
 export type PaginationMeta = {
   total: number
   page: number
@@ -5,9 +7,24 @@ export type PaginationMeta = {
   totalPages: number
 }
 
+/**
+ * Returns auth headers for service-to-service calls from server components and API routes.
+ * The Bearer token carries the tenantId / organisationId as JWT claims (set via Supabase
+ * app_metadata). NestJS services validate the token and extract the claims server-side.
+ */
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const supabase = await createClient()
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error('Not authenticated')
+  return {
+    'Authorization': `Bearer ${session.access_token}`,
+    'Content-Type': 'application/json',
+  }
+}
+
 export async function getVenues() {
   const res = await fetch(`${FACILITY_SERVICE}/venues`, {
-    headers: FACILITY_HEADERS,
+    headers: await getAuthHeaders(),
     cache: "no-store",
   })
 
@@ -21,7 +38,7 @@ export async function getVenues() {
 
 export async function getBookableUnits() {
   const res = await fetch(`${FACILITY_SERVICE}/bookable-units`, {
-    headers: FACILITY_HEADERS,
+    headers: await getAuthHeaders(),
     cache: "no-store",
   })
 
@@ -48,7 +65,7 @@ export type CreateBookableUnitInput = {
 export async function createBookableUnit(input: CreateBookableUnitInput) {
   const res = await fetch(`${FACILITY_SERVICE}/bookable-units`, {
     method: "POST",
-    headers: FACILITY_HEADERS,
+    headers: await getAuthHeaders(),
     body: JSON.stringify(input),
   })
 
@@ -63,11 +80,6 @@ export async function createBookableUnit(input: CreateBookableUnitInput) {
 const BOOKING_SERVICE =
   process.env.NEXT_PUBLIC_BOOKING_SERVICE_URL || "http://127.0.0.1:4005"
 
-const BOOKING_HEADERS = {
-  "x-tenant-id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-  "x-organisation-id": "11111111-1111-1111-1111-111111111111",
-}
-
 export async function getBookings(
   page = 1,
   limit = 25,
@@ -78,7 +90,7 @@ export async function getBookings(
   if (filters.fromDate) qs.set("fromDate", filters.fromDate)
   if (filters.toDate) qs.set("toDate", filters.toDate)
   const res = await fetch(`${BOOKING_SERVICE}/bookings?${qs}`, {
-    headers: BOOKING_HEADERS,
+    headers: await getAuthHeaders(),
     cache: "no-store",
   })
 
@@ -101,7 +113,7 @@ export async function updateBooking(
 ) {
   const res = await fetch(`${BOOKING_SERVICE}/bookings/${id}`, {
     method: "PATCH",
-    headers: { ...BOOKING_HEADERS, "content-type": "application/json" },
+    headers: await getAuthHeaders(),
     body: JSON.stringify(data),
     cache: "no-store",
   })
@@ -126,7 +138,7 @@ export async function checkAvailability(params: {
   const res = await fetch(
     `${BOOKING_SERVICE}/availability/check?${search.toString()}`,
     {
-      headers: BOOKING_HEADERS,
+      headers: await getAuthHeaders(),
       cache: "no-store",
     }
   )
@@ -141,7 +153,7 @@ export async function checkAvailability(params: {
 
 export async function getBookingRules() {
   const res = await fetch(`${BOOKING_SERVICE}/booking-rules`, {
-    headers: BOOKING_HEADERS,
+    headers: await getAuthHeaders(),
     cache: "no-store",
   })
   if (!res.ok) throw new Error("Failed to load booking rules")
@@ -151,7 +163,7 @@ export async function getBookingRules() {
 
 export async function getBookingRuleById(id: string) {
   const res = await fetch(`${BOOKING_SERVICE}/booking-rules/${id}`, {
-    headers: BOOKING_HEADERS,
+    headers: await getAuthHeaders(),
     cache: "no-store",
   })
   if (!res.ok) return null
@@ -161,7 +173,7 @@ export async function getBookingRuleById(id: string) {
 
 export async function getBookingSeries() {
   const res = await fetch(`${BOOKING_SERVICE}/booking-series`, {
-    headers: BOOKING_HEADERS,
+    headers: await getAuthHeaders(),
     cache: "no-store",
   })
   if (!res.ok) throw new Error("Failed to load booking series")
@@ -171,7 +183,7 @@ export async function getBookingSeries() {
 
 export async function getBookingSeriesById(id: string) {
   const res = await fetch(`${BOOKING_SERVICE}/booking-series/${id}`, {
-    headers: BOOKING_HEADERS,
+    headers: await getAuthHeaders(),
     cache: "no-store",
   })
   if (!res.ok) return null
@@ -182,7 +194,7 @@ export async function getBookingSeriesById(id: string) {
 export async function createBookingSeries(data: Record<string, unknown>) {
   const res = await fetch(`${BOOKING_SERVICE}/booking-series`, {
     method: "POST",
-    headers: { ...BOOKING_HEADERS, "content-type": "application/json" },
+    headers: await getAuthHeaders(),
     body: JSON.stringify(data),
   })
   if (!res.ok) {
@@ -198,7 +210,7 @@ export async function cancelBookingSeries(
 ) {
   const res = await fetch(`${BOOKING_SERVICE}/booking-series/${id}/cancel`, {
     method: "POST",
-    headers: { ...BOOKING_HEADERS, "content-type": "application/json" },
+    headers: await getAuthHeaders(),
     body: JSON.stringify(data),
   })
   if (!res.ok) throw new Error("Failed to cancel booking series")
@@ -211,7 +223,7 @@ export async function updateBookingSeries(
 ) {
   const res = await fetch(`${BOOKING_SERVICE}/booking-series/${id}`, {
     method: "PATCH",
-    headers: { ...BOOKING_HEADERS, "content-type": "application/json" },
+    headers: await getAuthHeaders(),
     body: JSON.stringify(data),
   })
   if (!res.ok) throw new Error("Failed to update booking series")
@@ -220,7 +232,7 @@ export async function updateBookingSeries(
 
 export async function getResources() {
   const res = await fetch(`${FACILITY_SERVICE}/resources`, {
-    headers: FACILITY_HEADERS,
+    headers: await getAuthHeaders(),
     cache: "no-store",
   })
 
@@ -244,7 +256,7 @@ export async function getDayAvailability(params: {
   const res = await fetch(
     `${BOOKING_SERVICE}/availability/day?${search.toString()}`,
     {
-      headers: BOOKING_HEADERS,
+      headers: await getAuthHeaders(),
       cache: "no-store",
     }
   )
@@ -260,16 +272,11 @@ export async function getDayAvailability(params: {
 const MEMBERSHIP_SERVICE =
   process.env.NEXT_PUBLIC_MEMBERSHIP_SERVICE_URL || "http://127.0.0.1:4010"
 
-const MEMBERSHIP_HEADERS = {
-  "x-tenant-id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-  "x-organisation-id": "11111111-1111-1111-1111-111111111111",
-}
-
 export async function getMembershipSchemes(page = 1, limit = 25) {
   const offset = (page - 1) * limit
   const qs = new URLSearchParams({ limit: String(limit), offset: String(offset) })
   const res = await fetch(`${MEMBERSHIP_SERVICE}/membership-schemes?${qs}`, {
-    headers: MEMBERSHIP_HEADERS,
+    headers: await getAuthHeaders(),
     cache: "no-store",
   })
 
@@ -289,7 +296,7 @@ export async function getMembershipPlans(page = 1, limit = 25) {
   const offset = (page - 1) * limit
   const qs = new URLSearchParams({ limit: String(limit), offset: String(offset) })
   const res = await fetch(`${MEMBERSHIP_SERVICE}/membership-plans?${qs}`, {
-    headers: MEMBERSHIP_HEADERS,
+    headers: await getAuthHeaders(),
     cache: "no-store",
   })
 
@@ -312,10 +319,7 @@ export async function createMembershipScheme(input: {
 }) {
   const res = await fetch(`${MEMBERSHIP_SERVICE}/membership-schemes`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...MEMBERSHIP_HEADERS,
-    },
+    headers: await getAuthHeaders(),
     body: JSON.stringify(input),
   })
 
@@ -331,18 +335,24 @@ export async function createMembershipPlan(input: {
   name: string
   code?: string
   description?: string
-  ownershipType: "person" | "household"
-  durationType: "fixed" | "rolling"
+  ownershipType?: "person" | "household"
+  durationType?: "fixed" | "rolling"
   visibility?: "public" | "invite_only" | "admin_only"
-  status?: "active" | "inactive" | "archived"
+  status?: "active" | "inactive" | "archived" | "draft"
   sortOrder?: number
+  membershipType?: string
+  sportCategory?: string
+  maxMembers?: number
+  isPublic?: boolean
+  pricingModel?: string
+  price?: number
+  currency?: string
+  billingInterval?: string
+  instalmentCount?: number
 }) {
   const res = await fetch(`${MEMBERSHIP_SERVICE}/membership-plans`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...MEMBERSHIP_HEADERS,
-    },
+    headers: await getAuthHeaders(),
     body: JSON.stringify(input),
   })
 
@@ -355,7 +365,7 @@ export async function createMembershipPlan(input: {
 
 export async function getMembershipSchemeById(id: string) {
   const res = await fetch(`${MEMBERSHIP_SERVICE}/membership-schemes/${id}`, {
-    headers: MEMBERSHIP_HEADERS,
+    headers: await getAuthHeaders(),
     cache: "no-store",
   })
 
@@ -368,7 +378,7 @@ export async function getMembershipSchemeById(id: string) {
 
 export async function getMembershipPlanById(id: string) {
   const res = await fetch(`${MEMBERSHIP_SERVICE}/membership-plans/${id}`, {
-    headers: MEMBERSHIP_HEADERS,
+    headers: await getAuthHeaders(),
     cache: "no-store",
   })
 
@@ -383,7 +393,7 @@ export async function getMembershipPlanEntitlements(planId: string) {
   const res = await fetch(
     `${MEMBERSHIP_SERVICE}/membership-plans/${planId}/entitlements`,
     {
-      headers: MEMBERSHIP_HEADERS,
+      headers: await getAuthHeaders(),
       cache: "no-store",
     }
   )
@@ -416,10 +426,7 @@ export async function updateMembershipPlanEntitlements(
     `${MEMBERSHIP_SERVICE}/membership-plans/${planId}/entitlements`,
     {
       method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        ...MEMBERSHIP_HEADERS,
-      },
+      headers: await getAuthHeaders(),
       body: JSON.stringify(input),
     }
   )
@@ -433,7 +440,7 @@ export async function updateMembershipPlanEntitlements(
 
 export async function getEntitlementPolicies() {
   const res = await fetch(`${MEMBERSHIP_SERVICE}/entitlement-policies`, {
-    headers: MEMBERSHIP_HEADERS,
+    headers: await getAuthHeaders(),
     cache: "no-store",
   })
 
@@ -446,7 +453,7 @@ export async function getEntitlementPolicies() {
 
 export async function getEntitlementPolicyById(id: string) {
   const res = await fetch(`${MEMBERSHIP_SERVICE}/entitlement-policies/${id}`, {
-    headers: MEMBERSHIP_HEADERS,
+    headers: await getAuthHeaders(),
     cache: "no-store",
   })
 
@@ -469,10 +476,7 @@ export async function createEntitlementPolicy(
 ) {
   const res = await fetch(`${MEMBERSHIP_SERVICE}/entitlement-policies`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...MEMBERSHIP_HEADERS,
-    },
+    headers: await getAuthHeaders(),
     body: JSON.stringify(input),
   })
 
@@ -483,11 +487,12 @@ export async function createEntitlementPolicy(
   return res.json()
 }
 
-export async function getMemberships(page = 1, limit = 25) {
+export async function getMemberships(page = 1, limit = 25, status?: string) {
   const offset = (page - 1) * limit
   const qs = new URLSearchParams({ limit: String(limit), offset: String(offset) })
+  if (status) qs.set("status", status)
   const res = await fetch(`${MEMBERSHIP_SERVICE}/memberships?${qs}`, {
-    headers: MEMBERSHIP_HEADERS,
+    headers: await getAuthHeaders(),
     cache: "no-store",
   })
 
@@ -518,13 +523,13 @@ export async function createMembership(input: {
   autoRenew?: boolean
   status?: "active" | "pending" | "expired" | "cancelled"
   paymentStatus?: "unpaid" | "paid" | "part_paid" | "failed" | "waived"
+  reference?: string
+  source?: string
+  notes?: string
 }) {
   const res = await fetch(`${MEMBERSHIP_SERVICE}/memberships`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...MEMBERSHIP_HEADERS,
-    },
+    headers: await getAuthHeaders(),
     body: JSON.stringify(input),
   })
 
@@ -539,15 +544,10 @@ export async function createMembership(input: {
 const CUSTOMER_SERVICE =
   process.env.NEXT_PUBLIC_CUSTOMER_SERVICE_URL || "http://127.0.0.1:4004"
 
-const CUSTOMER_HEADERS = {
-  "x-tenant-id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-  "x-organisation-id": "11111111-1111-1111-1111-111111111111",
-}
-
 export async function getCustomers(page = 1, limit = 25) {
   const qs = new URLSearchParams({ page: String(page), limit: String(limit) })
   const res = await fetch(`${CUSTOMER_SERVICE}/customers?${qs}`, {
-    headers: CUSTOMER_HEADERS,
+    headers: await getAuthHeaders(),
     cache: "no-store",
   })
 
@@ -560,7 +560,7 @@ export async function getCustomers(page = 1, limit = 25) {
 
 export async function getCustomerById(id: string) {
   const res = await fetch(`${CUSTOMER_SERVICE}/customers/${id}`, {
-    headers: CUSTOMER_HEADERS,
+    headers: await getAuthHeaders(),
     cache: "no-store",
   })
 
@@ -570,7 +570,7 @@ export async function getCustomerById(id: string) {
 
 export async function getMembershipById(id: string) {
   const res = await fetch(`${MEMBERSHIP_SERVICE}/memberships/${id}`, {
-    headers: MEMBERSHIP_HEADERS,
+    headers: await getAuthHeaders(),
     cache: "no-store",
   })
 
@@ -600,10 +600,7 @@ export async function updateMembership(
 ) {
   const res = await fetch(`${MEMBERSHIP_SERVICE}/memberships/${id}`, {
     method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      ...MEMBERSHIP_HEADERS,
-    },
+    headers: await getAuthHeaders(),
     body: JSON.stringify(input),
   })
 
@@ -618,9 +615,7 @@ export async function updateMembership(
 export async function deleteMembership(id: string) {
   const res = await fetch(`${MEMBERSHIP_SERVICE}/memberships/${id}`, {
     method: "DELETE",
-    headers: {
-      ...MEMBERSHIP_HEADERS,
-    },
+    headers: await getAuthHeaders(),
   })
 
   if (!res.ok) {
@@ -629,14 +624,35 @@ export async function deleteMembership(id: string) {
   }
 }
 
+export async function transitionMembership(
+  id: string,
+  action: "activate" | "suspend" | "cancel" | "lapse" | "expire",
+  reason?: string,
+) {
+  const res = await fetch(`${MEMBERSHIP_SERVICE}/memberships/${id}/transition`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({ action, reason }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.message ?? "Failed to transition membership")
+  }
+  return res.json()
+}
+
+export async function getMembershipHistory(id: string) {
+  const res = await fetch(`${MEMBERSHIP_SERVICE}/memberships/${id}/history`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to load membership history")
+  const json = await res.json()
+  return (json.data ?? json) as any[]
+}
+
 const FACILITY_SERVICE =
   process.env.NEXT_PUBLIC_FACILITY_SERVICE_URL || "http://127.0.0.1:4003"
-
-const FACILITY_HEADERS = {
-  "Content-Type": "application/json",
-  "x-tenant-id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-  "x-organisation-id": "11111111-1111-1111-1111-111111111111",
-}
 
 export type AddOnServiceCategory =
   | "equipment"
@@ -692,7 +708,7 @@ export async function getAddOnServices(params?: {
     : `${FACILITY_SERVICE}/add-ons`
 
   const res = await fetch(url, {
-    headers: FACILITY_HEADERS,
+    headers: await getAuthHeaders(),
     cache: "no-store",
   })
 
@@ -706,7 +722,7 @@ export async function getAddOnServices(params?: {
 
 export async function getAddOnServiceById(id: string) {
   const res = await fetch(`${FACILITY_SERVICE}/add-ons/${id}`, {
-    headers: FACILITY_HEADERS,
+    headers: await getAuthHeaders(),
     cache: "no-store",
   })
 
@@ -721,7 +737,7 @@ export async function getAddOnServiceById(id: string) {
 export async function createAddOnService(input: CreateAddOnServiceInput) {
   const res = await fetch(`${FACILITY_SERVICE}/add-ons`, {
     method: "POST",
-    headers: FACILITY_HEADERS,
+    headers: await getAuthHeaders(),
     body: JSON.stringify(input),
   })
 
@@ -737,7 +753,7 @@ export async function createAddOnService(input: CreateAddOnServiceInput) {
 
 export async function getResourceById(id: string) {
   const res = await fetch(`${FACILITY_SERVICE}/resources/${id}`, {
-    headers: FACILITY_HEADERS,
+    headers: await getAuthHeaders(),
     cache: "no-store",
   })
   if (!res.ok) throw new Error(`Failed to load resource: ${res.status}`)
@@ -763,7 +779,7 @@ export type CreateResourceInput = {
 export async function createResource(input: CreateResourceInput) {
   const res = await fetch(`${FACILITY_SERVICE}/resources`, {
     method: "POST",
-    headers: FACILITY_HEADERS,
+    headers: await getAuthHeaders(),
     body: JSON.stringify(input),
   })
   if (!res.ok) {
@@ -776,7 +792,7 @@ export async function createResource(input: CreateResourceInput) {
 export async function updateResource(id: string, input: Partial<CreateResourceInput> & { groupId?: string | null }) {
   const res = await fetch(`${FACILITY_SERVICE}/resources/${id}`, {
     method: "PATCH",
-    headers: FACILITY_HEADERS,
+    headers: await getAuthHeaders(),
     body: JSON.stringify(input),
   })
   if (!res.ok) {
@@ -793,7 +809,7 @@ export async function getResourceGroups(params?: { venueId?: string }) {
   if (params?.venueId) search.set("venueId", params.venueId)
   const query = search.toString()
   const url = query ? `${FACILITY_SERVICE}/resource-groups?${query}` : `${FACILITY_SERVICE}/resource-groups`
-  const res = await fetch(url, { headers: FACILITY_HEADERS, cache: "no-store" })
+  const res = await fetch(url, { headers: await getAuthHeaders(), cache: "no-store" })
   if (!res.ok) throw new Error(`Failed to load resource groups: ${res.status}`)
   const json = await res.json()
   return (json.data ?? json) as any[]
@@ -801,7 +817,7 @@ export async function getResourceGroups(params?: { venueId?: string }) {
 
 export async function getResourceGroupById(id: string) {
   const res = await fetch(`${FACILITY_SERVICE}/resource-groups/${id}`, {
-    headers: FACILITY_HEADERS,
+    headers: await getAuthHeaders(),
     cache: "no-store",
   })
   if (!res.ok) throw new Error(`Failed to load resource group: ${res.status}`)
@@ -821,7 +837,7 @@ export type CreateResourceGroupInput = {
 export async function createResourceGroup(input: CreateResourceGroupInput) {
   const res = await fetch(`${FACILITY_SERVICE}/resource-groups`, {
     method: "POST",
-    headers: FACILITY_HEADERS,
+    headers: await getAuthHeaders(),
     body: JSON.stringify(input),
   })
   if (!res.ok) {
@@ -834,7 +850,7 @@ export async function createResourceGroup(input: CreateResourceGroupInput) {
 export async function updateResourceGroup(id: string, input: Partial<CreateResourceGroupInput>) {
   const res = await fetch(`${FACILITY_SERVICE}/resource-groups/${id}`, {
     method: "PATCH",
-    headers: FACILITY_HEADERS,
+    headers: await getAuthHeaders(),
     body: JSON.stringify(input),
   })
   if (!res.ok) {
@@ -847,7 +863,7 @@ export async function updateResourceGroup(id: string, input: Partial<CreateResou
 export async function deleteResourceGroup(id: string) {
   const res = await fetch(`${FACILITY_SERVICE}/resource-groups/${id}`, {
     method: "DELETE",
-    headers: FACILITY_HEADERS,
+    headers: await getAuthHeaders(),
   })
   if (!res.ok) throw new Error(`Failed to delete resource group: ${res.status}`)
 }
@@ -867,7 +883,7 @@ export async function getAvailabilityConfigs(params?: {
   const url = query
     ? `${FACILITY_SERVICE}/availability-configs?${query}`
     : `${FACILITY_SERVICE}/availability-configs`
-  const res = await fetch(url, { headers: FACILITY_HEADERS, cache: "no-store" })
+  const res = await fetch(url, { headers: await getAuthHeaders(), cache: "no-store" })
   if (!res.ok) throw new Error(`Failed to load availability configs: ${res.status}`)
   const json = await res.json()
   return (json.data ?? json) as any[]
@@ -875,7 +891,7 @@ export async function getAvailabilityConfigs(params?: {
 
 export async function getAvailabilityConfigById(id: string) {
   const res = await fetch(`${FACILITY_SERVICE}/availability-configs/${id}`, {
-    headers: FACILITY_HEADERS,
+    headers: await getAuthHeaders(),
     cache: "no-store",
   })
   if (!res.ok) throw new Error(`Failed to load availability config: ${res.status}`)
@@ -898,7 +914,7 @@ export type CreateAvailabilityConfigInput = {
 export async function createAvailabilityConfig(input: CreateAvailabilityConfigInput) {
   const res = await fetch(`${FACILITY_SERVICE}/availability-configs`, {
     method: "POST",
-    headers: FACILITY_HEADERS,
+    headers: await getAuthHeaders(),
     body: JSON.stringify(input),
   })
   if (!res.ok) {
@@ -911,7 +927,7 @@ export async function createAvailabilityConfig(input: CreateAvailabilityConfigIn
 export async function updateAvailabilityConfig(id: string, input: Partial<CreateAvailabilityConfigInput>) {
   const res = await fetch(`${FACILITY_SERVICE}/availability-configs/${id}`, {
     method: "PATCH",
-    headers: FACILITY_HEADERS,
+    headers: await getAuthHeaders(),
     body: JSON.stringify(input),
   })
   if (!res.ok) {
@@ -924,7 +940,7 @@ export async function updateAvailabilityConfig(id: string, input: Partial<Create
 export async function deleteAvailabilityConfig(id: string) {
   const res = await fetch(`${FACILITY_SERVICE}/availability-configs/${id}`, {
     method: "DELETE",
-    headers: FACILITY_HEADERS,
+    headers: await getAuthHeaders(),
   })
   if (!res.ok) throw new Error(`Failed to delete availability config: ${res.status}`)
 }
@@ -939,7 +955,7 @@ export async function getBlackoutDates(params?: { venueId?: string; resourceId?:
   const url = query
     ? `${FACILITY_SERVICE}/blackout-dates?${query}`
     : `${FACILITY_SERVICE}/blackout-dates`
-  const res = await fetch(url, { headers: FACILITY_HEADERS, cache: "no-store" })
+  const res = await fetch(url, { headers: await getAuthHeaders(), cache: "no-store" })
   if (!res.ok) throw new Error(`Failed to load blackout dates: ${res.status}`)
   const json = await res.json()
   return (json.data ?? json) as any[]
@@ -947,7 +963,7 @@ export async function getBlackoutDates(params?: { venueId?: string; resourceId?:
 
 export async function getBlackoutDateById(id: string) {
   const res = await fetch(`${FACILITY_SERVICE}/blackout-dates/${id}`, {
-    headers: FACILITY_HEADERS,
+    headers: await getAuthHeaders(),
     cache: "no-store",
   })
   if (!res.ok) throw new Error(`Failed to load blackout date: ${res.status}`)
@@ -967,7 +983,7 @@ export type CreateBlackoutDateInput = {
 export async function createBlackoutDate(input: CreateBlackoutDateInput) {
   const res = await fetch(`${FACILITY_SERVICE}/blackout-dates`, {
     method: "POST",
-    headers: FACILITY_HEADERS,
+    headers: await getAuthHeaders(),
     body: JSON.stringify(input),
   })
   if (!res.ok) {
@@ -980,7 +996,7 @@ export async function createBlackoutDate(input: CreateBlackoutDateInput) {
 export async function updateBlackoutDate(id: string, input: Partial<CreateBlackoutDateInput>) {
   const res = await fetch(`${FACILITY_SERVICE}/blackout-dates/${id}`, {
     method: "PATCH",
-    headers: FACILITY_HEADERS,
+    headers: await getAuthHeaders(),
     body: JSON.stringify(input),
   })
   if (!res.ok) {
@@ -993,7 +1009,67 @@ export async function updateBlackoutDate(id: string, input: Partial<CreateBlacko
 export async function deleteBlackoutDate(id: string) {
   const res = await fetch(`${FACILITY_SERVICE}/blackout-dates/${id}`, {
     method: "DELETE",
-    headers: FACILITY_HEADERS,
+    headers: await getAuthHeaders(),
   })
   if (!res.ok) throw new Error(`Failed to delete blackout date: ${res.status}`)
+}
+
+// ─── Booking Approval ─────────────────────────────────────────────────────────
+
+export async function approveBooking(id: string, approvedBy: string) {
+  const res = await fetch(`${BOOKING_SERVICE}/bookings/${id}/approve`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({ approvedBy }),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Failed to approve booking: ${res.status} ${text}`)
+  }
+  return res.json()
+}
+
+export async function rejectBooking(id: string, reason?: string) {
+  const res = await fetch(`${BOOKING_SERVICE}/bookings/${id}/reject`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({ reason }),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Failed to reject booking: ${res.status} ${text}`)
+  }
+  return res.json()
+}
+
+// ─── Venue Settings ───────────────────────────────────────────────────────────
+
+export async function getVenueSettings(venueId: string) {
+  const res = await fetch(`${FACILITY_SERVICE}/venues/${venueId}/settings`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error(`Failed to load venue settings: ${res.status}`)
+  const json = await res.json()
+  return (json.data ?? json) as any
+}
+
+export async function upsertVenueSettings(venueId: string, data: {
+  openBookings?: boolean
+  addOnsEnabled?: boolean
+  pendingApprovals?: boolean
+  splitPayments?: boolean
+  publicBookingView?: string
+}) {
+  const res = await fetch(`${FACILITY_SERVICE}/venues/${venueId}/settings`, {
+    method: "PUT",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Failed to update venue settings: ${res.status} ${text}`)
+  }
+  const json = await res.json()
+  return (json.data ?? json) as any
 }
