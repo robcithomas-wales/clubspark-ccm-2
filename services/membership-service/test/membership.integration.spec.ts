@@ -212,7 +212,7 @@ describe('Membership service — integration', () => {
       expect(res.status).toBe(201)
       expect(res.body.data.id).toBeDefined()
       expect(res.body.data.planId).toBe(TEST_PLAN_ID)
-      expect(res.body.data.status).toBe('active')
+      expect(res.body.data.status).toBe('pending')
     })
 
     it('creates a membership with a customerId', async () => {
