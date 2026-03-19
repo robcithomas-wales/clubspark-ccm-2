@@ -17,12 +17,14 @@ import {
   LayoutGrid,
   LogOut,
   MapPin,
+  Newspaper,
   Search,
   Settings,
   ShieldCheck,
   ShoppingBag,
   Users,
   Building2,
+  Globe,
   Repeat2,
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
@@ -98,6 +100,21 @@ const navSections = [
           { label: "Customers", href: "/reports/customers" },
           { label: "Membership", href: "/reports/membership" },
           { label: "Series", href: "/reports/series" },
+        ],
+      },
+    ],
+  },
+  {
+    label: "Website",
+    items: [
+      {
+        label: "Website",
+        icon: Globe,
+        children: [
+          { label: "Design", href: "/website/design" },
+          { label: "Home page", href: "/website/home" },
+          { label: "News", href: "/website/news" },
+          { label: "Events", href: "/website/events" },
         ],
       },
     ],

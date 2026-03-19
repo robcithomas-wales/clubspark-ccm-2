@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
+import { ScheduleModule } from '@nestjs/schedule'
 import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core'
 import configuration from './config/configuration'
 import { PrismaModule } from './prisma/prisma.module'
@@ -15,6 +16,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor'
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     HealthModule,
     MembershipSchemesModule,

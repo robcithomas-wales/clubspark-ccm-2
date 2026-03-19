@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common'
 import { MembershipPlansRepository } from './membership-plans.repository'
 import { CreateMembershipPlanDto } from './dto/create-membership-plan.dto'
 import { UpdateMembershipPlanDto } from './dto/update-membership-plan.dto'
+import { SetPlanEligibilityDto } from './dto/set-plan-eligibility.dto'
 
 @Injectable()
 export class MembershipPlansService {
@@ -60,5 +61,22 @@ export class MembershipPlansService {
     const plan = await this.repo.update({ tenantId, organisationId, id, ...dto })
     if (!plan) throw new NotFoundException('Membership plan not found')
     return { data: plan }
+  }
+
+  async getEligibility(tenantId: string, organisationId: string, id: string) {
+    const plan = await this.repo.findById(tenantId, organisationId, id)
+    if (!plan) throw new NotFoundException('Membership plan not found')
+    return { data: plan.eligibility ?? {} }
+  }
+
+  async setEligibility(
+    tenantId: string,
+    organisationId: string,
+    id: string,
+    dto: SetPlanEligibilityDto,
+  ) {
+    const plan = await this.repo.setEligibility(tenantId, organisationId, id, dto as Record<string, unknown>)
+    if (!plan) throw new NotFoundException('Membership plan not found')
+    return { data: plan.eligibility ?? {} }
   }
 }

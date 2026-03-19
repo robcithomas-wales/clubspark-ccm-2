@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Param,
   Body,
   Query,
@@ -13,6 +14,7 @@ import type { FastifyRequest } from 'fastify'
 import { Request } from '@nestjs/common'
 import { CustomersService } from './customers.service.js'
 import { CreateCustomerDto } from './dto/create-customer.dto.js'
+import { UpdateCustomerDto } from './dto/update-customer.dto.js'
 
 @ApiTags('customers')
 @Controller('customers')
@@ -51,5 +53,16 @@ export class CustomersController {
     @Body() dto: CreateCustomerDto,
   ) {
     return this.service.create(req.tenantContext.tenantId, dto)
+  }
+
+  @Patch(':id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update a customer' })
+  update(
+    @Request() req: FastifyRequest & { tenantContext: { tenantId: string } },
+    @Param('id') id: string,
+    @Body() dto: UpdateCustomerDto,
+  ) {
+    return this.service.update(req.tenantContext.tenantId, id, dto)
   }
 }

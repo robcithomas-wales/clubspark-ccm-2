@@ -31,6 +31,8 @@ export class MembershipsService {
     query: {
       planId?: string
       status?: string
+      paymentStatus?: string
+      renewingWithinDays?: number
       customerId?: string
       ownerType?: string
       ownerId?: string
@@ -47,6 +49,8 @@ export class MembershipsService {
       organisationId,
       planId: query.planId ?? null,
       status: query.status ?? null,
+      paymentStatus: query.paymentStatus ?? null,
+      renewingWithinDays: query.renewingWithinDays ?? null,
       customerId: query.customerId ?? null,
       ownerType: query.ownerType ?? null,
       ownerId: query.ownerId ?? null,
@@ -216,5 +220,99 @@ export class MembershipsService {
 
   async getDailyStats(tenantId: string, organisationId: string, months: number) {
     return this.repo.getDailyStats(tenantId, organisationId, months)
+  }
+
+  async listExpiringRenewals(tenantId: string, organisationId: string, withinDays: number) {
+    const rows = await this.repo.listExpiringRenewals(tenantId, organisationId, withinDays)
+    return { data: rows }
+  }
+
+  async bulkTransition(
+    tenantId: string,
+    organisationId: string,
+    ids: string[],
+    action: string,
+    reason: string | null,
+    actorEmail: string | null,
+  ) {
+    const rule = TRANSITIONS[action]
+    if (!rule) throw new BadRequestException(`Unknown action: ${action}`)
+
+    const results: { id: string; success: boolean; error?: string }[] = []
+
+    for (const id of ids) {
+      try {
+        const existing = await this.repo.findById(tenantId, organisationId, id)
+        if (!existing) { results.push({ id, success: false, error: 'Not found' }); continue }
+        if (!rule.from.includes(existing.status)) {
+          results.push({ id, success: false, error: `Cannot ${action} from '${existing.status}'` })
+          continue
+        }
+
+        const now = new Date()
+        const timestamps: Record<string, Date> = {}
+        if (rule.to === 'active')    timestamps['activatedAt'] = now
+        if (rule.to === 'suspended') timestamps['suspendedAt'] = now
+        if (rule.to === 'cancelled') timestamps['cancelledAt'] = now
+        if (rule.to === 'lapsed')    timestamps['lapsedAt']    = now
+        if (rule.to === 'expired')   timestamps['expiredAt']   = now
+
+        await this.repo.transition(id, rule.to, timestamps, existing.status, reason, actorEmail)
+        results.push({ id, success: true })
+      } catch (e: any) {
+        results.push({ id, success: false, error: e?.message ?? 'Unknown error' })
+      }
+    }
+
+    return { data: results }
+  }
+
+  async recordPayment(
+    tenantId: string,
+    organisationId: string,
+    id: string,
+    dto: { paymentStatus: string; paymentMethod?: string; paymentReference?: string; paymentAmount?: number },
+  ) {
+    const existing = await this.repo.findById(tenantId, organisationId, id)
+    if (!existing) throw new NotFoundException('Membership not found')
+    const m = await this.repo.recordPayment(id, {
+      paymentStatus: dto.paymentStatus,
+      paymentMethod: dto.paymentMethod ?? null,
+      paymentReference: dto.paymentReference ?? null,
+      paymentAmount: dto.paymentAmount ?? null,
+      paymentRecordedAt: new Date(),
+    })
+    return { data: m }
+  }
+
+  async transferPlan(
+    tenantId: string,
+    organisationId: string,
+    id: string,
+    newPlanId: string,
+    reason: string | null,
+  ) {
+    const existing = await this.repo.findById(tenantId, organisationId, id)
+    if (!existing) throw new NotFoundException('Membership not found')
+
+    const plan = await this.plansRepo.findById(tenantId, organisationId, newPlanId)
+    if (!plan) throw new NotFoundException('Target membership plan not found')
+
+    const m = await this.repo.update(id, {
+      planId: newPlanId,
+      customerId: existing.customerId,
+      ownerType: existing.ownerType,
+      ownerId: existing.ownerId,
+      status: existing.status,
+      startDate: existing.startDate,
+      endDate: existing.endDate,
+      renewalDate: existing.renewalDate,
+      autoRenew: existing.autoRenew,
+      paymentStatus: existing.paymentStatus,
+      reference: existing.reference,
+      source: existing.source,
+      notes: reason ? `[Transferred from plan ${existing.planId}] ${reason}` : existing.notes,
+    })
+    return { data: m }
   }
 }

@@ -36,10 +36,6 @@ export class VenuesRepository {
     pendingApprovals?: boolean
     splitPayments?: boolean
     publicBookingView?: string
-    clubCode?: string | null
-    primaryColour?: string
-    logoUrl?: string | null
-    appName?: string | null
   }) {
     return this.prisma.write.venueSetting.upsert({
       where: { venueId },
@@ -49,15 +45,16 @@ export class VenuesRepository {
   }
 
   async findByClubCode(clubCode: string) {
-    return this.prisma.read.venueSetting.findUnique({
+    return this.prisma.read.organisation.findUnique({
       where: { clubCode },
       select: {
-        venueId: true,
+        tenantId: true,
+        name: true,
         appName: true,
         primaryColour: true,
+        secondaryColour: true,
         logoUrl: true,
         clubCode: true,
-        venue: { select: { tenantId: true, name: true } },
       },
     })
   }

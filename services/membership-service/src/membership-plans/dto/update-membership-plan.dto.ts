@@ -74,4 +74,17 @@ export class UpdateMembershipPlanDto {
   @IsOptional()
   @IsNumber()
   instalmentCount?: number
+
+  // Phase 1: eligibility rules
+  @IsOptional()
+  eligibility?: Record<string, unknown>
+
+  // Phase 2: grace period and T&C
+  @IsOptional()
+  @IsNumber()
+  gracePeriodDays?: number
+
+  @IsOptional()
+  @IsString()
+  termsAndConditions?: string
 }

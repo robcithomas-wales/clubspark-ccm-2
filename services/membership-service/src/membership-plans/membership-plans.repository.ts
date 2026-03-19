@@ -32,6 +32,9 @@ interface CreateInput {
   currency?: string
   billingInterval?: string | null
   instalmentCount?: number | null
+  eligibility?: Record<string, unknown> | null
+  gracePeriodDays?: number | null
+  termsAndConditions?: string | null
 }
 
 interface UpdateInput extends Partial<Omit<CreateInput, 'tenantId' | 'organisationId'>> {
@@ -103,7 +106,24 @@ export class MembershipPlansRepository {
         currency: input.currency ?? 'GBP',
         billingInterval: input.billingInterval ?? null,
         instalmentCount: input.instalmentCount ?? null,
+        eligibility: input.eligibility ?? undefined,
+        gracePeriodDays: input.gracePeriodDays ?? null,
+        termsAndConditions: input.termsAndConditions ?? null,
       },
+      include: { scheme: { select: { name: true } } },
+    })
+    return this.format(plan)
+  }
+
+  async setEligibility(tenantId: string, organisationId: string, id: string, eligibility: Record<string, unknown>) {
+    const existing = await this.prisma.membershipPlan.findFirst({
+      where: { id, tenantId, organisationId },
+    })
+    if (!existing) return null
+
+    const plan = await this.prisma.membershipPlan.update({
+      where: { id },
+      data: { eligibility },
       include: { scheme: { select: { name: true } } },
     })
     return this.format(plan)
@@ -136,6 +156,9 @@ export class MembershipPlansRepository {
         currency: input.currency ?? existing.currency,
         billingInterval: input.billingInterval !== undefined ? input.billingInterval : existing.billingInterval,
         instalmentCount: input.instalmentCount !== undefined ? input.instalmentCount : existing.instalmentCount,
+        eligibility: input.eligibility !== undefined ? input.eligibility : (existing.eligibility as Record<string, unknown> | null),
+        gracePeriodDays: input.gracePeriodDays !== undefined ? input.gracePeriodDays : existing.gracePeriodDays,
+        termsAndConditions: input.termsAndConditions !== undefined ? input.termsAndConditions : existing.termsAndConditions,
       },
       include: { scheme: { select: { name: true } } },
     })

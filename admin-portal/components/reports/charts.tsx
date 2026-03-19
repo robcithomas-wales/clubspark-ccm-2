@@ -147,6 +147,76 @@ export function DonutChart({
   )
 }
 
+/**
+ * Dual vertical bar chart — two series rendered side by side per x-label.
+ * Primary series (left) and secondary series (right) share the same x-axis.
+ */
+export function DualVBarChart({
+  rows,
+  primaryColour = "#1857E0",
+  secondaryColour = "#10b981",
+  formatPrimary,
+  formatSecondary,
+  primaryLabel,
+  secondaryLabel,
+}: {
+  rows: { label: string; primary: number; secondary: number }[]
+  primaryColour?: string
+  secondaryColour?: string
+  formatPrimary?: (v: number) => string
+  formatSecondary?: (v: number) => string
+  primaryLabel?: string
+  secondaryLabel?: string
+}) {
+  if (rows.length === 0) return <p className="text-sm text-slate-400">No data</p>
+  const maxPrimary = Math.max(...rows.map((r) => r.primary), 1)
+  const maxSecondary = Math.max(...rows.map((r) => r.secondary), 1)
+  const pairW = Math.max(6, Math.floor((CHART_W / rows.length) - 2))
+  const barW = Math.max(2, Math.floor(pairW / 2) - 1)
+
+  const legendY = CHART_H + LABEL_H + 6
+
+  return (
+    <div className="overflow-x-auto">
+      <svg viewBox={`0 0 ${CHART_W} ${legendY + 16}`} className="w-full">
+        {rows.map((row, i) => {
+          const x = i * pairW
+          const h1 = Math.max(3, Math.round((row.primary / maxPrimary) * CHART_H))
+          const h2 = Math.max(3, Math.round((row.secondary / maxSecondary) * CHART_H))
+          return (
+            <g key={row.label}>
+              <rect x={x} y={CHART_H - h1} width={barW} height={h1} rx={2} fill={primaryColour} opacity={0.85}>
+                <title>{row.label}: {formatPrimary ? formatPrimary(row.primary) : row.primary}</title>
+              </rect>
+              <rect x={x + barW + 1} y={CHART_H - h2} width={barW} height={h2} rx={2} fill={secondaryColour} opacity={0.85}>
+                <title>{row.label}: {formatSecondary ? formatSecondary(row.secondary) : row.secondary}</title>
+              </rect>
+              {pairW >= 14 && (
+                <text x={x + pairW / 2} y={CHART_H + 14} textAnchor="middle" fontSize={9} fill="#94a3b8">
+                  {row.label}
+                </text>
+              )}
+            </g>
+          )
+        })}
+        {/* Legend */}
+        {primaryLabel && (
+          <>
+            <rect x={0} y={legendY} width={10} height={10} rx={2} fill={primaryColour} opacity={0.85} />
+            <text x={14} y={legendY + 9} fontSize={10} fill="#64748b">{primaryLabel}</text>
+          </>
+        )}
+        {secondaryLabel && (
+          <>
+            <rect x={primaryLabel ? 130 : 0} y={legendY} width={10} height={10} rx={2} fill={secondaryColour} opacity={0.85} />
+            <text x={(primaryLabel ? 130 : 0) + 14} y={legendY + 9} fontSize={10} fill="#64748b">{secondaryLabel}</text>
+          </>
+        )}
+      </svg>
+    </div>
+  )
+}
+
 /** Day-of-week × hour heatmap. dow 0=Sun … 6=Sat, hour 0–23. */
 export function DowHeatmap({ rows }: { rows: { dow: number; hour: number; count: number }[] }) {
   if (rows.length === 0) return <p className="text-sm text-slate-400">No data</p>

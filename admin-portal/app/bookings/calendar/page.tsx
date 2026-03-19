@@ -25,10 +25,11 @@ function formatDateDisplay(dateStr: string): string {
 export default async function BookingCalendarPage({
   searchParams,
 }: {
-  searchParams: { date?: string }
+  searchParams: Promise<{ date?: string }>
 }) {
+  const params = await searchParams
   const today = new Date().toISOString().slice(0, 10)
-  const date = searchParams.date ?? today
+  const date = params.date ?? today
 
   const fromDate = `${date}T00:00:00Z`
   const toDate = `${addDays(date, 1)}T00:00:00Z`

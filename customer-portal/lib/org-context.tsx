@@ -15,6 +15,26 @@ export type Org = {
   email: string | null
   mapsEmbedUrl: string | null
   isPublished: boolean
+  secondaryColour: string | null
+  headingFont: string | null
+  bodyFont: string | null
+  navLayout: string
+  faviconUrl: string | null
+  homePageContent: HomePageContent | null
+}
+
+export type HomePageContent = {
+  heroImageUrl?: string | null
+  heroGradient?: boolean
+  headline?: string | null
+  subheadline?: string | null
+  bannerEnabled?: boolean
+  bannerText?: string | null
+  introHeading?: string | null
+  introText?: string | null
+  gallery?: string[]
+  seoTitle?: string | null
+  seoDescription?: string | null
 }
 
 const OrgContext = createContext<Org | null>(null)

@@ -33,6 +33,8 @@ export interface BookingRow {
   approvedAt: Date | null
   seriesId: string | null
   cancelledAt: Date | null
+  price: number | null
+  currency: string
   createdAt: Date
   updatedAt: Date
   customerFirstName: string | null
@@ -95,6 +97,8 @@ export class BookingsRepository {
           b.approved_at        AS "approvedAt",
           b.series_id          AS "seriesId",
           b.cancelled_at       AS "cancelledAt",
+          b.price,
+          b.currency,
           b.created_at         AS "createdAt",
           b.updated_at         AS "updatedAt",
           c.first_name         AS "customerFirstName",
@@ -149,6 +153,8 @@ export class BookingsRepository {
           b.approved_at        AS "approvedAt",
           b.series_id          AS "seriesId",
           b.cancelled_at       AS "cancelledAt",
+          b.price,
+          b.currency,
           b.created_at         AS "createdAt",
           b.updated_at         AS "updatedAt",
           c.first_name         AS "customerFirstName",
@@ -256,7 +262,7 @@ export class BookingsRepository {
               tenant_id, organisation_id, venue_id, resource_id,
               bookable_unit_id, customer_id, booking_source,
               starts_at, ends_at, status, payment_status, booking_reference, notes,
-              optional_unit_ids, admin_override
+              optional_unit_ids, admin_override, price, currency
             ) VALUES (
               ${tenantId}::uuid,
               ${organisationId}::uuid,
@@ -272,7 +278,9 @@ export class BookingsRepository {
               ${bookingReference},
               ${dto.notes ?? null},
               ${optionalUnitIds}::uuid[],
-              ${dto.adminOverride ?? false}
+              ${dto.adminOverride ?? false},
+              ${dto.price ?? null},
+              ${dto.currency ?? 'GBP'}
             )
             RETURNING
               id,
@@ -294,6 +302,8 @@ export class BookingsRepository {
               approved_by       AS "approvedBy",
               approved_at       AS "approvedAt",
               cancelled_at      AS "cancelledAt",
+              price,
+              currency,
               created_at        AS "createdAt",
               updated_at        AS "updatedAt"
           `
@@ -448,6 +458,7 @@ export class BookingsRepository {
                   booking_source    = CASE WHEN ${dto.bookingSource !== undefined} THEN ${dto.bookingSource ?? null} ELSE booking_source END,
                   customer_id       = CASE WHEN ${dto.customerId !== undefined} THEN ${dto.customerId ?? null}::uuid ELSE customer_id END,
                   optional_unit_ids = CASE WHEN ${dto.optionalUnitIds !== undefined} THEN ${dto.optionalUnitIds ?? []}::uuid[] ELSE optional_unit_ids END,
+                  admin_override    = CASE WHEN ${dto.adminOverride !== undefined} THEN ${dto.adminOverride ?? false} ELSE admin_override END,
                   updated_at        = now()
                 WHERE tenant_id = ${tenantId}::uuid
                   AND id        = ${id}::uuid
@@ -479,6 +490,7 @@ export class BookingsRepository {
           booking_source    = CASE WHEN ${dto.bookingSource !== undefined} THEN ${dto.bookingSource ?? null} ELSE booking_source END,
           customer_id       = CASE WHEN ${dto.customerId !== undefined} THEN ${dto.customerId ?? null}::uuid ELSE customer_id END,
           optional_unit_ids = CASE WHEN ${dto.optionalUnitIds !== undefined} THEN ${dto.optionalUnitIds ?? []}::uuid[] ELSE optional_unit_ids END,
+          admin_override    = CASE WHEN ${dto.adminOverride !== undefined} THEN ${dto.adminOverride ?? false} ELSE admin_override END,
           updated_at        = now()
         WHERE tenant_id = ${tenantId}::uuid
           AND id        = ${id}::uuid
@@ -491,15 +503,22 @@ export class BookingsRepository {
 
   async getStats(tenantId: string): Promise<{
     totalBookedHours: number
+    bookedHours30d: number
     addOnRevenue: number
+    totalRevenue: number
+    totalPaidBookings: number
     uniqueCustomers: number
+    utilisationRate30d: number
   }> {
-    const [bookingRows, addOnRows, customerRows] = await Promise.all([
-      this.prisma.read.$queryRaw<[{ totalBookedHours: number }]>`
-        SELECT COALESCE(
-          SUM(EXTRACT(EPOCH FROM (ends_at - starts_at)) / 3600)
-          FILTER (WHERE status = 'active'), 0
-        )::float AS "totalBookedHours"
+    const cutoff30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+
+    const [bookingRows, addOnRows, customerRows, revenueRows, unitRows] = await Promise.all([
+      this.prisma.read.$queryRaw<[{ totalBookedHours: number; bookedHours30d: number }]>`
+        SELECT
+          COALESCE(SUM(EXTRACT(EPOCH FROM (ends_at - starts_at)) / 3600)
+            FILTER (WHERE status = 'active'), 0)::float AS "totalBookedHours",
+          COALESCE(SUM(EXTRACT(EPOCH FROM (ends_at - starts_at)) / 3600)
+            FILTER (WHERE status = 'active' AND starts_at >= ${cutoff30d}::timestamptz), 0)::float AS "bookedHours30d"
         FROM booking.bookings
         WHERE tenant_id = ${tenantId}::uuid
       `,
@@ -507,37 +526,59 @@ export class BookingsRepository {
         SELECT COALESCE(SUM(ba.price * ba.quantity), 0)::float AS total
         FROM booking.booking_add_ons ba
         JOIN booking.bookings b ON b.id = ba.booking_id
-        WHERE b.tenant_id = ${tenantId}::uuid
-          AND ba.status   = 'active'
+        WHERE b.tenant_id = ${tenantId}::uuid AND ba.status = 'active'
       `,
       this.prisma.read.$queryRaw<[{ count: number }]>`
         SELECT COUNT(DISTINCT customer_id)::int AS count
         FROM booking.bookings
-        WHERE tenant_id  = ${tenantId}::uuid
-          AND status     = 'active'
-          AND customer_id IS NOT NULL
+        WHERE tenant_id = ${tenantId}::uuid AND status = 'active' AND customer_id IS NOT NULL
+      `,
+      this.prisma.read.$queryRaw<[{ totalRevenue: number; totalPaid: number }]>`
+        SELECT
+          COALESCE(SUM(price) FILTER (WHERE payment_status = 'paid' AND status = 'active' AND price IS NOT NULL), 0)::float AS "totalRevenue",
+          COUNT(*) FILTER (WHERE payment_status = 'paid' AND status = 'active')::int AS "totalPaid"
+        FROM booking.bookings
+        WHERE tenant_id = ${tenantId}::uuid
+      `,
+      this.prisma.read.$queryRaw<[{ activeUnits: number }]>`
+        SELECT COUNT(*)::int AS "activeUnits"
+        FROM venue.bookable_units
+        WHERE tenant_id = ${tenantId}::uuid AND is_active = true
       `,
     ])
 
+    const bookedHours30d = bookingRows[0]?.bookedHours30d ?? 0
+    const activeUnits = unitRows[0]?.activeUnits ?? 0
+    // 16 operational hours per day (06:00–22:00), 30 days
+    const totalPossibleHours30d = activeUnits * 16 * 30
+    const utilisationRate30d = totalPossibleHours30d > 0
+      ? Math.round((bookedHours30d / totalPossibleHours30d) * 1000) / 10
+      : 0
+
     return {
       totalBookedHours: bookingRows[0]?.totalBookedHours ?? 0,
+      bookedHours30d,
       addOnRevenue: addOnRows[0]?.total ?? 0,
+      totalRevenue: revenueRows[0]?.totalRevenue ?? 0,
+      totalPaidBookings: revenueRows[0]?.totalPaid ?? 0,
       uniqueCustomers: customerRows[0]?.count ?? 0,
+      utilisationRate30d,
     }
   }
 
   async getDailyStats(
     tenantId: string,
     days = 30,
-  ): Promise<{ date: string; bookingCount: number; bookedHours: number; addOnRevenue: number }[]> {
+  ): Promise<{ date: string; bookingCount: number; bookedHours: number; addOnRevenue: number; revenue: number }[]> {
     const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
 
     const [bookingRows, addOnRows] = await Promise.all([
-      this.prisma.read.$queryRaw<{ date: string; bookingCount: number; bookedHours: number }[]>`
+      this.prisma.read.$queryRaw<{ date: string; bookingCount: number; bookedHours: number; revenue: number }[]>`
         SELECT
-          starts_at::date::text                                                   AS date,
-          COUNT(*)::int                                                           AS "bookingCount",
-          COALESCE(SUM(EXTRACT(EPOCH FROM (ends_at - starts_at)) / 3600), 0)::float AS "bookedHours"
+          starts_at::date::text                                                        AS date,
+          COUNT(*)::int                                                                AS "bookingCount",
+          COALESCE(SUM(EXTRACT(EPOCH FROM (ends_at - starts_at)) / 3600), 0)::float   AS "bookedHours",
+          COALESCE(SUM(price) FILTER (WHERE payment_status = 'paid' AND price IS NOT NULL), 0)::float AS revenue
         FROM booking.bookings
         WHERE tenant_id = ${tenantId}::uuid
           AND status    = 'active'
@@ -565,6 +606,7 @@ export class BookingsRepository {
       bookingCount: r.bookingCount,
       bookedHours: r.bookedHours,
       addOnRevenue: revenueByDate.get(r.date) ?? 0,
+      revenue: r.revenue,
     }))
   }
 

@@ -7,28 +7,40 @@ type OrgData = {
   name: string
   slug: string
   customDomain: string
-  primaryColour: string
-  logoUrl: string
   about: string
   address: string
   phone: string
   email: string
   mapsEmbedUrl: string
   isPublished: boolean
+  appName: string
+  clubCode: string
+}
+
+// Design fields we don't edit here but must preserve on save
+type DesignPassthrough = {
+  primaryColour?: string
+  secondaryColour?: string | null
+  logoUrl?: string | null
+  faviconUrl?: string | null
+  headingFont?: string | null
+  bodyFont?: string | null
+  navLayout?: string
+  homePageContent?: any
 }
 
 const EMPTY: OrgData = {
   name: "",
   slug: "",
   customDomain: "",
-  primaryColour: "#1857E0",
-  logoUrl: "",
   about: "",
   address: "",
   phone: "",
   email: "",
   mapsEmbedUrl: "",
   isPublished: false,
+  appName: "",
+  clubCode: "",
 }
 
 function slugify(value: string) {
@@ -40,13 +52,41 @@ function slugify(value: string) {
     .replace(/-+/g, "-")
 }
 
-export function OrganisationSettingsForm({ initial }: { initial: OrgData | null }) {
-  const [form, setForm] = useState<OrgData>(initial ?? EMPTY)
+function normalise(data: any): OrgData {
+  return {
+    ...EMPTY,
+    ...data,
+    customDomain: data?.customDomain ?? "",
+    about:        data?.about        ?? "",
+    address:      data?.address      ?? "",
+    phone:        data?.phone        ?? "",
+    email:        data?.email        ?? "",
+    mapsEmbedUrl: data?.mapsEmbedUrl ?? "",
+    appName:      data?.appName      ?? "",
+    clubCode:     data?.clubCode     ?? "",
+  }
+}
+
+function extractDesign(data: any): DesignPassthrough {
+  return {
+    primaryColour:   data?.primaryColour,
+    secondaryColour: data?.secondaryColour,
+    logoUrl:         data?.logoUrl,
+    faviconUrl:      data?.faviconUrl,
+    headingFont:     data?.headingFont,
+    bodyFont:        data?.bodyFont,
+    navLayout:       data?.navLayout,
+    homePageContent: data?.homePageContent,
+  }
+}
+
+export function OrganisationSettingsForm({ initial }: { initial: any | null }) {
+  const [form, setForm] = useState<OrgData>(normalise(initial))
+  const [design] = useState<DesignPassthrough>(extractDesign(initial))
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(!!initial?.slug)
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
   const [errorMsg, setErrorMsg] = useState("")
 
-  // Auto-generate slug from name until user manually edits it
   useEffect(() => {
     if (!slugManuallyEdited) {
       setForm((f) => ({ ...f, slug: slugify(f.name) }))
@@ -66,13 +106,15 @@ export function OrganisationSettingsForm({ initial }: { initial: OrgData | null 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
+          ...design, // preserve design fields unchanged
           customDomain: form.customDomain || null,
-          logoUrl: form.logoUrl || null,
-          about: form.about || null,
-          address: form.address || null,
-          phone: form.phone || null,
-          email: form.email || null,
+          about:        form.about        || null,
+          address:      form.address      || null,
+          phone:        form.phone        || null,
+          email:        form.email        || null,
           mapsEmbedUrl: form.mapsEmbedUrl || null,
+          appName:      form.appName      || null,
+          clubCode:     form.clubCode     || null,
         }),
       })
       const json = await res.json()
@@ -126,50 +168,9 @@ export function OrganisationSettingsForm({ initial }: { initial: OrgData | null 
         </Field>
       </Section>
 
-      {/* Branding */}
-      <Section title="Branding">
-        <Field label="Primary colour">
-          <div className="flex items-center gap-3">
-            <input
-              type="color"
-              value={form.primaryColour}
-              onChange={(e) => set("primaryColour", e.target.value)}
-              className="h-10 w-14 cursor-pointer rounded-lg border border-slate-200 p-1"
-            />
-            <input
-              className={`${input} w-32 font-mono uppercase`}
-              value={form.primaryColour}
-              onChange={(e) => set("primaryColour", e.target.value)}
-              placeholder="#1857E0"
-              maxLength={7}
-            />
-            <span
-              className="h-10 w-10 rounded-lg border border-slate-200 shadow-sm"
-              style={{ backgroundColor: form.primaryColour }}
-            />
-          </div>
-        </Field>
-        <Field label="Logo URL" hint="Hosted image URL for your organisation logo.">
-          <input
-            className={input}
-            value={form.logoUrl}
-            onChange={(e) => set("logoUrl", e.target.value)}
-            placeholder="https://..."
-          />
-          {form.logoUrl && (
-            <img
-              src={form.logoUrl}
-              alt="Logo preview"
-              className="mt-2 h-12 rounded border border-slate-200 object-contain"
-              onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
-            />
-          )}
-        </Field>
-      </Section>
-
       {/* About */}
       <Section title="About">
-        <Field label="About text" hint="Shown on your customer-facing website home page.">
+        <Field label="About text" hint="Shown in the footer of your customer portal and mobile app.">
           <textarea
             className={`${input} min-h-[100px] resize-y`}
             value={form.about}
@@ -214,6 +215,26 @@ export function OrganisationSettingsForm({ initial }: { initial: OrgData | null 
             value={form.mapsEmbedUrl}
             onChange={(e) => set("mapsEmbedUrl", e.target.value)}
             placeholder="https://www.google.com/maps/embed?pb=..."
+          />
+        </Field>
+      </Section>
+
+      {/* Mobile app */}
+      <Section title="Mobile app">
+        <Field label="Club code" hint="Short unique code customers type to find your club in the mobile app (e.g. caerphilly). Lowercase letters, numbers and hyphens only.">
+          <input
+            className={`${input} font-mono`}
+            value={form.clubCode}
+            onChange={(e) => set("clubCode", e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+            placeholder="e.g. caerphilly"
+          />
+        </Field>
+        <Field label="App display name" hint="Name shown in the mobile app header. Defaults to the organisation name if left blank.">
+          <input
+            className={input}
+            value={form.appName}
+            onChange={(e) => set("appName", e.target.value)}
+            placeholder={form.name || "e.g. Caerphilly Leisure"}
           />
         </Field>
       </Section>

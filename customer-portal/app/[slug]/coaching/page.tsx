@@ -1,0 +1,28 @@
+import { notFound } from "next/navigation"
+import { fetchOrgBySlug } from "@/lib/api"
+import { GraduationCap } from "lucide-react"
+
+export default async function CoachingPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params
+  const org = await fetchOrgBySlug(slug)
+  if (!org) notFound()
+  const primary = org.primaryColour
+
+  return (
+    <div className="min-h-screen bg-white pt-20">
+      <div className="border-b border-slate-100 py-12" style={{ backgroundColor: primary + "08" }}>
+        <div className="mx-auto max-w-4xl px-4 md:px-8">
+          <h1 className="text-4xl font-extrabold tracking-tight text-slate-900">Coaching</h1>
+          <p className="mt-2 text-slate-500">Coaching and lessons at {org.name}</p>
+        </div>
+      </div>
+      <div className="mx-auto max-w-4xl px-4 py-16 md:px-8 text-center">
+        <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl mb-4" style={{ backgroundColor: primary + "18" }}>
+          <GraduationCap size={28} style={{ color: primary }} />
+        </div>
+        <h2 className="text-xl font-bold text-slate-900">Coaching coming soon</h2>
+        <p className="mt-2 text-slate-500">We're putting together our coaching programme. Check back soon.</p>
+      </div>
+    </div>
+  )
+}

@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { CustomersRepository } from './customers.repository.js'
 import type { CreateCustomerDto } from './dto/create-customer.dto.js'
+import type { UpdateCustomerDto } from './dto/update-customer.dto.js'
 
 @Injectable()
 export class CustomersService {
@@ -40,5 +41,12 @@ export class CustomersService {
     }
     const customer = await this.repo.create(tenantId, dto)
     return { data: customer }
+  }
+
+  async update(tenantId: string, id: string, dto: UpdateCustomerDto) {
+    const existing = await this.repo.findById(tenantId, id)
+    if (!existing) throw new NotFoundException('Customer not found')
+    await this.repo.update(tenantId, id, dto)
+    return this.findById(tenantId, id)
   }
 }

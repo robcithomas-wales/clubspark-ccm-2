@@ -1,8 +1,10 @@
-import { Controller, Get, Put, Post, Body, Query, HttpCode, HttpStatus, BadRequestException } from '@nestjs/common'
+import { Controller, Get, Put, Patch, Post, Body, Query, HttpCode, HttpStatus, BadRequestException } from '@nestjs/common'
 import { ApiTags, ApiSecurity } from '@nestjs/swagger'
 import { SetMetadata } from '@nestjs/common'
 import { OrganisationsService } from './organisations.service.js'
 import { UpsertOrganisationDto, PublicRegisterDto } from './dto/upsert-organisation.dto.js'
+import { PatchHomePageDto } from './dto/patch-home-page.dto.js'
+import { PatchDesignDto } from './dto/patch-design.dto.js'
 import { TenantCtx, type TenantContext } from '../common/decorators/tenant-context.decorator.js'
 import { SKIP_TENANT_KEY } from '../common/guards/tenant-context.guard.js'
 
@@ -23,6 +25,18 @@ export class OrganisationsController {
   @HttpCode(HttpStatus.OK)
   upsertMe(@TenantCtx() ctx: TenantContext, @Body() dto: UpsertOrganisationDto) {
     return this.service.upsert(ctx.tenantId, dto)
+  }
+
+  @Patch('me/design')
+  @HttpCode(HttpStatus.OK)
+  patchDesign(@TenantCtx() ctx: TenantContext, @Body() dto: PatchDesignDto) {
+    return this.service.patchDesign(ctx.tenantId, dto)
+  }
+
+  @Patch('me/home-page')
+  @HttpCode(HttpStatus.OK)
+  patchHomePage(@TenantCtx() ctx: TenantContext, @Body() dto: PatchHomePageDto) {
+    return this.service.patchHomePage(ctx.tenantId, dto)
   }
 
   // ─── Public endpoints (used by customer portal for tenant resolution) ─────

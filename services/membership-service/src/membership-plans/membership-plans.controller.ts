@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Patch,
   Param,
   Body,
@@ -11,6 +12,7 @@ import {
 import { MembershipPlansService } from './membership-plans.service'
 import { CreateMembershipPlanDto } from './dto/create-membership-plan.dto'
 import { UpdateMembershipPlanDto } from './dto/update-membership-plan.dto'
+import { SetPlanEligibilityDto } from './dto/set-plan-eligibility.dto'
 
 @Controller('membership-plans')
 export class MembershipPlansController {
@@ -45,5 +47,17 @@ export class MembershipPlansController {
   update(@Req() req: any, @Param('id') id: string, @Body() dto: UpdateMembershipPlanDto) {
     const { tenantId, organisationId } = req.tenantContext
     return this.service.update(tenantId, organisationId, id, dto)
+  }
+
+  @Get(':id/eligibility')
+  getEligibility(@Req() req: any, @Param('id') id: string) {
+    const { tenantId, organisationId } = req.tenantContext
+    return this.service.getEligibility(tenantId, organisationId, id)
+  }
+
+  @Put(':id/eligibility')
+  setEligibility(@Req() req: any, @Param('id') id: string, @Body() dto: SetPlanEligibilityDto) {
+    const { tenantId, organisationId } = req.tenantContext
+    return this.service.setEligibility(tenantId, organisationId, id, dto)
   }
 }

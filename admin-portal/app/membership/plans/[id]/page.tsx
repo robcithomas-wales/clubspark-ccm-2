@@ -11,9 +11,12 @@ import { PortalLayout } from "@/components/portal-layout"
 import {
   getMembershipPlanById,
   getMembershipPlanEntitlements,
+  getMembershipPlanEligibility,
 } from "@/lib/api"
 import { PageSection } from "@/components/ui/page-section"
 import { SurfaceCard } from "@/components/ui/surface-card"
+import { EditPlanEligibilityPanel } from "@/components/edit-plan-eligibility-panel"
+import { EditPlanConfigPanel } from "@/components/edit-plan-config-panel"
 
 type EntitlementItem = {
   id?: string
@@ -124,6 +127,7 @@ export default async function MembershipPlanDetailPage({
 
   let entitlementItems: EntitlementItem[] = []
   let entitlementLoadFailed = false
+  let eligibility: Record<string, unknown> = {}
 
   try {
     const entitlementData = await getMembershipPlanEntitlements(id)
@@ -134,6 +138,13 @@ export default async function MembershipPlanDetailPage({
         : []
   } catch {
     entitlementLoadFailed = true
+  }
+
+  try {
+    const eligibilityData = await getMembershipPlanEligibility(id)
+    eligibility = (eligibilityData?.data ?? {}) as Record<string, unknown>
+  } catch {
+    // non-critical
   }
 
   const benefitSummary = getBenefitSummary(entitlementItems)
@@ -194,6 +205,24 @@ export default async function MembershipPlanDetailPage({
             />
           </div>
         </SurfaceCard>
+
+        <PageSection
+          title="Eligibility Rules"
+          description="Restrict who can enrol in this plan"
+        >
+          <EditPlanEligibilityPanel planId={id} initial={eligibility as any} />
+        </PageSection>
+
+        <PageSection
+          title="Plan Configuration"
+          description="Grace period and terms & conditions"
+        >
+          <EditPlanConfigPanel
+            planId={id}
+            gracePeriodDays={plan.gracePeriodDays}
+            termsAndConditions={plan.termsAndConditions}
+          />
+        </PageSection>
 
         <PageSection
           title="Membership Benefits"

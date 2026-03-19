@@ -53,6 +53,13 @@ model MembershipPlan {
   billingInterval  String?  @map("billing_interval")  // monthly | quarterly | annual
   instalmentCount  Int?     @map("instalment_count")
 
+  // Phase 1: eligibility rules (JSONB: minAge, maxAge, requiresExistingMembership, notes, etc.)
+  eligibility      Json?
+
+  // Phase 2: grace period and T&C
+  gracePeriodDays      Int?    @map("grace_period_days")
+  termsAndConditions   String? @map("terms_and_conditions")
+
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
@@ -89,6 +96,12 @@ model Membership {
   cancelledAt    DateTime? @map("cancelled_at")
   lapsedAt       DateTime? @map("lapsed_at")
   expiredAt      DateTime? @map("expired_at")
+
+  // Phase 2: manual payment recording
+  paymentRecordedAt DateTime? @map("payment_recorded_at")
+  paymentReference  String?   @map("payment_reference")
+  paymentMethod     String?   @map("payment_method")
+  paymentAmount     Decimal?  @map("payment_amount") @db.Decimal(10, 2)
 
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")

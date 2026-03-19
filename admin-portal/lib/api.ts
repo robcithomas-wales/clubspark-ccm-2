@@ -101,17 +101,17 @@ export async function getBookings(
   return res.json() as Promise<{ data: any[]; pagination: PaginationMeta }>
 }
 
-export async function getBookingStats(): Promise<{ totalBookedHours: number; addOnRevenue: number; uniqueCustomers: number }> {
+export async function getBookingStats(): Promise<{ totalBookedHours: number; bookedHours30d: number; addOnRevenue: number; totalRevenue: number; totalPaidBookings: number; uniqueCustomers: number; utilisationRate30d: number }> {
   const res = await fetch(`${BOOKING_SERVICE}/bookings/stats`, {
     headers: await getAuthHeaders(),
     cache: "no-store",
   })
   if (!res.ok) throw new Error("Failed to load booking stats")
   const json = await res.json()
-  return json.data ?? { totalBookedHours: 0, addOnRevenue: 0, uniqueCustomers: 0 }
+  return json.data ?? { totalBookedHours: 0, bookedHours30d: 0, addOnRevenue: 0, totalRevenue: 0, totalPaidBookings: 0, uniqueCustomers: 0, utilisationRate30d: 0 }
 }
 
-export async function getBookingDailyStats(days = 30): Promise<{ date: string; bookingCount: number; bookedHours: number; addOnRevenue: number }[]> {
+export async function getBookingDailyStats(days = 30): Promise<{ date: string; bookingCount: number; bookedHours: number; addOnRevenue: number; revenue: number }[]> {
   const res = await fetch(`${BOOKING_SERVICE}/bookings/stats/daily?days=${days}`, {
     headers: await getAuthHeaders(),
     cache: "no-store",
@@ -669,6 +669,118 @@ export async function getMembershipHistory(id: string) {
   if (!res.ok) throw new Error("Failed to load membership history")
   const json = await res.json()
   return (json.data ?? json) as any[]
+}
+
+export async function getMembershipsWithFilter(opts: {
+  page?: number
+  limit?: number
+  status?: string
+  paymentStatus?: string
+  renewingWithinDays?: number
+}) {
+  const page = opts.page ?? 1
+  const limit = opts.limit ?? 25
+  const offset = (page - 1) * limit
+  const qs = new URLSearchParams({ limit: String(limit), offset: String(offset) })
+  if (opts.status) qs.set("status", opts.status)
+  if (opts.paymentStatus) qs.set("paymentStatus", opts.paymentStatus)
+  if (opts.renewingWithinDays != null) qs.set("renewingWithinDays", String(opts.renewingWithinDays))
+
+  const res = await fetch(`${MEMBERSHIP_SERVICE}/memberships?${qs}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return { data: [], pagination: { total: 0, page, limit, totalPages: 0 } }
+  const json = await res.json()
+  const p = json.pagination ?? {}
+  return {
+    data: json.data ?? [],
+    pagination: { total: p.total ?? 0, page, limit, totalPages: Math.ceil((p.total ?? 0) / limit) },
+  }
+}
+
+export async function getMembershipsRenewalsDue(withinDays = 30) {
+  const res = await fetch(`${MEMBERSHIP_SERVICE}/memberships/renewals-due?days=${withinDays}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return { data: [] }
+  return res.json() as Promise<{ data: any[] }>
+}
+
+export async function bulkTransitionMemberships(
+  ids: string[],
+  action: string,
+  reason?: string,
+) {
+  const res = await fetch(`${MEMBERSHIP_SERVICE}/memberships/bulk-transition`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({ ids, action, reason }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.message ?? "Failed to bulk transition memberships")
+  }
+  return res.json()
+}
+
+export async function recordMembershipPayment(
+  id: string,
+  input: { paymentStatus: string; paymentMethod?: string; paymentReference?: string; paymentAmount?: number },
+) {
+  const res = await fetch(`${MEMBERSHIP_SERVICE}/memberships/${id}/record-payment`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(input),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.message ?? "Failed to record payment")
+  }
+  return res.json()
+}
+
+export async function transferMembershipPlan(
+  id: string,
+  planId: string,
+  reason?: string,
+) {
+  const res = await fetch(`${MEMBERSHIP_SERVICE}/memberships/${id}/transfer`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({ planId, reason }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.message ?? "Failed to transfer membership")
+  }
+  return res.json()
+}
+
+export async function getMembershipPlanEligibility(planId: string) {
+  const res = await fetch(`${MEMBERSHIP_SERVICE}/membership-plans/${planId}/eligibility`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return { data: {} }
+  return res.json() as Promise<{ data: Record<string, unknown> }>
+}
+
+export async function setMembershipPlanEligibility(
+  planId: string,
+  eligibility: { minAge?: number | null; maxAge?: number | null; requiresExistingMembership?: boolean; requiredPlanCodes?: string[]; notes?: string | null },
+) {
+  const res = await fetch(`${MEMBERSHIP_SERVICE}/membership-plans/${planId}/eligibility`, {
+    method: "PUT",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(eligibility),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.message ?? "Failed to save eligibility rules")
+  }
+  return res.json()
 }
 
 const FACILITY_SERVICE =

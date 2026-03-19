@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { OrganisationsRepository } from './organisations.repository.js'
 import type { UpsertOrganisationDto } from './dto/upsert-organisation.dto.js'
+import type { PatchHomePageDto } from './dto/patch-home-page.dto.js'
+import type { PatchDesignDto } from './dto/patch-design.dto.js'
 
 @Injectable()
 export class OrganisationsService {
@@ -26,6 +28,17 @@ export class OrganisationsService {
   async getByDomain(domain: string) {
     const org = await this.repo.findByCustomDomain(domain)
     if (!org) throw new NotFoundException('Organisation not found')
+    return { data: org }
+  }
+
+  async patchDesign(tenantId: string, dto: PatchDesignDto) {
+    const org = await this.repo.findByTenantId(tenantId)
+    if (!org) throw new NotFoundException('Organisation not found')
+    return { data: await this.repo.patchDesign(tenantId, dto) }
+  }
+
+  async patchHomePage(tenantId: string, dto: PatchHomePageDto) {
+    const org = await this.repo.patchHomePage(tenantId, dto)
     return { data: org }
   }
 }

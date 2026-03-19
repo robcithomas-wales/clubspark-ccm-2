@@ -33,6 +33,32 @@ export type Org = {
   email: string | null
   mapsEmbedUrl: string | null
   isPublished: boolean
+  secondaryColour: string | null
+  headingFont: string | null
+  bodyFont: string | null
+  navLayout: string
+  faviconUrl: string | null
+  homePageContent: Record<string, any> | null
+}
+
+// ─── News (public) ────────────────────────────────────────────────────────────
+
+export type NewsPost = {
+  id: string
+  title: string
+  slug: string
+  body: string | null
+  coverImageUrl: string | null
+  published: boolean
+  publishedAt: string | null
+  createdAt: string
+}
+
+export async function fetchLatestNews(tenantId: string, limit = 3): Promise<NewsPost[]> {
+  const res = await fetch(`${VENUE_URL}/news-posts/public/list?tenantId=${tenantId}`, { cache: "no-store" })
+  if (!res.ok) return []
+  const json = await res.json()
+  return (json.data ?? []).slice(0, limit)
 }
 
 export async function fetchOrgBySlug(slug: string): Promise<Org | null> {

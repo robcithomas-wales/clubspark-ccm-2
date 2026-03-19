@@ -53,4 +53,32 @@ export class UpsertOrganisationDto {
   @IsOptional()
   @IsBoolean()
   isPublished?: boolean
+
+  @IsOptional()
+  @IsString()
+  appName?: string | null
+
+  @IsOptional()
+  @IsString()
+  clubCode?: string | null
+
+  @IsOptional()
+  @IsString()
+  secondaryColour?: string | null
+
+  @IsOptional()
+  @IsString()
+  headingFont?: string | null
+
+  @IsOptional()
+  @IsString()
+  bodyFont?: string | null
+
+  @IsOptional()
+  @IsString()
+  navLayout?: string
+
+  @IsOptional()
+  @IsString()
+  faviconUrl?: string | null
 }

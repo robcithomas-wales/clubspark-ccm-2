@@ -7,10 +7,6 @@ type VenueSettingsData = {
   pendingApprovals?: boolean
   splitPayments?: boolean
   publicBookingView?: string
-  clubCode?: string | null
-  primaryColour?: string
-  logoUrl?: string | null
-  appName?: string | null
 }
 
 @Injectable()
@@ -30,15 +26,16 @@ export class VenuesService {
   }
 
   async getPublicConfig(clubCode: string) {
-    const row = await this.repo.findByClubCode(clubCode)
-    if (!row) return null
+    const org = await this.repo.findByClubCode(clubCode)
+    if (!org) return null
     return {
-      tenantId: row.venue.tenantId,
-      venueName: row.venue.name,
-      appName: row.appName ?? row.venue.name,
-      primaryColour: row.primaryColour,
-      logoUrl: row.logoUrl,
-      clubCode: row.clubCode,
+      tenantId: org.tenantId,
+      venueName: org.name,
+      appName: org.appName ?? org.name,
+      primaryColour: org.primaryColour,
+      secondaryColour: org.secondaryColour,
+      logoUrl: org.logoUrl,
+      clubCode: org.clubCode,
     }
   }
 }

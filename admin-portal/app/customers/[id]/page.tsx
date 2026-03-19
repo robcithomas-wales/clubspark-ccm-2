@@ -1,8 +1,9 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ChevronLeft, Mail, Phone, CalendarDays, Hash } from "lucide-react"
+import { ChevronLeft, Mail, Phone, CalendarDays, Hash, ShieldCheck } from "lucide-react"
 import { PortalLayout } from "@/components/portal-layout"
 import { getCustomerById } from "@/lib/api"
+import { EditCustomerPanel } from "@/components/edit-customer-panel"
 
 function formatDate(value?: string | null) {
   if (!value) return "n/a"
@@ -101,6 +102,29 @@ export default async function CustomerDetailPage({
             </div>
 
             <div className="flex items-center gap-3 bg-white px-6 py-5">
+              <ShieldCheck className="h-5 w-5 shrink-0 text-slate-400" />
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                  Marketing consent
+                </div>
+                <div className="mt-1 flex items-center gap-2">
+                  <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${
+                    customer.marketingConsent
+                      ? "bg-emerald-50 text-emerald-700 ring-emerald-600/20"
+                      : "bg-slate-100 text-slate-600 ring-slate-500/20"
+                  }`}>
+                    {customer.marketingConsent ? "Opted in" : "Not given"}
+                  </span>
+                  {customer.consentRecordedAt && (
+                    <span className="text-xs text-slate-400">
+                      {formatDate(customer.consentRecordedAt)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 bg-white px-6 py-5">
               <CalendarDays className="h-5 w-5 shrink-0 text-slate-400" />
               <div>
                 <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
@@ -112,7 +136,7 @@ export default async function CustomerDetailPage({
               </div>
             </div>
 
-            <div className="flex items-center gap-3 bg-white px-6 py-5">
+            <div className="flex items-center gap-3 bg-white px-6 py-5 md:col-span-2">
               <Hash className="h-5 w-5 shrink-0 text-slate-400" />
               <div>
                 <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
@@ -125,6 +149,15 @@ export default async function CustomerDetailPage({
             </div>
           </div>
         </div>
+
+        <EditCustomerPanel
+          customerId={customer.id}
+          firstName={customer.firstName ?? ""}
+          lastName={customer.lastName ?? ""}
+          email={customer.email ?? ""}
+          phone={customer.phone ?? ""}
+          marketingConsent={customer.marketingConsent ?? false}
+        />
 
         <div className="flex gap-3">
           <Link

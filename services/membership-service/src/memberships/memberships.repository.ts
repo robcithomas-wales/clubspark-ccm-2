@@ -6,6 +6,8 @@ interface ListInput {
   organisationId: string
   planId?: string | null
   status?: string | null
+  paymentStatus?: string | null
+  renewingWithinDays?: number | null
   customerId?: string | null
   ownerType?: string | null
   ownerId?: string | null
@@ -43,6 +45,13 @@ export class MembershipsRepository {
     }
     if (input.planId) where.planId = input.planId
     if (input.status) where.status = input.status
+    if (input.paymentStatus) where.paymentStatus = input.paymentStatus
+    if (input.renewingWithinDays != null) {
+      const cutoff = new Date()
+      cutoff.setDate(cutoff.getDate() + input.renewingWithinDays)
+      where.renewalDate = { lte: cutoff }
+      where.status = { in: ['active', 'pending'] }
+    }
     if (input.customerId) where.customerId = input.customerId
     if (input.ownerType) where.ownerType = input.ownerType
     if (input.ownerId) where.ownerId = input.ownerId
@@ -155,6 +164,45 @@ export class MembershipsRepository {
     await this.prisma.membership.delete({ where: { id } })
   }
 
+  async listExpiringRenewals(tenantId: string, organisationId: string, withinDays: number) {
+    const cutoff = new Date()
+    cutoff.setDate(cutoff.getDate() + withinDays)
+
+    const rows = await this.prisma.membership.findMany({
+      where: {
+        tenantId,
+        organisationId,
+        status: { in: ['active', 'pending'] },
+        renewalDate: { lte: cutoff },
+      },
+      include: { plan: { select: { name: true, ownershipType: true, membershipType: true, price: true, currency: true, pricingModel: true } } },
+      orderBy: { renewalDate: 'asc' },
+      take: 100,
+    })
+    return rows.map((m) => this.format(m))
+  }
+
+  async recordPayment(id: string, input: {
+    paymentStatus: string
+    paymentMethod: string | null
+    paymentReference: string | null
+    paymentAmount: number | null
+    paymentRecordedAt: Date
+  }) {
+    const m = await this.prisma.membership.update({
+      where: { id },
+      data: {
+        paymentStatus: input.paymentStatus,
+        paymentMethod: input.paymentMethod,
+        paymentReference: input.paymentReference,
+        paymentAmount: input.paymentAmount,
+        paymentRecordedAt: input.paymentRecordedAt,
+      },
+      include: { plan: { select: { name: true, ownershipType: true, membershipType: true, price: true, currency: true, pricingModel: true } } },
+    })
+    return this.format(m)
+  }
+
   // ─── Reporting aggregations ─────────────────────────────────────────────────
 
   async getStats(tenantId: string, organisationId: string): Promise<{
@@ -218,6 +266,88 @@ export class MembershipsRepository {
       GROUP BY DATE_TRUNC('month', created_at)
       ORDER BY month
     `
+  }
+
+  // ─── Cron helpers ────────────────────────────────────────────────────────────
+
+  /**
+   * Lapse all active/suspended memberships whose endDate has passed.
+   * Returns the number of memberships transitioned.
+   */
+  async lapseExpired(now: Date): Promise<number> {
+    const candidates = await this.prisma.membership.findMany({
+      where: {
+        status: { in: ['active', 'suspended'] },
+        endDate: { lt: now },
+      },
+      select: { id: true, status: true },
+    })
+
+    if (candidates.length === 0) return 0
+
+    await this.prisma.$transaction([
+      this.prisma.membership.updateMany({
+        where: { id: { in: candidates.map((c) => c.id) } },
+        data: { status: 'lapsed', lapsedAt: now },
+      }),
+      ...candidates.map((c) =>
+        this.prisma.membershipLifecycleEvent.create({
+          data: {
+            membershipId: c.id,
+            fromStatus: c.status,
+            toStatus: 'lapsed',
+            reason: 'Auto-lapsed: membership end date reached',
+            createdBy: 'system',
+          },
+        }),
+      ),
+    ])
+
+    return candidates.length
+  }
+
+  /**
+   * Expire all lapsed memberships that have also passed the plan's grace period.
+   * Returns the number of memberships transitioned.
+   */
+  async expireLapsed(now: Date): Promise<number> {
+    const candidates = await this.prisma.membership.findMany({
+      where: { status: 'lapsed', endDate: { not: null } },
+      select: {
+        id: true,
+        endDate: true,
+        plan: { select: { gracePeriodDays: true } },
+      },
+    })
+
+    const toExpire = candidates.filter((c) => {
+      const grace = c.plan?.gracePeriodDays ?? 0
+      const expireAfter = new Date(c.endDate!)
+      expireAfter.setDate(expireAfter.getDate() + grace)
+      return expireAfter <= now
+    })
+
+    if (toExpire.length === 0) return 0
+
+    await this.prisma.$transaction([
+      this.prisma.membership.updateMany({
+        where: { id: { in: toExpire.map((c) => c.id) } },
+        data: { status: 'expired', expiredAt: now },
+      }),
+      ...toExpire.map((c) =>
+        this.prisma.membershipLifecycleEvent.create({
+          data: {
+            membershipId: c.id,
+            fromStatus: 'lapsed',
+            toStatus: 'expired',
+            reason: 'Auto-expired: grace period elapsed',
+            createdBy: 'system',
+          },
+        }),
+      ),
+    ])
+
+    return toExpire.length
   }
 
   private format(m: any) {

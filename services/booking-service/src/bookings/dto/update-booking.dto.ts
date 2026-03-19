@@ -1,4 +1,4 @@
-import { IsDateString, IsOptional, IsString, IsArray, IsNotEmpty } from 'class-validator'
+import { IsDateString, IsOptional, IsString, IsArray, IsNotEmpty, IsBoolean } from 'class-validator'
 
 export class UpdateBookingDto {
   @IsOptional()
@@ -30,4 +30,8 @@ export class UpdateBookingDto {
   @IsString()
   @IsNotEmpty()
   bookableUnitId?: string
+
+  @IsOptional()
+  @IsBoolean()
+  adminOverride?: boolean
 }

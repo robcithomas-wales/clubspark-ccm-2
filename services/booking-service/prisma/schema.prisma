@@ -64,6 +64,8 @@ model Booking {
   approvedBy      String?   @map("approved_by")
   approvedAt      DateTime? @map("approved_at")
   cancelledAt     DateTime? @map("cancelled_at")
+  price           Decimal?  @db.Decimal(10, 2)
+  currency        String    @default("GBP") @db.Char(3)
   seriesId        String?   @map("series_id") @db.Uuid
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")

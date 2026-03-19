@@ -12,7 +12,8 @@ interface EditBookingPanelProps {
   notes?: string | null
   bookingSource?: string | null
   bookableUnitId: string
-  availableUnits: { id: string; name: string }[]
+  availableUnits: { id: string; name: string; resourceName?: string }[]
+  adminOverride?: boolean
 }
 
 export function EditBookingPanel({
@@ -24,6 +25,7 @@ export function EditBookingPanel({
   bookingSource,
   bookableUnitId,
   availableUnits,
+  adminOverride,
 }: EditBookingPanelProps) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -42,6 +44,7 @@ export function EditBookingPanel({
     notes: notes ?? "",
     bookingSource: bookingSource ?? "",
     bookableUnitId: bookableUnitId,
+    adminOverride: adminOverride ?? false,
   })
 
   if (status === "cancelled") return null
@@ -55,6 +58,7 @@ export function EditBookingPanel({
         endsAt: new Date(form.endsAt).toISOString(),
         notes: form.notes || undefined,
         bookingSource: form.bookingSource || undefined,
+        adminOverride: form.adminOverride,
       }
 
       if (form.bookableUnitId !== bookableUnitId) {
@@ -131,11 +135,27 @@ export function EditBookingPanel({
                 onChange={(e) => setForm((f) => ({ ...f, bookableUnitId: e.target.value }))}
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#1857E0]"
               >
-                {availableUnits.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name}
-                  </option>
-                ))}
+                {(() => {
+                  const grouped = new Map<string, typeof availableUnits>()
+                  for (const u of availableUnits) {
+                    const key = u.resourceName ?? "Other"
+                    if (!grouped.has(key)) grouped.set(key, [])
+                    grouped.get(key)!.push(u)
+                  }
+                  const groups = Array.from(grouped.entries())
+                  if (groups.length === 1 && groups[0][0] === "Other") {
+                    return availableUnits.map((u) => (
+                      <option key={u.id} value={u.id}>{u.name}</option>
+                    ))
+                  }
+                  return groups.map(([resourceName, units]) => (
+                    <optgroup key={resourceName} label={resourceName}>
+                      {units.map((u) => (
+                        <option key={u.id} value={u.id}>{u.name}</option>
+                      ))}
+                    </optgroup>
+                  ))
+                })()}
               </select>
             </div>
             <div>
@@ -168,6 +188,28 @@ export function EditBookingPanel({
               placeholder="Optional notes..."
             />
           </div>
+
+          <label className="flex cursor-pointer items-start gap-3">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={form.adminOverride}
+              onClick={() => setForm((f) => ({ ...f, adminOverride: !f.adminOverride }))}
+              className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#1857E0] focus:ring-offset-2 ${
+                form.adminOverride ? "bg-amber-500" : "bg-slate-300"
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                  form.adminOverride ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </button>
+            <div>
+              <div className="text-sm font-medium text-slate-900">Admin override</div>
+              <div className="text-xs text-slate-500">Bypass booking rules for this booking.</div>
+            </div>
+          </label>
 
           {error && (
             <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>

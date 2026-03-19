@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service.js'
 import type { CreateCustomerDto } from './dto/create-customer.dto.js'
+import type { UpdateCustomerDto } from './dto/update-customer.dto.js'
 
 @Injectable()
 export class CustomersRepository {
@@ -84,6 +85,22 @@ export class CustomersRepository {
         email: dto.email ?? null,
         phone: dto.phone ?? null,
       },
+    })
+  }
+
+  async update(tenantId: string, id: string, dto: UpdateCustomerDto) {
+    const data: Record<string, unknown> = {}
+    if (dto.firstName !== undefined) data.firstName = dto.firstName
+    if (dto.lastName !== undefined) data.lastName = dto.lastName
+    if (dto.email !== undefined) data.email = dto.email ?? null
+    if (dto.phone !== undefined) data.phone = dto.phone ?? null
+    if (dto.marketingConsent !== undefined) {
+      data.marketingConsent = dto.marketingConsent
+      data.consentRecordedAt = new Date()
+    }
+    return this.prisma.customer.updateMany({
+      where: { tenantId, id },
+      data,
     })
   }
 }

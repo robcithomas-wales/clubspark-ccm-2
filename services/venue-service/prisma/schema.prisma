@@ -204,13 +204,40 @@ model Organisation {
   email          String?
   mapsEmbedUrl   String?  @map("maps_embed_url")
   isPublished    Boolean  @default(false) @map("is_published")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  appName         String?  @map("app_name")
+  clubCode        String?  @unique @map("club_code")
+  secondaryColour String?  @map("secondary_colour")
+  headingFont     String?  @map("heading_font")
+  bodyFont        String?  @map("body_font")
+  navLayout       String   @default("dark-inline") @map("nav_layout")
+  faviconUrl      String?  @map("favicon_url")
+  homePageContent Json?    @map("home_page_content")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
   @@map("organisations")
   @@schema("venue")
   @@index([tenantId])
   @@index([slug])
+}
+
+model NewsPost {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  title          String
+  slug           String
+  body           String?
+  coverImageUrl  String?   @map("cover_image_url")
+  published      Boolean   @default(false)
+  publishedAt    DateTime? @map("published_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@unique([tenantId, slug])
+  @@map("news_posts")
+  @@schema("venue")
+  @@index([tenantId])
+  @@index([tenantId, published])
 }
 
 model AvailabilityConfig {

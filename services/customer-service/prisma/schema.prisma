@@ -14,13 +14,16 @@ datasource db {
 }
 
 model Customer {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId  String   @map("tenant_id") @db.Uuid
-  firstName String?  @map("first_name")
-  lastName  String?  @map("last_name")
-  email     String?
-  phone     String?
-  createdAt DateTime @default(now()) @map("created_at")
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId            String    @map("tenant_id") @db.Uuid
+  firstName           String?   @map("first_name")
+  lastName            String?   @map("last_name")
+  email               String?
+  phone               String?
+  marketingConsent    Boolean   @default(false) @map("marketing_consent")
+  consentRecordedAt   DateTime? @map("consent_recorded_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at")
 
   @@map("customers")
   @@schema("customer")

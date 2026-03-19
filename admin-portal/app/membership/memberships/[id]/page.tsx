@@ -5,11 +5,14 @@ import {
   deleteMembership,
   getMembershipById,
   getMembershipHistory,
+  getMembershipPlans,
   getCustomers,
 } from "@/lib/api"
 import { PortalLayout } from "@/components/portal-layout"
 import { DeleteMembershipButton } from "@/components/delete-membership-button"
 import { MembershipLifecycleActions } from "@/components/membership-lifecycle-actions"
+import { TransferMembershipPanel } from "@/components/transfer-membership-panel"
+import { RecordPaymentPanel } from "@/components/record-payment-panel"
 
 type Customer = {
   id: string
@@ -88,10 +91,11 @@ export default async function MembershipDetailPage({
     redirect("/membership/memberships")
   }
 
-  const [membershipResponse, customersResponse, history] = await Promise.all([
+  const [membershipResponse, customersResponse, history, plansResponse] = await Promise.all([
     getMembershipById(id).catch(() => null),
     getCustomers(),
     getMembershipHistory(id).catch(() => []),
+    getMembershipPlans().catch(() => ({ data: [] })),
   ])
 
   if (!membershipResponse?.data) notFound()
@@ -101,6 +105,9 @@ export default async function MembershipDetailPage({
   const customer = membership.customerId
     ? customers.find((c) => c.id === membership.customerId) ?? null
     : null
+
+  const allPlans: { id: string; name: string; code?: string | null; status?: string }[] =
+    Array.isArray(plansResponse?.data) ? plansResponse.data : []
 
   const name = customerName(customer)
   const statusCls = STATUS_BADGE[membership.status] ?? "bg-slate-100 text-slate-600"
@@ -217,6 +224,22 @@ export default async function MembershipDetailPage({
                 <p className="text-sm text-slate-700">{membership.notes}</p>
               </DetailCard>
             )}
+
+            <RecordPaymentPanel
+              membershipId={membership.id}
+              currentPaymentStatus={membership.paymentStatus ?? "unpaid"}
+              paymentRecordedAt={membership.paymentRecordedAt}
+              paymentReference={membership.paymentReference}
+              paymentMethod={membership.paymentMethod}
+              paymentAmount={membership.paymentAmount}
+            />
+
+            <TransferMembershipPanel
+              membershipId={membership.id}
+              currentPlanId={membership.planId}
+              currentPlanName={membership.planName ?? "Current plan"}
+              plans={allPlans}
+            />
           </div>
 
           <div className="space-y-6">

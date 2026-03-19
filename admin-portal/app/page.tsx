@@ -13,6 +13,7 @@ import {
   Users,
 } from "lucide-react"
 import { PortalLayout } from "@/components/portal-layout"
+import { RecentBookingsTable } from "@/components/recent-bookings-table"
 import {
   getAddOnServices,
   getBookableUnits,
@@ -24,27 +25,11 @@ import {
   getMembershipPlans,
   getMembershipSchemes,
   getMemberships,
+  getMembershipsRenewalsDue,
   getOrganisation,
   getResources,
   getVenues,
 } from "@/lib/api"
-
-function formatDateTime(value?: string) {
-  if (!value) return "—"
-
-  return new Intl.DateTimeFormat("en-GB", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value))
-}
-
-function formatDate(value?: string) {
-  if (!value) return "—"
-
-  return new Intl.DateTimeFormat("en-GB", {
-    dateStyle: "medium",
-  }).format(new Date(value))
-}
 
 function StatCard({
   title,
@@ -113,29 +98,6 @@ function SectionCard({
   )
 }
 
-function StatusPill({
-  label,
-  tone = "slate",
-}: {
-  label: string
-  tone?: "emerald" | "blue" | "amber" | "slate"
-}) {
-  const toneClass =
-    tone === "emerald"
-      ? "bg-emerald-50 text-emerald-700"
-      : tone === "blue"
-      ? "bg-blue-50 text-blue-700"
-      : tone === "amber"
-      ? "bg-amber-50 text-amber-700"
-      : "bg-slate-100 text-slate-700"
-
-  return (
-    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${toneClass}`}>
-      {label}
-    </span>
-  )
-}
-
 export default async function DashboardPage() {
   const org = await getOrganisation()
 
@@ -153,6 +115,7 @@ export default async function DashboardPage() {
     addOnsResult,
     statsResult,
     dailyStatsResult,
+    renewalsDueResult,
   ] = await Promise.allSettled([
     getVenues(),
     getResources(),
@@ -167,6 +130,7 @@ export default async function DashboardPage() {
     getAddOnServices(),
     getBookingStats(),
     getBookingDailyStats(30),
+    getMembershipsRenewalsDue(30),
   ])
 
   const venuesResponse = venuesResult.status === "fulfilled" ? venuesResult.value : null
@@ -182,6 +146,7 @@ export default async function DashboardPage() {
   const addOnsResponse = addOnsResult.status === "fulfilled" ? addOnsResult.value : null
   const bookingStats = statsResult.status === "fulfilled" ? statsResult.value : null
   const dailyStats = dailyStatsResult.status === "fulfilled" ? dailyStatsResult.value : []
+  const renewalsDue: any[] = renewalsDueResult.status === "fulfilled" ? ((renewalsDueResult.value as any)?.data ?? []) : []
 
   function extractData(r: any): any[] {
     if (!r) return []
@@ -405,55 +370,7 @@ export default async function DashboardPage() {
             actionHref="/bookings"
             actionLabel="View Bookings"
           >
-            {recentBookings.length === 0 ? (
-              <div className="text-sm text-slate-500">No bookings found.</div>
-            ) : (
-              <div className="overflow-hidden rounded-2xl border border-slate-200">
-                <table className="min-w-full divide-y divide-slate-200">
-                  <thead className="bg-slate-100">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Reference
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Customer
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Start
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Status
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 bg-white">
-                    {recentBookings.map((booking: any) => (
-                      <tr key={booking.id} className="transition hover:bg-blue-50/40">
-                        <td className="px-4 py-3 text-sm font-semibold text-slate-900">
-                          {booking.bookingReference || booking.id}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-slate-700">
-                          {booking.customerFirstName || booking.customerLastName
-                            ? `${booking.customerFirstName || ""} ${
-                                booking.customerLastName || ""
-                              }`.trim()
-                            : "Walk in / not linked"}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-slate-700">
-                          {formatDateTime(booking.startsAt)}
-                        </td>
-                        <td className="px-4 py-3">
-                          <StatusPill
-                            label={booking.status || "unknown"}
-                            tone={booking.status === "active" ? "emerald" : "slate"}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <RecentBookingsTable bookings={recentBookings} />
           </SectionCard>
 
           <SectionCard
@@ -506,6 +423,52 @@ export default async function DashboardPage() {
           </SectionCard>
         </div>
 
+        {/* Renewal alerts widget */}
+        {renewalsDue.length > 0 && (
+          <SectionCard
+            title={`Renewals Due (${renewalsDue.length})`}
+            description="Memberships with a renewal date in the next 30 days."
+            actionHref="/membership/memberships?tab=renewals"
+            actionLabel="View all"
+          >
+            <div className="divide-y divide-slate-100">
+              {renewalsDue.slice(0, 5).map((m: any) => {
+                const renewalDate = m.renewalDate
+                  ? new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(m.renewalDate))
+                  : "—"
+                const daysUntil = m.renewalDate
+                  ? Math.ceil((new Date(m.renewalDate).getTime() - Date.now()) / 86400000)
+                  : null
+                return (
+                  <Link
+                    key={m.id}
+                    href={`/membership/memberships/${m.id}`}
+                    className="flex items-center justify-between gap-4 py-3 transition hover:text-[#1857E0]"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-slate-900 truncate">
+                        {m.planName ?? "Unknown plan"}
+                      </div>
+                      <div className="text-xs text-slate-500">Renews {renewalDate}</div>
+                    </div>
+                    {daysUntil != null && (
+                      <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                        daysUntil <= 7
+                          ? "bg-rose-100 text-rose-700"
+                          : daysUntil <= 14
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-slate-100 text-slate-600"
+                      }`}>
+                        {daysUntil <= 0 ? "Today" : `${daysUntil}d`}
+                      </span>
+                    )}
+                  </Link>
+                )
+              })}
+            </div>
+          </SectionCard>
+        )}
+
         {/* Revenue & utilisation trend charts (from daily stats API) */}
         {dailyStats.length > 0 && (() => {
           const chartH = 80
@@ -532,7 +495,6 @@ export default async function DashboardPage() {
                       return (
                         <g key={d.date}>
                           <rect x={x} y={y} width={barW} height={barH} rx={3} fill="#10b981" opacity={0.8} />
-                          <title>{d.date}: £{d.addOnRevenue.toFixed(2)}</title>
                           {barW >= 20 && (
                             <text x={x + barW / 2} y={chartH + 16} textAnchor="middle" fontSize={9} fill="#94a3b8">
                               {d.date.slice(5)}
@@ -560,7 +522,6 @@ export default async function DashboardPage() {
                       return (
                         <g key={d.date}>
                           <rect x={x} y={y} width={barW} height={barH} rx={3} fill="#1857E0" opacity={0.7} />
-                          <title>{d.date}: {d.bookedHours.toFixed(1)}h</title>
                           {barW >= 20 && (
                             <text x={x + barW / 2} y={chartH + 16} textAnchor="middle" fontSize={9} fill="#94a3b8">
                               {d.date.slice(5)}
@@ -603,7 +564,6 @@ export default async function DashboardPage() {
                     return (
                       <g key={date}>
                         <rect x={x} y={y} width={barW} height={barH} rx={3} fill="#1857E0" opacity={0.8} />
-                        <title>{date}: {count} booking{count !== 1 ? "s" : ""}</title>
                         {barW >= 20 && (
                           <text x={x + barW / 2} y={chartH + 16} textAnchor="middle" fontSize={9} fill="#94a3b8">
                             {label}

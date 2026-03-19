@@ -11,10 +11,49 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common'
+import { IsString, IsArray, IsOptional } from 'class-validator'
 import { MembershipsService } from './memberships.service'
 import { CreateMembershipDto } from './dto/create-membership.dto'
 import { UpdateMembershipDto } from './dto/update-membership.dto'
 import { TransitionMembershipDto } from './dto/transition-membership.dto'
+
+class BulkTransitionDto {
+  @IsArray()
+  @IsString({ each: true })
+  ids!: string[]
+
+  @IsString()
+  action!: string
+
+  @IsOptional()
+  @IsString()
+  reason?: string
+}
+
+class RecordPaymentDto {
+  @IsString()
+  paymentStatus!: string
+
+  @IsOptional()
+  @IsString()
+  paymentMethod?: string
+
+  @IsOptional()
+  @IsString()
+  paymentReference?: string
+
+  @IsOptional()
+  paymentAmount?: number
+}
+
+class TransferPlanDto {
+  @IsString()
+  planId!: string
+
+  @IsOptional()
+  @IsString()
+  reason?: string
+}
 
 @Controller('memberships')
 export class MembershipsController {
@@ -32,11 +71,22 @@ export class MembershipsController {
     return this.service.getDailyStats(tenantId, organisationId, Number(months) || 12).then((data) => ({ data }))
   }
 
+  @Get('renewals-due')
+  listExpiringRenewals(
+    @Req() req: any,
+    @Query('days') days?: number,
+  ) {
+    const { tenantId, organisationId } = req.tenantContext
+    return this.service.listExpiringRenewals(tenantId, organisationId, Number(days) || 30)
+  }
+
   @Get()
   list(
     @Req() req: any,
     @Query('planId') planId?: string,
     @Query('status') status?: string,
+    @Query('paymentStatus') paymentStatus?: string,
+    @Query('renewingWithinDays') renewingWithinDays?: number,
     @Query('customerId') customerId?: string,
     @Query('ownerType') ownerType?: string,
     @Query('ownerId') ownerId?: string,
@@ -46,7 +96,9 @@ export class MembershipsController {
   ) {
     const { tenantId, organisationId } = req.tenantContext
     return this.service.list(tenantId, organisationId, {
-      planId, status, customerId, ownerType, ownerId, search, limit, offset,
+      planId, status, paymentStatus,
+      renewingWithinDays: renewingWithinDays ? Number(renewingWithinDays) : undefined,
+      customerId, ownerType, ownerId, search, limit, offset,
     })
   }
 
@@ -68,11 +120,30 @@ export class MembershipsController {
     return this.service.create(tenantId, organisationId, dto)
   }
 
+  @Post('bulk-transition')
+  bulkTransition(@Req() req: any, @Body() dto: BulkTransitionDto) {
+    const { tenantId, organisationId } = req.tenantContext
+    const actorEmail: string | null = req.tenantContext.email ?? null
+    return this.service.bulkTransition(tenantId, organisationId, dto.ids, dto.action, dto.reason ?? null, actorEmail)
+  }
+
   @Post(':id/transition')
   transition(@Req() req: any, @Param('id') id: string, @Body() dto: TransitionMembershipDto) {
     const { tenantId, organisationId } = req.tenantContext
     const actorEmail: string | null = req.tenantContext.email ?? null
     return this.service.transition(tenantId, organisationId, id, dto, actorEmail)
+  }
+
+  @Post(':id/record-payment')
+  recordPayment(@Req() req: any, @Param('id') id: string, @Body() dto: RecordPaymentDto) {
+    const { tenantId, organisationId } = req.tenantContext
+    return this.service.recordPayment(tenantId, organisationId, id, dto)
+  }
+
+  @Post(':id/transfer')
+  transferPlan(@Req() req: any, @Param('id') id: string, @Body() dto: TransferPlanDto) {
+    const { tenantId, organisationId } = req.tenantContext
+    return this.service.transferPlan(tenantId, organisationId, id, dto.planId, dto.reason ?? null)
   }
 
   @Patch(':id')

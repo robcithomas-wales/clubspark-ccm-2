@@ -26,10 +26,6 @@ class UpsertVenueSettingsDto {
   @IsOptional() @IsBoolean() pendingApprovals?: boolean
   @IsOptional() @IsBoolean() splitPayments?: boolean
   @IsOptional() @IsString()  publicBookingView?: string
-  @IsOptional() @IsString()  clubCode?: string | null
-  @IsOptional() @IsString()  primaryColour?: string
-  @IsOptional() @IsString()  logoUrl?: string | null
-  @IsOptional() @IsString()  appName?: string | null
 }
 
 class CustomerRegisterDto {

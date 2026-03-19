@@ -15,6 +15,7 @@ import { ResourceGroupsModule } from './resource-groups/resource-groups.module.j
 import { AvailabilityConfigsModule } from './availability-configs/availability-configs.module.js'
 import { BlackoutDatesModule } from './blackout-dates/blackout-dates.module.js'
 import { OrganisationsModule } from './organisations/organisations.module.js'
+import { NewsPostsModule } from './news-posts/news-posts.module.js'
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { OrganisationsModule } from './organisations/organisations.module.js'
     AvailabilityConfigsModule,
     BlackoutDatesModule,
     OrganisationsModule,
+    NewsPostsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: TenantContextGuard },

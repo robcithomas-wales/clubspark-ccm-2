@@ -8,7 +8,7 @@ import {
   FileText,
   Repeat2,
 } from "lucide-react"
-import { getBookableUnits, getAddOnServices } from "@/lib/api"
+import { getBookableUnits, getAddOnServices, getResources } from "@/lib/api"
 import { PortalLayout } from "@/components/portal-layout"
 import { CancelBookingButton } from "@/components/cancel-booking-button"
 import { PaymentStatusButton } from "@/components/payment-status-button"
@@ -198,9 +198,10 @@ export default async function BookingDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const [booking, units, bookingAddOns, addOnServices] = await Promise.all([
+  const [booking, units, resources, bookingAddOns, addOnServices] = await Promise.all([
     getBooking(id),
     getBookableUnits(),
+    getResources().catch(() => []),
     getBookingAddOns(id),
     getAddOnServices().catch(() => []),
   ])
@@ -210,6 +211,7 @@ export default async function BookingDetailPage({
   }
 
   const unitMap = new Map(units.map((unit: any) => [unit.id, unit]))
+  const resourceMap = new Map((Array.isArray(resources) ? resources : []).map((r: any) => [r.id, r]))
   const addOnServiceMap = new Map<string, any>(
     (Array.isArray(addOnServices) ? addOnServices : (addOnServices as any)?.data ?? [])
       .map((a: any) => [a.id, a])
@@ -299,6 +301,28 @@ export default async function BookingDetailPage({
                 label="Last updated"
                 value={formatDateTime(booking.updatedAt)}
               />
+
+              {booking.approvedBy && (
+                <DetailTile
+                  label="Approved by"
+                  value={booking.approvedBy}
+                />
+              )}
+
+              {booking.approvedAt && (
+                <DetailTile
+                  icon={<History className="h-4 w-4 text-slate-400" />}
+                  label="Approved at"
+                  value={formatDateTime(booking.approvedAt)}
+                />
+              )}
+
+              {booking.adminOverride && (
+                <DetailTile
+                  label="Admin override"
+                  value="Booking rules bypassed by admin"
+                />
+              )}
             </div>
 
             {booking.seriesId && (
@@ -408,9 +432,14 @@ export default async function BookingDetailPage({
               notes={booking.notes}
               bookingSource={booking.bookingSource}
               bookableUnitId={booking.bookableUnitId}
+              adminOverride={booking.adminOverride ?? false}
               availableUnits={units
-                .filter((u: any) => u.resourceId === booking.resourceId && u.isActive !== false)
-                .map((u: any) => ({ id: u.id, name: u.name }))}
+                .filter((u: any) => u.isActive !== false)
+                .map((u: any) => ({
+                  id: u.id,
+                  name: u.name,
+                  resourceName: resourceMap.get(u.resourceId)?.name ?? undefined,
+                }))}
             />
 
             <div className="border-t border-slate-200 pt-6">
