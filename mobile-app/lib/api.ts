@@ -88,6 +88,7 @@ export type Resource = {
   description: string | null
   colour: string | null
   isActive: boolean
+  visibleAttributes: string[]
 }
 
 export async function fetchResources(tenantId: string, venueId: string): Promise<Resource[]> {

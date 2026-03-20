@@ -111,6 +111,7 @@ export default async function ResourceDetailPage({
         <ResourcePublicAttributesPanel
           resourceId={resource.id}
           initial={resource.publicAttributes}
+          initialVisibleAttributes={resource.visibleAttributes}
         />
 
         {/* Availability configs */}

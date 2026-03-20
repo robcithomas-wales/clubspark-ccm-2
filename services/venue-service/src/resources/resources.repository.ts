@@ -18,6 +18,7 @@ const RESOURCE_SELECT = {
   description: true,
   colour: true,
   publicAttributes: true,
+  visibleAttributes: true,
   isActive: true,
   createdAt: true,
   updatedAt: true,
@@ -94,6 +95,7 @@ export class ResourcesRepository {
         colour: dto.colour !== undefined ? dto.colour : existing.colour,
         isActive: dto.isActive !== undefined ? dto.isActive : existing.isActive,
         publicAttributes: dto.publicAttributes !== undefined ? (dto.publicAttributes as object) : (existing.publicAttributes as object ?? {}),
+        visibleAttributes: dto.visibleAttributes !== undefined ? dto.visibleAttributes : existing.visibleAttributes,
       },
       select: RESOURCE_SELECT,
     })

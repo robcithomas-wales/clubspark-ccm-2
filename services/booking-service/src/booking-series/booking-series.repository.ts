@@ -165,11 +165,21 @@ export class BookingSeriesRepository {
   ) {
     const firstStartsAt = new Date(dto.startsAt)
     const firstEndsAt = new Date(dto.endsAt)
-    const occurrences = expandOccurrences(dto.rrule, firstStartsAt, firstEndsAt)
+    const allOccurrences = expandOccurrences(dto.rrule, firstStartsAt, firstEndsAt)
 
-    if (occurrences.length === 0) {
+    if (allOccurrences.length === 0) {
       throw new Error('RRULE produced no occurrences')
     }
+
+    // Enforce minSessions: RRULE must produce at least this many occurrences
+    if (dto.minSessions && allOccurrences.length < dto.minSessions) {
+      throw new Error(`MIN_SESSIONS_NOT_MET:${allOccurrences.length}:${dto.minSessions}`)
+    }
+
+    // Enforce maxSessions: cap occurrences to this many (truncate the rest)
+    const occurrences = dto.maxSessions && allOccurrences.length > dto.maxSessions
+      ? allOccurrences.slice(0, dto.maxSessions)
+      : allOccurrences
 
     const slotStartsAt = firstStartsAt.toTimeString().slice(0, 8) // "HH:MM:SS"
     const slotEndsAt = firstEndsAt.toTimeString().slice(0, 8)

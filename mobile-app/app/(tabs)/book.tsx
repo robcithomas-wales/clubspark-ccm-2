@@ -183,10 +183,11 @@ function ResourceCard({
   brandColour: string
   onPress: () => void
 }) {
+  const visible = resource.visibleAttributes ?? ['surface', 'isIndoor', 'hasLighting']
   const attrs = [
-    resource.surface,
-    resource.isIndoor !== null ? (resource.isIndoor ? 'Indoor' : 'Outdoor') : null,
-    resource.hasLighting ? 'Floodlit' : null,
+    visible.includes('surface') ? resource.surface : null,
+    visible.includes('isIndoor') && resource.isIndoor !== null ? (resource.isIndoor ? 'Indoor' : 'Outdoor') : null,
+    visible.includes('hasLighting') && resource.hasLighting ? 'Floodlit' : null,
   ].filter(Boolean)
 
   return (

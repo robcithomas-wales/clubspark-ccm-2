@@ -1,6 +1,37 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 
+/**
+ * Calculate an end date from a start date based on durationType / billingInterval.
+ * Returns null for open-ended / unknown duration types.
+ */
+function computeEndDate(
+  start: Date,
+  durationType?: string | null,
+  billingInterval?: string | null,
+): Date | null {
+  const d = new Date(start)
+  const type = durationType?.toLowerCase()
+  const interval = billingInterval?.toLowerCase()
+
+  if (type === 'annual' || type === 'yearly' || interval === 'annual') {
+    d.setFullYear(d.getFullYear() + 1)
+    d.setDate(d.getDate() - 1)
+    return d
+  }
+  if (type === 'monthly' || interval === 'monthly') {
+    d.setMonth(d.getMonth() + 1)
+    d.setDate(d.getDate() - 1)
+    return d
+  }
+  if (type === 'quarterly' || interval === 'quarterly') {
+    d.setMonth(d.getMonth() + 3)
+    d.setDate(d.getDate() - 1)
+    return d
+  }
+  return null
+}
+
 interface ListInput {
   tenantId: string
   organisationId: string
@@ -348,6 +379,85 @@ export class MembershipsRepository {
     ])
 
     return toExpire.length
+  }
+
+  /**
+   * Find active memberships with autoRenew=true whose endDate is within
+   * the next `withinDays` days and for which no future membership already
+   * exists for the same plan + customer. Returns the created count.
+   */
+  async createAutoRenewals(now: Date, withinDays: number): Promise<number> {
+    const horizon = new Date(now)
+    horizon.setDate(horizon.getDate() + withinDays)
+
+    const candidates = await this.prisma.membership.findMany({
+      where: {
+        autoRenew: true,
+        status: 'active',
+        endDate: { gte: now, lte: horizon },
+      },
+      select: {
+        id: true,
+        tenantId: true,
+        organisationId: true,
+        planId: true,
+        customerId: true,
+        ownerType: true,
+        ownerId: true,
+        endDate: true,
+        plan: { select: { durationType: true, billingInterval: true } },
+      },
+    })
+
+    let created = 0
+    for (const m of candidates) {
+      // Skip if a future membership already exists for this plan+customer
+      const existing = await this.prisma.membership.findFirst({
+        where: {
+          tenantId: m.tenantId,
+          planId: m.planId,
+          customerId: m.customerId,
+          startDate: { gt: m.endDate! },
+          status: { notIn: ['cancelled', 'expired'] },
+        },
+      })
+      if (existing) continue
+
+      const newStart = new Date(m.endDate!)
+      newStart.setDate(newStart.getDate() + 1)
+      const newEnd = computeEndDate(newStart, m.plan?.durationType, m.plan?.billingInterval)
+
+      await this.prisma.membership.create({
+        data: {
+          tenantId: m.tenantId,
+          organisationId: m.organisationId,
+          planId: m.planId,
+          customerId: m.customerId,
+          ownerType: m.ownerType,
+          ownerId: m.ownerId,
+          status: 'pending',
+          startDate: newStart,
+          endDate: newEnd,
+          renewalDate: newEnd,
+          autoRenew: true,
+          paymentStatus: 'unpaid',
+          source: 'auto-renew',
+          notes: `Auto-renewal queued from membership ${m.id}`,
+        },
+      })
+      await this.prisma.membershipLifecycleEvent.create({
+        data: {
+          membershipId: m.id,
+          fromStatus: 'active',
+          toStatus: 'active',
+          reason: `Auto-renewal queued: new membership created from ${newStart.toISOString().slice(0, 10)}`,
+          createdBy: 'system',
+        },
+      })
+      created++
+    }
+
+    return created
   }
 
   private format(m: any) {

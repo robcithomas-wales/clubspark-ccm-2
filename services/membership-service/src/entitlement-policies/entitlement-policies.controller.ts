@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Param,
   Body,
   Query,
@@ -36,6 +37,12 @@ export class EntitlementPoliciesController {
   create(@Req() req: any, @Body() dto: CreateEntitlementPolicyDto) {
     const { tenantId, organisationId } = req.tenantContext
     return this.service.create(tenantId, organisationId, dto)
+  }
+
+  @Patch(':id')
+  update(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
+    const { tenantId, organisationId } = req.tenantContext
+    return this.service.update(tenantId, organisationId, id, dto)
   }
 }
 

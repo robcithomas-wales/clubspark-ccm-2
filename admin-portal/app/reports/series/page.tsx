@@ -1,9 +1,20 @@
 import { PortalLayout } from "@/components/portal-layout"
 import { ExportButton } from "@/components/reports/export-button"
-import { HBarChart } from "@/components/reports/charts"
+import { ReportFilters } from "@/components/reports/report-filters"
+import { HBarChart, DonutChart } from "@/components/reports/charts"
 import { getBookingSeries, getBookableUnits, getResources } from "@/lib/api"
+import { resolveReportRange, inRange, formatDateRange } from "@/lib/report-utils"
 
-export default async function SeriesReportPage() {
+export default async function SeriesReportPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const sp = await searchParams
+  const { from, to } = resolveReportRange(sp)
+  const rangeLabel = formatDateRange(from, to)
+  const statusFilter = typeof sp.status === "string" ? sp.status : "all"
+
   const [seriesRes, unitsRes, resourcesRes] = await Promise.allSettled([
     getBookingSeries(),
     getBookableUnits(),
@@ -11,9 +22,16 @@ export default async function SeriesReportPage() {
   ])
 
   const seriesData = seriesRes.status === "fulfilled" ? seriesRes.value : null
-  const allSeries: any[] = Array.isArray(seriesData)
+  const rawSeries: any[] = Array.isArray(seriesData)
     ? seriesData
     : (seriesData as any)?.data ?? []
+
+  // Filter by created date and status
+  const allSeries = rawSeries.filter((s: any) => {
+    if (!inRange(s.createdAt, from, to)) return false
+    if (statusFilter !== "all" && s.status !== statusFilter) return false
+    return true
+  })
 
   const units: any[] = unitsRes.status === "fulfilled"
     ? (Array.isArray(unitsRes.value) ? unitsRes.value : (unitsRes.value as any)?.data ?? [])
@@ -28,6 +46,26 @@ export default async function SeriesReportPage() {
 
   const activeSeries = allSeries.filter((s) => s.status !== "cancelled")
   const cancelledSeries = allSeries.filter((s) => s.status === "cancelled")
+  const cancellationRate = allSeries.length > 0
+    ? Math.round((cancelledSeries.length / allSeries.length) * 100)
+    : 0
+
+  // Avg min/max sessions from active series that have them defined
+  const withSessions = activeSeries.filter((s) => s.minSessions != null || s.maxSessions != null)
+  const avgMinSessions = withSessions.length > 0
+    ? withSessions.reduce((s, r) => s + (r.minSessions ?? 0), 0) / withSessions.length
+    : null
+  const avgMaxSessions = withSessions.length > 0
+    ? withSessions.reduce((s, r) => s + (r.maxSessions ?? 0), 0) / withSessions.length
+    : null
+
+  // Payment status breakdown
+  const paymentStatusMap: Record<string, number> = {}
+  for (const s of allSeries) {
+    const ps = s.paymentStatus ?? "unknown"
+    paymentStatusMap[ps] = (paymentStatusMap[ps] ?? 0) + 1
+  }
+  const paymentStatusSlices = Object.entries(paymentStatusMap).map(([label, value]) => ({ label, value }))
 
   // Series by resource
   const byResource: Record<string, number> = {}
@@ -78,19 +116,55 @@ export default async function SeriesReportPage() {
     <PortalLayout title="Series Report" description="Recurring booking programmes — volume, resource breakdown and session targets.">
       <div className="space-y-6">
 
+        <ReportFilters
+          rangeLabel={rangeLabel}
+          extraFilters={[
+            {
+              key: "status",
+              label: "Status",
+              options: ["active", "pending", "cancelled"].map((s) => ({
+                value: s,
+                label: s.charAt(0).toUpperCase() + s.slice(1),
+              })),
+            },
+          ]}
+        />
+
         {/* KPI row */}
-        <div className="grid gap-4 sm:grid-cols-3">
-          {[
-            { label: "Total series", value: allSeries.length },
-            { label: "Active series", value: activeSeries.length },
-            { label: "Cancelled series", value: cancelledSeries.length },
-          ].map((k) => (
-            <div key={k.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="text-sm font-medium text-slate-500">{k.label}</div>
-              <div className="mt-2 text-3xl font-bold text-slate-950">{k.value}</div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="text-sm font-medium text-slate-500">Series in range</div>
+            <div className="mt-2 text-3xl font-bold text-slate-950">{allSeries.length}</div>
+            <div className="mt-1 text-xs text-slate-400">{rangeLabel}</div>
+          </div>
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5 shadow-sm">
+            <div className="text-sm font-medium text-emerald-700">Active series</div>
+            <div className="mt-2 text-3xl font-bold text-slate-950">{activeSeries.length}</div>
+          </div>
+          <div className="rounded-2xl border border-red-200 bg-red-50/50 p-5 shadow-sm">
+            <div className="text-sm font-medium text-red-600">Cancellation rate</div>
+            <div className="mt-2 text-3xl font-bold text-slate-950">{cancellationRate}%</div>
+            <div className="mt-1 text-xs text-slate-400">{cancelledSeries.length} cancelled</div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="text-sm font-medium text-slate-500">Avg sessions (min / max)</div>
+            <div className="mt-2 text-3xl font-bold text-slate-950">
+              {avgMinSessions != null ? avgMinSessions.toFixed(1) : "—"} / {avgMaxSessions != null ? avgMaxSessions.toFixed(1) : "—"}
             </div>
-          ))}
+            <div className="mt-1 text-xs text-slate-400">{withSessions.length} series with session targets</div>
+          </div>
         </div>
+
+        {/* Payment status donut */}
+        {paymentStatusSlices.length > 0 && (
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h3 className="mb-4 text-base font-semibold text-slate-900">Series by payment status</h3>
+            <DonutChart
+              slices={paymentStatusSlices}
+              colours={["#10b981", "#f59e0b", "#ef4444", "#64748b"]}
+            />
+          </div>
+        )}
 
         <div className="grid gap-6 xl:grid-cols-2">
           {/* By resource */}
@@ -117,7 +191,7 @@ export default async function SeriesReportPage() {
         {/* Series table */}
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-            <h3 className="text-base font-semibold text-slate-900">All series ({allSeries.length})</h3>
+            <h3 className="text-base font-semibold text-slate-900">Filtered series ({allSeries.length})</h3>
             <ExportButton
               data={enriched as unknown as Record<string, unknown>[]}
               filename="series-report.csv"

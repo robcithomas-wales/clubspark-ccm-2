@@ -57,4 +57,9 @@ export class UpdateResourceDto {
   @IsOptional()
   @IsObject()
   publicAttributes?: Record<string, unknown>
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  visibleAttributes?: string[]
 }

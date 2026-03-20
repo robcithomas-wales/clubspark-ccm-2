@@ -76,6 +76,12 @@ export class BookingSeriesService {
       if ((err as Error).message === 'RRULE produced no occurrences') {
         throw new BadRequestException('The RRULE produced no occurrences')
       }
+      if ((err as Error).message?.startsWith('MIN_SESSIONS_NOT_MET')) {
+        const [, actual, required] = (err as Error).message.split(':')
+        throw new BadRequestException(
+          `The RRULE only produces ${actual} occurrence(s) but minSessions is ${required}`,
+        )
+      }
       throw err
     }
   }

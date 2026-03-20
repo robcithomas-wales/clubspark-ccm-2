@@ -9,6 +9,37 @@ import { CreateMembershipDto } from './dto/create-membership.dto'
 import { UpdateMembershipDto } from './dto/update-membership.dto'
 import { TransitionMembershipDto } from './dto/transition-membership.dto'
 
+/**
+ * Compute an end date from a start date based on plan duration/billing settings.
+ * Returns null for open-ended plans.
+ */
+function computeEndDate(
+  start: Date,
+  durationType?: string | null,
+  billingInterval?: string | null,
+): Date | null {
+  const d = new Date(start)
+  const type = durationType?.toLowerCase()
+  const interval = billingInterval?.toLowerCase()
+
+  if (type === 'annual' || type === 'yearly' || interval === 'annual') {
+    d.setFullYear(d.getFullYear() + 1)
+    d.setDate(d.getDate() - 1)
+    return d
+  }
+  if (type === 'monthly' || interval === 'monthly') {
+    d.setMonth(d.getMonth() + 1)
+    d.setDate(d.getDate() - 1)
+    return d
+  }
+  if (type === 'quarterly' || interval === 'quarterly') {
+    d.setMonth(d.getMonth() + 3)
+    d.setDate(d.getDate() - 1)
+    return d
+  }
+  return null
+}
+
 // State machine: action → { requiredFromStatuses, toStatus }
 const TRANSITIONS: Record<string, { from: string[]; to: string }> = {
   activate: { from: ['pending', 'suspended', 'lapsed'], to: 'active' },
@@ -91,6 +122,21 @@ export class MembershipsService {
       ownerId = dto.householdId
     }
 
+    // Auto-calculate endDate / renewalDate from plan duration if not supplied
+    let endDate = dto.endDate ?? null
+    let renewalDate = dto.renewalDate ?? null
+    if (!endDate && (plan.durationType || plan.billingInterval)) {
+      const computed = computeEndDate(
+        new Date(dto.startDate),
+        (plan as any).durationType,
+        (plan as any).billingInterval,
+      )
+      if (computed) {
+        endDate = computed.toISOString().slice(0, 10)
+        renewalDate = renewalDate ?? endDate
+      }
+    }
+
     const m = await this.repo.create({
       tenantId,
       organisationId,
@@ -100,8 +146,8 @@ export class MembershipsService {
       ownerId,
       status: dto.status ?? 'pending',
       startDate: dto.startDate,
-      endDate: dto.endDate ?? null,
-      renewalDate: dto.renewalDate ?? null,
+      endDate,
+      renewalDate,
       autoRenew: dto.autoRenew === true,
       paymentStatus: dto.paymentStatus ?? 'unpaid',
       reference: dto.reference?.trim() ?? null,

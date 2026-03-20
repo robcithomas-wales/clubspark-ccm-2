@@ -37,6 +37,18 @@ export class EntitlementPoliciesService {
     return { data: policy }
   }
 
+  async update(
+    tenantId: string,
+    organisationId: string,
+    id: string,
+    dto: { name?: string; policyType?: string | null; description?: string | null; status?: string },
+  ) {
+    const existing = await this.repo.findById(tenantId, organisationId, id)
+    if (!existing) throw new NotFoundException('Entitlement policy not found')
+    const policy = await this.repo.update(id, dto)
+    return { data: policy }
+  }
+
   async getPlanEntitlements(tenantId: string, organisationId: string, planId: string) {
     const entitlements = await this.repo.listByPlanId(tenantId, organisationId, planId)
     const data = entitlements.map((e: any) => ({

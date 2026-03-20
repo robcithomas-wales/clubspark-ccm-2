@@ -28,5 +28,11 @@ export class MembershipExpiryTask {
     if (expired > 0) {
       this.logger.log({ count: expired }, 'Auto-expired lapsed memberships past grace period')
     }
+
+    // Queue pending renewal memberships for autoRenew=true members expiring within 7 days
+    const renewed = await this.repo.createAutoRenewals(now, 7)
+    if (renewed > 0) {
+      this.logger.log({ count: renewed }, 'Auto-renewal memberships queued')
+    }
   }
 }

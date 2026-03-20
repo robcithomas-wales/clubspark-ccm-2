@@ -67,6 +67,18 @@ export class EntitlementPoliciesRepository {
     })
   }
 
+  async update(id: string, input: Partial<Omit<CreateInput, 'tenantId' | 'organisationId'>>) {
+    return this.prisma.entitlementPolicy.update({
+      where: { id },
+      data: {
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.policyType !== undefined ? { policyType: input.policyType } : {}),
+        ...(input.description !== undefined ? { description: input.description } : {}),
+        ...(input.status !== undefined ? { status: input.status } : {}),
+      },
+    })
+  }
+
   async listByPlanId(tenantId: string, organisationId: string, planId: string) {
     return this.prisma.membershipPlanEntitlement.findMany({
       where: {

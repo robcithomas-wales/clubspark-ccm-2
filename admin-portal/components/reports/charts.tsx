@@ -8,9 +8,11 @@ const LABEL_H = 20
 export function HBarChart({
   rows,
   colour = "#1857E0",
+  formatValue,
 }: {
   rows: { label: string; value: number }[]
   colour?: string
+  formatValue?: (v: number) => string
 }) {
   if (rows.length === 0) return <p className="text-sm text-slate-400">No data</p>
   const max = Math.max(...rows.map((r) => r.value), 1)
@@ -32,7 +34,7 @@ export function HBarChart({
               </text>
               <rect x={labelW} y={y + 4} width={barW} height={rowH - 10} rx={3} fill={colour} opacity={0.82} />
               <text x={labelW + barW + 6} y={y + rowH / 2 + 4} fontSize={11} fill="#334155" fontWeight="600">
-                {row.value}
+                {formatValue ? formatValue(row.value) : row.value}
               </text>
             </g>
           )
@@ -100,17 +102,18 @@ export function DonutChart({
   const inner = 36
   let cumAngle = -Math.PI / 2
 
+  const n2 = (v: number) => Math.round(v * 100) / 100
   const paths = slices.map((slice, i) => {
     const angle = (slice.value / total) * 2 * Math.PI
-    const x1 = cx + r * Math.cos(cumAngle)
-    const y1 = cy + r * Math.sin(cumAngle)
+    const x1 = n2(cx + r * Math.cos(cumAngle))
+    const y1 = n2(cy + r * Math.sin(cumAngle))
     cumAngle += angle
-    const x2 = cx + r * Math.cos(cumAngle)
-    const y2 = cy + r * Math.sin(cumAngle)
-    const xi1 = cx + inner * Math.cos(cumAngle - angle)
-    const yi1 = cy + inner * Math.sin(cumAngle - angle)
-    const xi2 = cx + inner * Math.cos(cumAngle)
-    const yi2 = cy + inner * Math.sin(cumAngle)
+    const x2 = n2(cx + r * Math.cos(cumAngle))
+    const y2 = n2(cy + r * Math.sin(cumAngle))
+    const xi1 = n2(cx + inner * Math.cos(cumAngle - angle))
+    const yi1 = n2(cy + inner * Math.sin(cumAngle - angle))
+    const xi2 = n2(cx + inner * Math.cos(cumAngle))
+    const yi2 = n2(cy + inner * Math.sin(cumAngle))
     const large = angle > Math.PI ? 1 : 0
     return {
       d: `M ${xi1} ${yi1} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} L ${xi2} ${yi2} A ${inner} ${inner} 0 ${large} 0 ${xi1} ${yi1} Z`,
@@ -252,7 +255,7 @@ export function DowHeatmap({ rows }: { rows: { dow: number; hour: number; count:
         {DOW.map((_, di) =>
           HOURS.map((h, hi) => {
             const count = map.get(`${di}-${h}`) ?? 0
-            const opacity = count === 0 ? 0.06 : 0.15 + (count / maxCount) * 0.82
+            const opacity = Math.round((count === 0 ? 0.06 : 0.15 + (count / maxCount) * 0.82) * 1000) / 1000
             return (
               <rect
                 key={`${di}-${h}`}

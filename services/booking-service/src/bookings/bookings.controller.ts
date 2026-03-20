@@ -16,6 +16,7 @@ import { CreateBookingAddOnDto } from './dto/create-booking-add-on.dto.js'
 import { UpdatePaymentStatusDto } from './dto/update-payment-status.dto.js'
 import { UpdateBookingDto } from './dto/update-booking.dto.js'
 import { ApproveBookingDto, RejectBookingDto } from './dto/approve-booking.dto.js'
+import { BulkCancelBookingsDto } from './dto/bulk-cancel-bookings.dto.js'
 import { TenantCtx, type TenantContext } from '../common/decorators/tenant-context.decorator.js'
 
 @ApiTags('bookings')
@@ -144,6 +145,13 @@ export class BookingsController {
   ) {
     const booking = await this.service.reject(ctx, id, dto.reason)
     return { data: booking }
+  }
+
+  @Post('bulk-cancel')
+  @HttpCode(HttpStatus.OK)
+  async bulkCancel(@Body() dto: BulkCancelBookingsDto, @TenantCtx() ctx: TenantContext) {
+    const result = await this.service.bulkCancel(ctx, dto.ids)
+    return { data: result }
   }
 
   @Post(':id/cancel')

@@ -5,6 +5,7 @@ import {
   getMembershipPlans,
   getMembershipPlanEntitlements,
 } from "@/lib/api"
+import { EditPolicyPanel } from "@/components/edit-policy-panel"
 
 function formatLabel(value?: string | null) {
   if (!value) return "Unknown"
@@ -59,6 +60,15 @@ export default async function MembershipPolicyDetailPage({
           >
             Back to policies
           </Link>
+          <EditPolicyPanel
+            policyId={policy.id}
+            initial={{
+              name: policy.name,
+              description: policy.description,
+              policyType: policy.policy_type,
+              status: policy.status,
+            }}
+          />
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

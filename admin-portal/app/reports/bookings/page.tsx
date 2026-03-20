@@ -1,5 +1,6 @@
 import { PortalLayout } from "@/components/portal-layout"
 import { ExportButton } from "@/components/reports/export-button"
+import { ReportFilters } from "@/components/reports/report-filters"
 import { DonutChart, HBarChart, VBarChart, DualVBarChart, DowHeatmap } from "@/components/reports/charts"
 import {
   getBookingStats,
@@ -11,6 +12,12 @@ import {
   getBookings,
   getBookableUnits,
 } from "@/lib/api"
+import {
+  resolveReportRange,
+  daysBetween,
+  inRange,
+  formatDateRange,
+} from "@/lib/report-utils"
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(v)
@@ -20,12 +27,24 @@ function formatHours(v: number) {
   return `${v.toFixed(1)} h`
 }
 
-export default async function BookingsReportPage() {
+export default async function BookingsReportPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const sp = await searchParams
+  const { from, to, fromStr, toStr } = resolveReportRange(sp)
+  const days = daysBetween(from, to)
+  const rangeLabel = formatDateRange(from, to)
+
+  const statusFilter = typeof sp.status === 'string' ? sp.status : 'all'
+  const sourceFilter = typeof sp.source === 'string' ? sp.source : 'all'
+
   const [statsRes, summaryRes, dailyRes, byUnitRes, byDowRes, topCustomersRes, allRes, unitsRes] =
     await Promise.allSettled([
       getBookingStats(),
       getBookingStatsSummary(),
-      getBookingDailyStats(30),
+      getBookingDailyStats(days),
       getBookingStatsByUnit(),
       getBookingStatsByDow(),
       getTopCustomers(10),
@@ -40,17 +59,70 @@ export default async function BookingsReportPage() {
   const byDow   = byDowRes.status   === "fulfilled" ? byDowRes.value   : []
   const topCustomers = topCustomersRes.status === "fulfilled" ? topCustomersRes.value : []
   const allBookingsData = allRes.status === "fulfilled" ? allRes.value : null
-  const allBookings: any[] = Array.isArray(allBookingsData)
+  const rawBookings: any[] = Array.isArray(allBookingsData)
     ? allBookingsData
     : (allBookingsData as any)?.data ?? []
   const units: any[] = unitsRes.status === "fulfilled" ? (unitsRes.value ?? []) : []
 
+  // ── Apply date + status + source filters ──────────────────────────────────
+  const allBookings = rawBookings.filter((b: any) => {
+    if (!inRange(b.startsAt ?? b.createdAt, from, to)) return false
+    if (statusFilter !== 'all' && b.status !== statusFilter) return false
+    if (sourceFilter !== 'all' && b.bookingSource !== sourceFilter) return false
+    return true
+  })
+
   const unitMap = new Map(units.map((u: any) => [u.id, u]))
 
-  const totalBookings  = summary?.byStatus.reduce((s, r) => s + r.count, 0) ?? 0
-  const active         = summary?.byStatus.find((r) => r.status === "active")?.count ?? 0
-  const pending        = summary?.byStatus.find((r) => r.status === "pending")?.count ?? 0
-  const cancelled      = summary?.byStatus.find((r) => r.status === "cancelled")?.count ?? 0
+  // Recompute KPIs from filtered data
+  const totalBookings = allBookings.length
+  const active    = allBookings.filter((b: any) => b.status === "active").length
+  const pending   = allBookings.filter((b: any) => b.status === "pending").length
+  const cancelled = allBookings.filter((b: any) => b.status === "cancelled").length
+
+  const paidBookings = allBookings.filter((b: any) => b.paymentStatus === "paid")
+  const filteredRevenue = paidBookings.reduce((s, b: any) => s + Number(b.price ?? 0), 0)
+  const avgBookingValue = paidBookings.length > 0 ? filteredRevenue / paidBookings.length : 0
+
+  // Status donut from filtered data
+  const statusCounts: Record<string, number> = {}
+  for (const b of allBookings) {
+    statusCounts[b.status] = (statusCounts[b.status] ?? 0) + 1
+  }
+  const statusSlices = Object.entries(statusCounts).map(([label, value]) => ({ label, value }))
+
+  // Source bar from filtered data
+  const sourceCounts: Record<string, number> = {}
+  for (const b of allBookings) {
+    const s = b.bookingSource ?? "unknown"
+    sourceCounts[s] = (sourceCounts[s] ?? 0) + 1
+  }
+  const sourceRows = Object.entries(sourceCounts)
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value)
+
+  // Revenue by source from filtered data
+  const revenueBySource: Record<string, number> = {}
+  for (const b of allBookings) {
+    if (b.price != null) {
+      const src = b.bookingSource ?? "unknown"
+      revenueBySource[src] = (revenueBySource[src] ?? 0) + Number(b.price)
+    }
+  }
+  const revenueBySourceRows = Object.entries(revenueBySource)
+    .map(([label, value]) => ({ label, value: Math.round(value) }))
+    .sort((a, b) => b.value - a.value)
+
+  // Payment status from filtered data
+  const paymentCounts: Record<string, number> = {}
+  for (const b of allBookings.filter((b: any) => b.status !== "cancelled")) {
+    const p = b.paymentStatus ?? "unknown"
+    paymentCounts[p] = (paymentCounts[p] ?? 0) + 1
+  }
+  const paymentRows = Object.entries(paymentCounts).map(([label, value]) => ({ label, value }))
+
+  // Unique booking sources for filter dropdown
+  const sources = Array.from(new Set(rawBookings.map((b: any) => b.bookingSource).filter(Boolean)))
 
   const exportColumns = [
     { key: "bookingReference", header: "Reference" },
@@ -75,13 +147,29 @@ export default async function BookingsReportPage() {
     <PortalLayout title="Bookings Report" description="Volume, revenue, utilisation and source breakdown across all booking records.">
       <div className="space-y-6">
 
+        <ReportFilters
+          rangeLabel={rangeLabel}
+          extraFilters={[
+            {
+              key: "status",
+              label: "Status",
+              options: ["active", "pending", "cancelled", "lapsed"].map((s) => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) })),
+            },
+            {
+              key: "source",
+              label: "Source",
+              options: sources.map((s: any) => ({ value: s, label: s })),
+            },
+          ]}
+        />
+
         {/* Primary KPI row */}
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[
-            { label: "Total bookings", value: totalBookings, sub: "All time" },
-            { label: "Active", value: active, sub: "Current active" },
+            { label: "Total bookings", value: totalBookings, sub: rangeLabel },
+            { label: "Active", value: active, sub: "In selected range" },
             { label: "Pending approval", value: pending, sub: "Awaiting action" },
-            { label: "Cancelled", value: cancelled, sub: "All time" },
+            { label: "Cancelled", value: cancelled, sub: "In selected range" },
           ].map((k) => (
             <div key={k.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="text-sm font-medium text-slate-500">{k.label}</div>
@@ -94,34 +182,24 @@ export default async function BookingsReportPage() {
         {/* Revenue & utilisation KPI row */}
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5 shadow-sm">
-            <div className="text-sm font-medium text-emerald-700">Total Revenue</div>
-            <div className="mt-2 text-3xl font-bold text-slate-950">
-              {formatCurrency(stats?.totalRevenue ?? 0)}
-            </div>
-            <div className="mt-1 text-xs text-slate-400">From paid bookings (all time)</div>
+            <div className="text-sm font-medium text-emerald-700">Revenue (filtered)</div>
+            <div className="mt-2 text-3xl font-bold text-slate-950">{formatCurrency(filteredRevenue)}</div>
+            <div className="mt-1 text-xs text-slate-400">Paid bookings in range</div>
           </div>
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5 shadow-sm">
             <div className="text-sm font-medium text-emerald-700">Add-on Revenue</div>
-            <div className="mt-2 text-3xl font-bold text-slate-950">
-              {formatCurrency(stats?.addOnRevenue ?? 0)}
-            </div>
-            <div className="mt-1 text-xs text-slate-400">From active add-ons (all time)</div>
+            <div className="mt-2 text-3xl font-bold text-slate-950">{formatCurrency(stats?.addOnRevenue ?? 0)}</div>
+            <div className="mt-1 text-xs text-slate-400">All time · see revenue report</div>
           </div>
           <div className="rounded-2xl border border-sky-200 bg-sky-50/60 p-5 shadow-sm">
-            <div className="text-sm font-medium text-sky-700">Utilisation Rate (30d)</div>
-            <div className="mt-2 text-3xl font-bold text-slate-950">
-              {stats?.utilisationRate30d ?? 0}%
-            </div>
-            <div className="mt-1 text-xs text-slate-400">
-              {(stats?.bookedHours30d ?? 0).toFixed(1)} h booked of 16 h/day per active unit
-            </div>
+            <div className="text-sm font-medium text-sky-700">Avg booking value</div>
+            <div className="mt-2 text-3xl font-bold text-slate-950">{formatCurrency(avgBookingValue)}</div>
+            <div className="mt-1 text-xs text-slate-400">{paidBookings.length} paid in range</div>
           </div>
           <div className="rounded-2xl border border-violet-200 bg-violet-50/60 p-5 shadow-sm">
             <div className="text-sm font-medium text-violet-700">Unique Customers</div>
-            <div className="mt-2 text-3xl font-bold text-slate-950">
-              {stats?.uniqueCustomers ?? 0}
-            </div>
-            <div className="mt-1 text-xs text-slate-400">With at least one active booking</div>
+            <div className="mt-2 text-3xl font-bold text-slate-950">{stats?.uniqueCustomers ?? 0}</div>
+            <div className="mt-1 text-xs text-slate-400">All time · with active bookings</div>
           </div>
         </div>
 
@@ -130,7 +208,7 @@ export default async function BookingsReportPage() {
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h3 className="mb-4 text-base font-semibold text-slate-900">Bookings by status</h3>
             <DonutChart
-              slices={(summary?.byStatus ?? []).map((r) => ({ label: r.status, value: r.count }))}
+              slices={statusSlices.length > 0 ? statusSlices : (summary?.byStatus ?? []).map((r) => ({ label: r.status, value: r.count }))}
               colours={["#10b981", "#f59e0b", "#ef4444", "#64748b"]}
             />
           </div>
@@ -139,15 +217,23 @@ export default async function BookingsReportPage() {
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h3 className="mb-4 text-base font-semibold text-slate-900">Bookings by source</h3>
             <HBarChart
-              rows={(summary?.bySource ?? []).map((r) => ({ label: r.source, value: r.count }))}
+              rows={sourceRows.length > 0 ? sourceRows : (summary?.bySource ?? []).map((r) => ({ label: r.source, value: r.count }))}
             />
           </div>
         </div>
 
+        {/* Revenue by source */}
+        {revenueBySourceRows.length > 0 && (
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h3 className="mb-4 text-base font-semibold text-slate-900">Revenue by booking source</h3>
+            <HBarChart rows={revenueBySourceRows} colour="#10b981" formatValue={(v) => `£${v.toLocaleString()}`} />
+          </div>
+        )}
+
         {/* Daily volume + revenue dual chart */}
         {daily.length > 0 && (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h3 className="mb-4 text-base font-semibold text-slate-900">Daily bookings & revenue (30 days)</h3>
+            <h3 className="mb-4 text-base font-semibold text-slate-900">Daily bookings & revenue ({days} days)</h3>
             <DualVBarChart
               rows={daily.map((d) => ({
                 label: d.date.slice(5),
@@ -167,7 +253,7 @@ export default async function BookingsReportPage() {
         {/* Booked hours trend */}
         {daily.length > 0 && (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h3 className="mb-4 text-base font-semibold text-slate-900">Daily booked hours (30 days)</h3>
+            <h3 className="mb-4 text-base font-semibold text-slate-900">Daily booked hours ({days} days)</h3>
             <VBarChart
               rows={daily.map((d) => ({ label: d.date.slice(5), value: d.bookedHours }))}
               colour="#6366f1"
@@ -178,17 +264,15 @@ export default async function BookingsReportPage() {
 
         {/* Payment status */}
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h3 className="mb-4 text-base font-semibold text-slate-900">Payment status (non-cancelled)</h3>
-          <HBarChart
-            rows={(summary?.byPaymentStatus ?? []).map((r) => ({ label: r.paymentStatus, value: r.count }))}
-            colour="#10b981"
-          />
+          <h3 className="mb-4 text-base font-semibold text-slate-900">Payment status (non-cancelled, filtered)</h3>
+          <HBarChart rows={paymentRows.length > 0 ? paymentRows : (summary?.byPaymentStatus ?? []).map((r) => ({ label: r.paymentStatus, value: r.count }))} colour="#10b981" />
         </div>
 
-        {/* Utilisation by unit */}
+        {/* Utilisation by unit — all-time aggregated */}
         {byUnit.length > 0 && (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h3 className="mb-4 text-base font-semibold text-slate-900">Booked hours by unit</h3>
+            <h3 className="mb-1 text-base font-semibold text-slate-900">Booked hours by unit</h3>
+            <p className="mb-4 text-xs text-slate-400">All-time aggregated data</p>
             <HBarChart
               rows={byUnit.slice(0, 15).map((r) => ({
                 label: unitMap.get(r.bookableUnitId)?.name ?? r.bookableUnitId.slice(0, 8),
@@ -199,18 +283,20 @@ export default async function BookingsReportPage() {
           </div>
         )}
 
-        {/* Day-of-week heatmap */}
+        {/* Day-of-week heatmap — all-time aggregated */}
         {byDow.length > 0 && (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h3 className="mb-4 text-base font-semibold text-slate-900">Booking heatmap (day × hour)</h3>
+            <h3 className="mb-1 text-base font-semibold text-slate-900">Booking heatmap (day × hour)</h3>
+            <p className="mb-4 text-xs text-slate-400">All-time aggregated data</p>
             <DowHeatmap rows={byDow} />
           </div>
         )}
 
-        {/* Top customers */}
+        {/* Top customers — all-time */}
         {topCustomers.length > 0 && (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h3 className="mb-4 text-base font-semibold text-slate-900">Top 10 customers by bookings</h3>
+            <h3 className="mb-1 text-base font-semibold text-slate-900">Top 10 customers by bookings</h3>
+            <p className="mb-4 text-xs text-slate-400">All-time aggregated data</p>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-slate-100 text-sm">
                 <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -240,12 +326,10 @@ export default async function BookingsReportPage() {
         {/* Full booking table */}
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-            <h3 className="text-base font-semibold text-slate-900">All bookings ({allBookings.length})</h3>
-            <ExportButton
-              data={allBookings}
-              filename="bookings-report.csv"
-              columns={exportColumns}
-            />
+            <h3 className="text-base font-semibold text-slate-900">
+              Filtered bookings ({allBookings.length})
+            </h3>
+            <ExportButton data={allBookings} filename="bookings-report.csv" columns={exportColumns} />
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-100 text-sm">
@@ -283,6 +367,9 @@ export default async function BookingsReportPage() {
                     <td className="px-4 py-2 text-slate-600">{b.adminOverride ? "Yes" : "No"}</td>
                   </tr>
                 ))}
+                {allBookings.length === 0 && (
+                  <tr><td colSpan={8} className="px-4 py-6 text-center text-sm text-slate-400">No bookings match the selected filters.</td></tr>
+                )}
               </tbody>
             </table>
             {allBookings.length > 50 && (

@@ -158,6 +158,12 @@ export class BookingsService {
     throw new ConflictException('Booking is already cancelled')
   }
 
+  async bulkCancel(ctx: TenantContext, ids: string[]) {
+    const cancelled = await this.repo.bulkCancel(ctx.tenantId, ids)
+    this.logger.log({ count: cancelled, organisationId: ctx.organisationId }, 'Bulk cancel')
+    return { cancelled }
+  }
+
   async approve(ctx: TenantContext, id: string, approvedBy: string) {
     const booking = await this.repo.approve(ctx.tenantId, id, approvedBy)
     if (!booking) {

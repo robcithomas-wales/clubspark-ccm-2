@@ -117,11 +117,12 @@ export function BookingsBulkActions({
     setCancelling(true)
     setError(null)
     try {
-      await Promise.all(
-        Array.from(selected).map((id) =>
-          fetch(`/api/bookings/${id}/cancel`, { method: "POST" })
-        )
-      )
+      const res = await fetch(`/api/bookings/bulk-cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: Array.from(selected) }),
+      })
+      if (!res.ok) throw new Error("Bulk cancel failed")
       setSelected(new Set())
       router.refresh()
     } catch {

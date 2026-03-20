@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { PortalLayout } from "@/components/portal-layout"
 import { getMembershipSchemeById } from "@/lib/api"
+import { EditSchemePanel } from "@/components/edit-scheme-panel"
 
 export default async function MembershipSchemeDetailPage({
   params,
@@ -24,6 +25,10 @@ export default async function MembershipSchemeDetailPage({
           >
             Back to schemes
           </Link>
+          <EditSchemePanel
+            schemeId={scheme.id}
+            initial={{ name: scheme.name, description: scheme.description, status: scheme.status }}
+          />
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

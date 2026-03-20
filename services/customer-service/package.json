@@ -7,6 +7,9 @@
     "build": "nest build",
     "dev": "nest start --watch",
     "start": "node dist/main.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
@@ -33,6 +36,8 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20.17.10",
     "prisma": "^5.22.0",
-    "typescript": "^5.7.2"
+    "supertest": "^7.0.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.0"
   }
 }

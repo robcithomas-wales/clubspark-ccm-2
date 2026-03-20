@@ -352,6 +352,21 @@ export class BookingsRepository {
     return rows[0] ?? null
   }
 
+  async bulkCancel(tenantId: string, ids: string[]): Promise<number> {
+    if (ids.length === 0) return 0
+    const rows = await this.prisma.write.$queryRaw<{ id: string }[]>`
+      UPDATE booking.bookings
+      SET status       = 'cancelled',
+          cancelled_at = now(),
+          updated_at   = now()
+      WHERE tenant_id = ${tenantId}::uuid
+        AND id        = ANY(${ids}::uuid[])
+        AND status   <> 'cancelled'
+      RETURNING id
+    `
+    return rows.length
+  }
+
   async updatePaymentStatus(tenantId: string, id: string, paymentStatus: PaymentStatus) {
     const rows = await this.prisma.write.$queryRaw<BookingRow[]>`
       UPDATE booking.bookings
