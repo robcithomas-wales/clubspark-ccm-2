@@ -7,6 +7,19 @@ export const prisma = new PrismaClient({
 })
 
 /**
+ * Returns true if the test database is reachable.
+ * Integration tests call this in beforeAll and skip the suite if false.
+ */
+export async function checkDbAvailable(): Promise<boolean> {
+  try {
+    await prisma.$executeRaw`SELECT 1`
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
  * Delete all customers created during the test run.
  * Uses raw SQL because the people-service Prisma client targets the
  * customer schema directly.

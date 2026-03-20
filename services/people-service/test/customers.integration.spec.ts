@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest'
 import supertest from 'supertest'
 import { getApp, closeApp } from './helpers/app.js'
-import { prisma, cleanCustomers, teardown } from './helpers/db.js'
+import { prisma, cleanCustomers, teardown, checkDbAvailable } from './helpers/db.js'
 import { TEST_TENANT_ID, TEST_NONEXISTENT_ID } from './fixtures/index.js'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -18,7 +18,9 @@ const VALID_CUSTOMER = {
 
 // ─── Suite ──────────────────────────────────────────────────────────────────
 
-describe('Customer service — integration', () => {
+const DB_AVAILABLE = await checkDbAvailable()
+
+describe.runIf(DB_AVAILABLE)('Customer service — integration', () => {
   let request: ReturnType<typeof supertest>
 
   beforeAll(async () => {
