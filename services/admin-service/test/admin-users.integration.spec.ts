@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest'
 import supertest from 'supertest'
 import { getApp, closeApp } from './helpers/app.js'
-import { cleanAdminUsers, teardown } from './helpers/db.js'
+import { cleanAdminUsers, teardown, checkDbAvailable } from './helpers/db.js'
 import {
   TEST_TENANT_ID,
   TEST_SUPER_USER_ID,
@@ -21,7 +21,9 @@ const BASIC_HEADERS = {
   'content-type': 'application/json',
 }
 
-describe('Admin service — integration', () => {
+const DB_AVAILABLE = await checkDbAvailable()
+
+describe.runIf(DB_AVAILABLE)('Admin service — integration', () => {
   let request: ReturnType<typeof supertest>
 
   beforeAll(async () => {
