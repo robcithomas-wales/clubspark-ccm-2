@@ -11,7 +11,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common'
-import { IsString, IsArray, IsOptional } from 'class-validator'
+import { IsString, IsArray, IsOptional, ArrayMinSize } from 'class-validator'
 import { MembershipsService } from './memberships.service'
 import { CreateMembershipDto } from './dto/create-membership.dto'
 import { UpdateMembershipDto } from './dto/update-membership.dto'
@@ -19,6 +19,7 @@ import { TransitionMembershipDto } from './dto/transition-membership.dto'
 
 class BulkTransitionDto {
   @IsArray()
+  @ArrayMinSize(1)
   @IsString({ each: true })
   ids!: string[]
 

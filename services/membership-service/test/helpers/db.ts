@@ -8,8 +8,10 @@ import {
   TEST_CUSTOMER_ID,
 } from '../fixtures/index.js'
 
+// Use PgBouncer transaction mode (port 6543) to avoid session-mode connection exhaustion
+const txUrl = (process.env['DATABASE_URL'] ?? '').replace(':5432/', ':6543/')
 export const prisma = new PrismaClient({
-  datasourceUrl: `${process.env['DATABASE_URL']}?connection_limit=2`,
+  datasourceUrl: `${txUrl}?pgbouncer=true&connection_limit=1`,
 })
 
 /**
@@ -17,34 +19,23 @@ export const prisma = new PrismaClient({
  * Uses upsert so re-runs are safe.
  */
 export async function seedFixtures(): Promise<void> {
-  await prisma.membershipScheme.upsert({
-    where: { id: TEST_SCHEME_ID },
-    create: {
-      id: TEST_SCHEME_ID,
-      tenantId: TEST_TENANT_ID,
-      organisationId: TEST_ORG_ID,
-      name: 'Test Scheme',
-    },
-    update: {},
-  })
+  // Use raw SQL ON CONFLICT DO NOTHING so concurrent beforeAll calls from multiple
+  // spec files (Vitest singleFork runs them in parallel) are safe.
+  await prisma.$executeRaw`
+    INSERT INTO membership.membership_schemes (id, tenant_id, organisation_id, name)
+    VALUES (${TEST_SCHEME_ID}::uuid, ${TEST_TENANT_ID}::uuid, ${TEST_ORG_ID}::uuid, 'Test Scheme')
+    ON CONFLICT (id) DO NOTHING
+  `
 
-  await prisma.membershipPlan.upsert({
-    where: { id: TEST_PLAN_ID },
-    create: {
-      id: TEST_PLAN_ID,
-      tenantId: TEST_TENANT_ID,
-      organisationId: TEST_ORG_ID,
-      schemeId: TEST_SCHEME_ID,
-      name: 'Test Plan',
-      ownershipType: 'person',
-      durationType: 'fixed',
-      visibility: 'public',
-      sortOrder: 0,
-    },
-    update: {},
-  })
+  await prisma.$executeRaw`
+    INSERT INTO membership.membership_plans
+      (id, tenant_id, organisation_id, scheme_id, name, ownership_type, duration_type, visibility, sort_order)
+    VALUES
+      (${TEST_PLAN_ID}::uuid, ${TEST_TENANT_ID}::uuid, ${TEST_ORG_ID}::uuid,
+       ${TEST_SCHEME_ID}::uuid, 'Test Plan', 'person', 'fixed', 'public', 0)
+    ON CONFLICT (id) DO NOTHING
+  `
 
-  // Create a test customer in the customer schema to satisfy the FK on memberships.customer_id
   await prisma.$executeRaw`
     INSERT INTO customer.customers (id, tenant_id)
     VALUES (${TEST_CUSTOMER_ID}::uuid, ${TEST_TENANT_ID}::uuid)
@@ -54,8 +45,12 @@ export async function seedFixtures(): Promise<void> {
 
 /**
  * Delete all memberships for the test tenant. Call in afterEach.
+ * Must delete lifecycle events first to satisfy the FK constraint.
  */
 export async function cleanMemberships(): Promise<void> {
+  await prisma.membershipLifecycleEvent.deleteMany({
+    where: { membership: { tenantId: TEST_TENANT_ID } },
+  })
   await prisma.membership.deleteMany({
     where: { tenantId: TEST_TENANT_ID },
   })

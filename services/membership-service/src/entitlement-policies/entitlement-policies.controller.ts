@@ -62,7 +62,7 @@ export class PlanEntitlementsController {
     @Param('planId') planId: string,
     @Body() dto: ReplacePlanEntitlementsDto,
   ) {
-    const { tenantId } = req.tenantContext
-    return this.service.replacePlanEntitlements(tenantId, planId, dto)
+    const { tenantId, organisationId } = req.tenantContext
+    return this.service.replacePlanEntitlements(tenantId, organisationId, planId, dto)
   }
 }

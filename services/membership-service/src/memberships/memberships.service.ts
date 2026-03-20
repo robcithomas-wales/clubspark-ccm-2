@@ -24,7 +24,6 @@ function computeEndDate(
 
   if (type === 'annual' || type === 'yearly' || interval === 'annual') {
     d.setFullYear(d.getFullYear() + 1)
-    d.setDate(d.getDate() - 1)
     return d
   }
   if (type === 'monthly' || interval === 'monthly') {
@@ -135,6 +134,10 @@ export class MembershipsService {
         endDate = computed.toISOString().slice(0, 10)
         renewalDate = renewalDate ?? endDate
       }
+    }
+    // If endDate is provided manually but renewalDate is not, default renewalDate to endDate
+    if (endDate && !renewalDate) {
+      renewalDate = endDate
     }
 
     const m = await this.repo.create({
@@ -310,7 +313,8 @@ export class MembershipsService {
       }
     }
 
-    return { data: results }
+    const updated = results.filter((r) => r.success).length
+    return { data: { updated, results } }
   }
 
   async recordPayment(

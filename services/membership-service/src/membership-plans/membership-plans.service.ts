@@ -48,6 +48,18 @@ export class MembershipPlansService {
       visibility: dto.visibility ?? null,
       status: dto.status ?? 'active',
       sortOrder: dto.sortOrder ?? null,
+      membershipType: dto.membershipType ?? null,
+      sportCategory: dto.sportCategory ?? null,
+      maxMembers: dto.maxMembers ?? null,
+      isPublic: dto.isPublic ?? false,
+      pricingModel: dto.pricingModel ?? null,
+      price: dto.price ?? null,
+      currency: dto.currency ?? 'GBP',
+      billingInterval: dto.billingInterval ?? null,
+      instalmentCount: dto.instalmentCount ?? null,
+      eligibility: dto.eligibility ?? undefined,
+      gracePeriodDays: dto.gracePeriodDays ?? null,
+      termsAndConditions: dto.termsAndConditions ?? null,
     })
     return { data: plan }
   }

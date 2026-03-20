@@ -192,6 +192,7 @@ export class MembershipsRepository {
   }
 
   async delete(id: string) {
+    await this.prisma.membershipLifecycleEvent.deleteMany({ where: { membershipId: id } })
     await this.prisma.membership.delete({ where: { id } })
   }
 

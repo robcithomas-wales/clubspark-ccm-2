@@ -16,6 +16,7 @@ import { AvailabilityConfigsModule } from './availability-configs/availability-c
 import { BlackoutDatesModule } from './blackout-dates/blackout-dates.module.js'
 import { OrganisationsModule } from './organisations/organisations.module.js'
 import { NewsPostsModule } from './news-posts/news-posts.module.js'
+import { AffiliationsModule } from './affiliations/affiliations.module.js'
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { NewsPostsModule } from './news-posts/news-posts.module.js'
     BlackoutDatesModule,
     OrganisationsModule,
     NewsPostsModule,
+    AffiliationsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: TenantContextGuard },

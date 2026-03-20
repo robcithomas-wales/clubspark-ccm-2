@@ -13,7 +13,7 @@ export async function getApp(): Promise<NestFastifyApplication> {
   app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter(),
-    { logger: false },
+    { logger: ['error'] },
   )
 
   app.useGlobalPipes(

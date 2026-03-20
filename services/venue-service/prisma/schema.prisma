@@ -13,14 +13,37 @@ datasource db {
   schemas  = ["venue"]
 }
 
-model Venue {
-  id        String  @id @db.Uuid
-  tenantId  String  @map("tenant_id") @db.Uuid
-  name      String
-  timezone  String  @default("Europe/London")
-  city      String?
-  country   String  @default("GB")
+// Tier 1 = enterprise (NGB, large governing body)
+// Tier 2 = operator  (local authority, multi-site operator)
+// Tier 3 = club      (single self-serve club — org + venue collapsed)
+enum TenantType {
+  enterprise
+  operator
+  club
 
+  @@schema("venue")
+}
+
+// Affiliation status lifecycle
+enum AffiliationStatus {
+  pending
+  active
+  suspended
+  ended
+
+  @@schema("venue")
+}
+
+model Venue {
+  id             String  @id @db.Uuid
+  tenantId       String  @map("tenant_id") @db.Uuid
+  organisationId String? @map("organisation_id") @db.Uuid
+  name           String
+  timezone       String  @default("Europe/London")
+  city           String?
+  country        String  @default("GB")
+
+  organisation   Organisation? @relation(fields: [organisationId], references: [id])
   resources      Resource[]
   units          BookableUnit[]
   resourceGroups ResourceGroup[]
@@ -30,6 +53,7 @@ model Venue {
   @@map("venues")
   @@schema("venue")
   @@index([tenantId])
+  @@index([organisationId])
 }
 
 model ResourceGroup {
@@ -192,34 +216,66 @@ model BlackoutDate {
 }
 
 model Organisation {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId       String   @unique @map("tenant_id") @db.Uuid
+  id             String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String     @unique @map("tenant_id") @db.Uuid
+  tenantType     TenantType @default(club) @map("tenant_type")
   name           String
-  slug           String   @unique
-  customDomain   String?  @unique @map("custom_domain")
-  primaryColour  String   @default("#1857E0") @map("primary_colour")
-  logoUrl        String?  @map("logo_url")
+  slug           String     @unique
+  customDomain   String?    @unique @map("custom_domain")
+  primaryColour  String     @default("#1857E0") @map("primary_colour")
+  logoUrl        String?    @map("logo_url")
   about          String?
   address        String?
   phone          String?
   email          String?
-  mapsEmbedUrl   String?  @map("maps_embed_url")
-  isPublished    Boolean  @default(false) @map("is_published")
-  appName         String?  @map("app_name")
-  clubCode        String?  @unique @map("club_code")
-  secondaryColour String?  @map("secondary_colour")
-  headingFont     String?  @map("heading_font")
-  bodyFont        String?  @map("body_font")
-  navLayout       String   @default("dark-inline") @map("nav_layout")
-  faviconUrl      String?  @map("favicon_url")
-  homePageContent Json?    @map("home_page_content")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  mapsEmbedUrl   String?    @map("maps_embed_url")
+  isPublished    Boolean    @default(false) @map("is_published")
+  appName         String?   @map("app_name")
+  clubCode        String?   @unique @map("club_code")
+  secondaryColour String?   @map("secondary_colour")
+  headingFont     String?   @map("heading_font")
+  bodyFont        String?   @map("body_font")
+  navLayout       String    @default("dark-inline") @map("nav_layout")
+  faviconUrl      String?   @map("favicon_url")
+  homePageContent Json?     @map("home_page_content")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  venues       Venue[]
+  affiliations Affiliation[] @relation("MemberOrg")
 
   @@map("organisations")
   @@schema("venue")
   @@index([tenantId])
   @@index([slug])
+}
+
+// Placeholder for NGB/enterprise affiliation relationships.
+// Status and profile fields will be populated when the governance
+// layer is built against a real NGB partner requirement.
+model Affiliation {
+  id                  String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  // The tenant affiliating (the club or operator)
+  tenantId            String            @map("tenant_id") @db.Uuid
+  organisationId      String            @map("organisation_id") @db.Uuid
+  // The governing tenant (the NGB or enterprise)
+  governingTenantId   String            @map("governing_tenant_id") @db.Uuid
+  status              AffiliationStatus @default(pending)
+  // Reserved for future policy / governance layer
+  policyPackId        String?           @map("policy_pack_id") @db.Uuid
+  effectiveFrom       DateTime?         @map("effective_from") @db.Date
+  effectiveTo         DateTime?         @map("effective_to") @db.Date
+  notes               String?
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+
+  organisation Organisation @relation("MemberOrg", fields: [organisationId], references: [id])
+
+  @@map("affiliations")
+  @@schema("venue")
+  @@index([tenantId])
+  @@index([governingTenantId])
+  @@index([organisationId])
 }
 
 model NewsPost {

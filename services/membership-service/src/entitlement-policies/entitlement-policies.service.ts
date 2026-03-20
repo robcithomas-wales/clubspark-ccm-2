@@ -69,10 +69,11 @@ export class EntitlementPoliciesService {
 
   async replacePlanEntitlements(
     tenantId: string,
+    organisationId: string,
     planId: string,
     dto: ReplacePlanEntitlementsDto,
   ) {
     await this.repo.replaceForPlan(tenantId, planId, dto.entitlements)
-    return this.getPlanEntitlements(tenantId, '', planId)
+    return this.getPlanEntitlements(tenantId, organisationId, planId)
   }
 }

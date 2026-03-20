@@ -64,10 +64,16 @@ export class OrganisationsRepository {
     }
     return this.prisma.write.organisation.upsert({
       where: { tenantId },
-      create: { tenantId, isPublished: dto.isPublished ?? false, ...shared },
+      create: {
+        tenantId,
+        isPublished: dto.isPublished ?? false,
+        tenantType: dto.tenantType ?? 'club',
+        ...shared,
+      },
       update: {
         ...shared,
         ...(dto.isPublished !== undefined ? { isPublished: dto.isPublished } : {}),
+        ...(dto.tenantType  !== undefined ? { tenantType:  dto.tenantType  } : {}),
       },
     })
   }

@@ -12,6 +12,7 @@ export class VenuesRepository {
       select: {
         id: true,
         tenantId: true,
+        organisationId: true,
         name: true,
         timezone: true,
         city: true,

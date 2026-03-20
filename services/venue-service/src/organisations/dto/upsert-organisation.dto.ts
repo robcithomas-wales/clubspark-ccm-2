@@ -1,4 +1,6 @@
-import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsEmail, Matches, MinLength } from 'class-validator'
+import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsEmail, IsIn, Matches, MinLength } from 'class-validator'
+
+export type TenantType = 'enterprise' | 'operator' | 'club'
 
 export class PublicRegisterDto {
   @IsString() @IsNotEmpty() tenantId!: string
@@ -81,4 +83,8 @@ export class UpsertOrganisationDto {
   @IsOptional()
   @IsString()
   faviconUrl?: string | null
+
+  @IsOptional()
+  @IsIn(['enterprise', 'operator', 'club'])
+  tenantType?: TenantType
 }
