@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest'
 import supertest from 'supertest'
 import { getApp, closeApp } from './helpers/app.js'
-import { prisma, seedFixtures, cleanBookings, cleanBookingRules, teardownFixtures } from './helpers/db.js'
+import { prisma, seedFixtures, cleanBookings, cleanBookingRules, teardownFixtures, checkDbAvailable } from './helpers/db.js'
 import {
   TEST_TENANT_ID,
   TEST_ORG_ID,
@@ -47,7 +47,9 @@ function bookingPayload(overrides: Record<string, unknown> = {}) {
 
 // ─── Suite ──────────────────────────────────────────────────────────────────
 
-describe('Bookings — integration', () => {
+const DB_AVAILABLE = await checkDbAvailable()
+
+describe.runIf(DB_AVAILABLE)('Bookings — integration', () => {
   let request: ReturnType<typeof supertest>
 
   beforeAll(async () => {
@@ -497,7 +499,7 @@ describe('Bookings — integration', () => {
 
 // ─── Booking rules enforcement ───────────────────────────────────────────────
 
-describe('Booking rules — enforcement', () => {
+describe.runIf(DB_AVAILABLE)('Booking rules — enforcement', () => {
   let request: ReturnType<typeof supertest>
 
   beforeAll(async () => {

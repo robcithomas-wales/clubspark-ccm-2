@@ -14,6 +14,20 @@ export const prisma = new PrismaClient({
 })
 
 /**
+ * Returns true if the test database is reachable.
+ * Integration tests call this in beforeAll and skip the suite if false,
+ * preventing auth/connectivity errors from being counted as test failures.
+ */
+export async function checkDbAvailable(): Promise<boolean> {
+  try {
+    await prisma.$executeRaw`SELECT 1`
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
  * Insert all fixture rows needed for the booking-service tests.
  * Uses INSERT ... ON CONFLICT DO NOTHING so re-runs are safe.
  */
