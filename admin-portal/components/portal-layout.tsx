@@ -67,7 +67,7 @@ const navSections = [
         ],
       },
       { label: "Availability", href: "/availability", icon: CalendarClock },
-      { label: "Customers", href: "/customers", icon: Users },
+      { label: "People", href: "/people", icon: Users },
     ],
   },
   {

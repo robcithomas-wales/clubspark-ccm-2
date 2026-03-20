@@ -564,17 +564,15 @@ export async function createMembership(input: {
 const CUSTOMER_SERVICE =
   process.env.NEXT_PUBLIC_CUSTOMER_SERVICE_URL || "http://127.0.0.1:4004"
 
-export async function getCustomers(page = 1, limit = 25) {
+export async function getCustomers(page = 1, limit = 25, opts?: { search?: string; lifecycle?: string }) {
   const qs = new URLSearchParams({ page: String(page), limit: String(limit) })
+  if (opts?.search) qs.set("search", opts.search)
+  if (opts?.lifecycle) qs.set("lifecycle", opts.lifecycle)
   const res = await fetch(`${CUSTOMER_SERVICE}/customers?${qs}`, {
     headers: await getAuthHeaders(),
     cache: "no-store",
   })
-
-  if (!res.ok) {
-    throw new Error("Failed to load customers")
-  }
-
+  if (!res.ok) throw new Error("Failed to load customers")
   return res.json() as Promise<{ data: any[]; pagination: PaginationMeta }>
 }
 
@@ -583,9 +581,56 @@ export async function getCustomerById(id: string) {
     headers: await getAuthHeaders(),
     cache: "no-store",
   })
-
   if (!res.ok) throw new Error(`Failed to load customer: ${res.status}`)
   return res.json() as Promise<{ data: any }>
+}
+
+export async function transitionLifecycle(customerId: string, toState: string, reason?: string) {
+  const res = await fetch(`${CUSTOMER_SERVICE}/customers/${customerId}/lifecycle`, {
+    method: "PATCH",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({ toState, reason }),
+  })
+  if (!res.ok) throw new Error(`Failed to transition lifecycle: ${res.status}`)
+  return res.json()
+}
+
+export async function getTags() {
+  const res = await fetch(`${CUSTOMER_SERVICE}/tags`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to load tags")
+  return res.json() as Promise<{ data: any[] }>
+}
+
+export async function createTag(name: string, colour?: string) {
+  const res = await fetch(`${CUSTOMER_SERVICE}/tags`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({ name, colour }),
+  })
+  if (!res.ok) throw new Error("Failed to create tag")
+  return res.json()
+}
+
+export async function applyTagToPerson(customerId: string, tagId: string) {
+  const res = await fetch(`${CUSTOMER_SERVICE}/customers/${customerId}/tags`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({ tagId }),
+  })
+  if (!res.ok) throw new Error("Failed to apply tag")
+  return res.json()
+}
+
+export async function removeTagFromPerson(customerId: string, tagId: string) {
+  const res = await fetch(`${CUSTOMER_SERVICE}/customers/${customerId}/tags/${tagId}`, {
+    method: "DELETE",
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) throw new Error("Failed to remove tag")
+  return res.json()
 }
 
 export async function getMembershipById(id: string) {

@@ -7,8 +7,8 @@ import type { UpdateCustomerDto } from './dto/update-customer.dto.js'
 export class CustomersService {
   constructor(private readonly repo: CustomersRepository) {}
 
-  async list(tenantId: string, page: number, limit: number, search?: string) {
-    const { customers, total } = await this.repo.list(tenantId, page, limit, search)
+  async list(tenantId: string, page: number, limit: number, search?: string, lifecycle?: string) {
+    const { customers, total } = await this.repo.list(tenantId, page, limit, search, lifecycle)
     return {
       data: customers,
       pagination: {

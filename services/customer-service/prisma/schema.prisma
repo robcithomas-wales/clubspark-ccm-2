@@ -1,5 +1,5 @@
 // ClubSpark — Customer Service Prisma Schema
-// Owns the customer schema: customers
+// Owns the customer schema: customers, lifecycle_history, tags, person_tags
 
 generator client {
   provider        = "prisma-client-js"
@@ -22,11 +22,84 @@ model Customer {
   phone               String?
   marketingConsent    Boolean   @default(false) @map("marketing_consent")
   consentRecordedAt   DateTime? @map("consent_recorded_at")
+
+  // People platform fields
+  lifecycleState      String    @default("active") @map("lifecycle_state")
+  lifecycleChangedAt  DateTime? @map("lifecycle_changed_at")
+  source              String?   @default("admin")
+  dateOfBirth         DateTime? @map("date_of_birth") @db.Date
+  avatarUrl           String?   @map("avatar_url")
+  commsPreferences    Json      @default("{}") @map("comms_preferences")
+  engagementScore     Int?      @map("engagement_score")
+  engagementBand      String?   @map("engagement_band")
+  lastActivityAt      DateTime? @map("last_activity_at")
+  mergedIntoId        String?   @map("merged_into_id") @db.Uuid
+  isPrimary           Boolean   @default(true) @map("is_primary")
+
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  lifecycleHistory    LifecycleHistory[]
+  personTags          PersonTag[]
 
   @@map("customers")
   @@schema("customer")
   @@index([tenantId])
   @@index([tenantId, email])
+  @@index([tenantId, lifecycleState])
+  @@index([tenantId, engagementBand])
+  @@index([tenantId, lastActivityAt])
+}
+
+model LifecycleHistory {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customerId String   @map("customer_id") @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  fromState  String?  @map("from_state")
+  toState    String   @map("to_state")
+  reason     String?
+  changedBy  String?  @map("changed_by")
+  changedAt  DateTime @default(now()) @map("changed_at")
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@map("lifecycle_history")
+  @@schema("customer")
+  @@index([customerId, changedAt])
+  @@index([tenantId])
+}
+
+model Tag {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  name      String
+  colour    String?
+  source    String   @default("manual")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  personTags PersonTag[]
+
+  @@unique([tenantId, name])
+  @@map("tags")
+  @@schema("customer")
+  @@index([tenantId])
+}
+
+model PersonTag {
+  customerId String    @map("customer_id") @db.Uuid
+  tagId      String    @map("tag_id") @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  appliedBy  String?   @map("applied_by")
+  appliedAt  DateTime  @default(now()) @map("applied_at")
+  expiresAt  DateTime? @map("expires_at")
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tag      Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([customerId, tagId])
+  @@map("person_tags")
+  @@schema("customer")
+  @@index([customerId])
+  @@index([tagId])
+  @@index([tenantId])
 }

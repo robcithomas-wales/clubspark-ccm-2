@@ -55,6 +55,16 @@ describe('Customer service — integration', () => {
       expect(res.body.data.email).toBe('jane.smith@example.com')
     })
 
+    it('creates a customer with default lifecycleState of active', async () => {
+      const res = await request
+        .post('/customers')
+        .set(JSON_HEADERS)
+        .send(VALID_CUSTOMER)
+
+      expect(res.status).toBe(201)
+      expect(res.body.data.lifecycleState).toBe('active')
+    })
+
     it('creates a customer with only required fields (no email or phone)', async () => {
       const res = await request
         .post('/customers')
@@ -122,7 +132,6 @@ describe('Customer service — integration', () => {
       const res = await request.get('/customers').set(HEADERS)
 
       expect(res.status).toBe(200)
-      // Response may be array or { data: [] }
       const list = Array.isArray(res.body) ? res.body : res.body.data ?? res.body
       expect(Array.isArray(list)).toBe(true)
       expect(list.length).toBe(0)
@@ -153,6 +162,23 @@ describe('Customer service — integration', () => {
       const list = Array.isArray(res.body) ? res.body : res.body.data ?? res.body
       expect(list.length).toBeGreaterThanOrEqual(1)
       expect(list.some((c: any) => c.firstName === 'Jane')).toBe(true)
+    })
+
+    it('filters by lifecycle state', async () => {
+      await request.post('/customers').set(JSON_HEADERS).send(VALID_CUSTOMER)
+      const created = await request.post('/customers').set(JSON_HEADERS)
+        .send({ firstName: 'Alice', lastName: 'Brown' })
+
+      // Transition Alice to lapsed
+      await request
+        .patch(`/customers/${created.body.data.id}/lifecycle`)
+        .set(JSON_HEADERS)
+        .send({ toState: 'lapsed' })
+
+      const res = await request.get('/customers?lifecycle=lapsed').set(HEADERS)
+      expect(res.status).toBe(200)
+      const list = Array.isArray(res.body) ? res.body : res.body.data ?? res.body
+      expect(list.every((c: any) => c.lifecycleState === 'lapsed')).toBe(true)
     })
 
     it('respects the limit parameter', async () => {
@@ -199,6 +225,20 @@ describe('Customer service — integration', () => {
       expect(res.status).toBe(200)
       expect(res.body.data.id).toBe(created.body.data.id)
       expect(res.body.data.firstName).toBe('Jane')
+    })
+
+    it('includes personTags in the response', async () => {
+      const created = await request
+        .post('/customers')
+        .set(JSON_HEADERS)
+        .send(VALID_CUSTOMER)
+
+      const res = await request
+        .get(`/customers/${created.body.data.id}`)
+        .set(HEADERS)
+
+      expect(res.status).toBe(200)
+      expect(Array.isArray(res.body.data.personTags)).toBe(true)
     })
 
     it('returns 404 for a non-existent customer', async () => {
@@ -299,23 +339,159 @@ describe('Customer service — integration', () => {
   })
 
   // ══════════════════════════════════════════════════════════════════════════
-  // Tenant isolation
+  // Lifecycle transitions
   // ══════════════════════════════════════════════════════════════════════════
 
-  describe('Tenant isolation', () => {
-    it('does not return customers belonging to another tenant', async () => {
-      // Create a customer under the test tenant
+  describe('PATCH /customers/:id/lifecycle', () => {
+    it('transitions lifecycle state and returns updated customer', async () => {
       const created = await request
         .post('/customers')
         .set(JSON_HEADERS)
         .send(VALID_CUSTOMER)
 
-      // Request from a different tenant
+      const res = await request
+        .patch(`/customers/${created.body.data.id}/lifecycle`)
+        .set(JSON_HEADERS)
+        .send({ toState: 'inactive', reason: 'No bookings in 60 days' })
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.lifecycleState).toBe('inactive')
+      expect(res.body.data.lifecycleChangedAt).toBeDefined()
+    })
+
+    it('records history on each transition', async () => {
+      const created = await request
+        .post('/customers')
+        .set(JSON_HEADERS)
+        .send(VALID_CUSTOMER)
+      const id = created.body.data.id
+
+      await request.patch(`/customers/${id}/lifecycle`).set(JSON_HEADERS).send({ toState: 'inactive' })
+      await request.patch(`/customers/${id}/lifecycle`).set(JSON_HEADERS).send({ toState: 'lapsed' })
+
+      const res = await request.get(`/customers/${id}/lifecycle/history`).set(HEADERS)
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.length).toBeGreaterThanOrEqual(2)
+      expect(res.body.data[0].toState).toBe('lapsed')
+      expect(res.body.data[1].toState).toBe('inactive')
+    })
+
+    it('returns 400 for an invalid lifecycle state', async () => {
+      const created = await request
+        .post('/customers')
+        .set(JSON_HEADERS)
+        .send(VALID_CUSTOMER)
+
+      const res = await request
+        .patch(`/customers/${created.body.data.id}/lifecycle`)
+        .set(JSON_HEADERS)
+        .send({ toState: 'flying' })
+
+      expect(res.status).toBe(400)
+    })
+
+    it('returns 404 for a non-existent customer', async () => {
+      const res = await request
+        .patch(`/customers/${TEST_NONEXISTENT_ID}/lifecycle`)
+        .set(JSON_HEADERS)
+        .send({ toState: 'inactive' })
+
+      expect(res.status).toBe(404)
+    })
+  })
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Tags
+  // ══════════════════════════════════════════════════════════════════════════
+
+  describe('Tags', () => {
+    it('creates a tag and lists it', async () => {
+      const create = await request
+        .post('/tags')
+        .set(JSON_HEADERS)
+        .send({ name: 'Junior', colour: '#10b981' })
+
+      expect(create.status).toBe(201)
+      expect(create.body.data.name).toBe('Junior')
+
+      const list = await request.get('/tags').set(HEADERS)
+      expect(list.status).toBe(200)
+      expect(list.body.data.some((t: any) => t.name === 'Junior')).toBe(true)
+    })
+
+    it('returns 409 when creating a duplicate tag name', async () => {
+      await request.post('/tags').set(JSON_HEADERS).send({ name: 'VIP' })
+      const res = await request.post('/tags').set(JSON_HEADERS).send({ name: 'VIP' })
+      expect(res.status).toBe(409)
+    })
+
+    it('applies a tag to a customer and lists person tags', async () => {
+      const tagRes = await request.post('/tags').set(JSON_HEADERS).send({ name: 'Coach' })
+      const tagId = tagRes.body.data.id
+
+      const custRes = await request.post('/customers').set(JSON_HEADERS).send(VALID_CUSTOMER)
+      const customerId = custRes.body.data.id
+
+      const apply = await request
+        .post(`/customers/${customerId}/tags`)
+        .set(JSON_HEADERS)
+        .send({ tagId })
+
+      expect(apply.status).toBe(200)
+      expect(apply.body.data.name).toBe('Coach')
+
+      const tags = await request.get(`/customers/${customerId}/tags`).set(HEADERS)
+      expect(tags.status).toBe(200)
+      expect(tags.body.data.some((t: any) => t.name === 'Coach')).toBe(true)
+    })
+
+    it('removes a tag from a customer', async () => {
+      const tagRes = await request.post('/tags').set(JSON_HEADERS).send({ name: 'Trial' })
+      const tagId = tagRes.body.data.id
+
+      const custRes = await request.post('/customers').set(JSON_HEADERS).send(VALID_CUSTOMER)
+      const customerId = custRes.body.data.id
+
+      await request.post(`/customers/${customerId}/tags`).set(JSON_HEADERS).send({ tagId })
+
+      const remove = await request
+        .delete(`/customers/${customerId}/tags/${tagId}`)
+        .set(HEADERS)
+
+      expect(remove.status).toBe(200)
+
+      const tags = await request.get(`/customers/${customerId}/tags`).set(HEADERS)
+      expect(tags.body.data.some((t: any) => t.name === 'Trial')).toBe(false)
+    })
+
+    it('deletes a tag from the catalogue', async () => {
+      const tagRes = await request.post('/tags').set(JSON_HEADERS).send({ name: 'Temporary' })
+      const tagId = tagRes.body.data.id
+
+      const del = await request.delete(`/tags/${tagId}`).set(HEADERS)
+      expect(del.status).toBe(200)
+
+      const list = await request.get('/tags').set(HEADERS)
+      expect(list.body.data.some((t: any) => t.id === tagId)).toBe(false)
+    })
+  })
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Tenant isolation
+  // ══════════════════════════════════════════════════════════════════════════
+
+  describe('Tenant isolation', () => {
+    it('does not return customers belonging to another tenant', async () => {
+      const created = await request
+        .post('/customers')
+        .set(JSON_HEADERS)
+        .send(VALID_CUSTOMER)
+
       const res = await request
         .get(`/customers/${created.body.data.id}`)
         .set({ 'x-tenant-id': '99000000-0000-4000-8000-000000000099' })
 
-      // Should be 404 — not visible to other tenant
       expect(res.status).toBe(404)
     })
   })

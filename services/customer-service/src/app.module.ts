@@ -8,6 +8,8 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js'
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor.js'
 import { HealthModule } from './health/health.module.js'
 import { CustomersModule } from './customers/customers.module.js'
+import { LifecycleModule } from './lifecycle/lifecycle.module.js'
+import { TagsModule } from './tags/tags.module.js'
 
 @Module({
   imports: [
@@ -15,6 +17,8 @@ import { CustomersModule } from './customers/customers.module.js'
     PrismaModule,
     HealthModule,
     CustomersModule,
+    LifecycleModule,
+    TagsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: TenantContextGuard },

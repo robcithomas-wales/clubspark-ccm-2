@@ -26,14 +26,16 @@ export class CustomersController {
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({ name: 'lifecycle', required: false, type: String })
   list(
     @Request() req: FastifyRequest & { tenantContext: { tenantId: string } },
     @Query('page') page = 1,
     @Query('limit') limit = 25,
     @Query('search') search?: string,
+    @Query('lifecycle') lifecycle?: string,
   ) {
     const safeLimit = Math.min(Number(limit), 100)
-    return this.service.list(req.tenantContext.tenantId, Number(page), safeLimit, search)
+    return this.service.list(req.tenantContext.tenantId, Number(page), safeLimit, search, lifecycle)
   }
 
   @Get(':id')

@@ -7,11 +7,12 @@ import type { UpdateCustomerDto } from './dto/update-customer.dto.js'
 export class CustomersRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(tenantId: string, page: number, limit: number, search?: string) {
+  async list(tenantId: string, page: number, limit: number, search?: string, lifecycle?: string) {
     const offset = (page - 1) * limit
 
     const where = {
       tenantId,
+      ...(lifecycle ? { lifecycleState: lifecycle } : {}),
       ...(search
         ? {
             OR: [
@@ -29,6 +30,9 @@ export class CustomersRepository {
         orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
         skip: offset,
         take: limit,
+        include: {
+          personTags: { include: { tag: true }, orderBy: { appliedAt: 'desc' } },
+        },
       }),
       this.prisma.customer.count({ where }),
     ])
@@ -39,6 +43,9 @@ export class CustomersRepository {
   async findById(tenantId: string, id: string) {
     return this.prisma.customer.findFirst({
       where: { tenantId, id },
+      include: {
+        personTags: { include: { tag: true }, orderBy: { appliedAt: 'desc' } },
+      },
     })
   }
 
