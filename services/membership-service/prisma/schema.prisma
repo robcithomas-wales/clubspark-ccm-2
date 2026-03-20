@@ -97,6 +97,9 @@ model Membership {
   lapsedAt       DateTime? @map("lapsed_at")
   expiredAt      DateTime? @map("expired_at")
 
+  // Phase 2: member role within the plan (player | coach | parent | manager | admin | junior)
+  memberRole     String?   @map("member_role")
+
   // Phase 2: manual payment recording
   paymentRecordedAt DateTime? @map("payment_recorded_at")
   paymentReference  String?   @map("payment_reference")

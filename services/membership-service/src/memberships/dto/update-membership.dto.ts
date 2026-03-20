@@ -48,4 +48,8 @@ export class UpdateMembershipDto {
   @IsOptional()
   @IsString()
   notes?: string
+
+  @IsOptional()
+  @IsString()
+  memberRole?: string
 }

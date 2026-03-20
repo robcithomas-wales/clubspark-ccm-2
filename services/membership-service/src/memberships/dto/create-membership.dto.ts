@@ -46,4 +46,8 @@ export class CreateMembershipDto {
   @IsOptional()
   @IsString()
   notes?: string
+
+  @IsOptional()
+  @IsString()
+  memberRole?: string
 }

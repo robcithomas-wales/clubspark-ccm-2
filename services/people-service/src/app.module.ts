@@ -10,6 +10,8 @@ import { HealthModule } from './health/health.module.js'
 import { CustomersModule } from './customers/customers.module.js'
 import { LifecycleModule } from './lifecycle/lifecycle.module.js'
 import { TagsModule } from './tags/tags.module.js'
+import { RolesModule } from './roles/roles.module.js'
+import { HouseholdsModule } from './households/households.module.js'
 
 @Module({
   imports: [
@@ -19,6 +21,8 @@ import { TagsModule } from './tags/tags.module.js'
     CustomersModule,
     LifecycleModule,
     TagsModule,
+    RolesModule,
+    HouseholdsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: TenantContextGuard },

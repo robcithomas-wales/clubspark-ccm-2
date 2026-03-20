@@ -1,11 +1,15 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ChevronLeft, Mail, Phone, CalendarDays, Hash, ShieldCheck } from "lucide-react"
+import { ChevronLeft, Mail, Phone, CalendarDays, Hash, ShieldCheck, MapPin } from "lucide-react"
 import { PortalLayout } from "@/components/portal-layout"
-import { getCustomerById, getTags } from "@/lib/api"
+import { getCustomerById, getTags, getPersonRelationships, getPersonHouseholds } from "@/lib/api"
 import { EditCustomerPanel } from "@/components/edit-customer-panel"
 import { LifecyclePanel } from "@/components/lifecycle-panel"
 import { PersonTagsPanel } from "@/components/person-tags-panel"
+import { PersonBookingsPanel } from "@/components/person-bookings-panel"
+import { PersonMembershipsPanel } from "@/components/person-memberships-panel"
+import { PersonRolesPanel } from "@/components/person-roles-panel"
+import { PersonRelationshipsPanel } from "@/components/person-relationships-panel"
 
 function formatDate(value?: string | null) {
   if (!value) return "n/a"
@@ -47,11 +51,19 @@ export default async function PersonDetailPage({
   if (!person) notFound()
 
   let catalogueTags: any[] = []
+  let relationships: any[] = []
+  let households: any[] = []
   try {
-    const tagsResult = await getTags()
-    catalogueTags = tagsResult.data ?? []
+    const [tagsResult, rels, hh] = await Promise.allSettled([
+      getTags(),
+      getPersonRelationships(id),
+      getPersonHouseholds(id),
+    ])
+    if (tagsResult.status === "fulfilled") catalogueTags = tagsResult.value.data ?? []
+    if (rels.status === "fulfilled") relationships = rels.value
+    if (hh.status === "fulfilled") households = hh.value
   } catch {
-    // non-fatal — tags panel will show empty catalogue
+    // non-fatal
   }
 
   return (
@@ -122,6 +134,20 @@ export default async function PersonDetailPage({
               </div>
             </div>
 
+            {(person.addressLine1 || person.city || person.postcode) && (
+              <div className="flex items-start gap-3 bg-white px-6 py-5 md:col-span-2">
+                <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-slate-400" />
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Address</div>
+                  <div className="mt-1 text-sm font-medium text-slate-900 leading-relaxed">
+                    {[person.addressLine1, person.addressLine2, person.city, person.county, person.postcode]
+                      .filter(Boolean)
+                      .join(", ")}
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center gap-3 bg-white px-6 py-5 md:col-span-2">
               <Hash className="h-5 w-5 shrink-0 text-slate-400" />
               <div>
@@ -131,6 +157,17 @@ export default async function PersonDetailPage({
             </div>
           </div>
         </div>
+
+        <PersonRolesPanel
+          customerId={person.id}
+          initialRoles={person.personRoles ?? []}
+        />
+
+        <PersonRelationshipsPanel
+          customerId={person.id}
+          initialRelationships={relationships}
+          initialHouseholds={households}
+        />
 
         <LifecyclePanel
           customerId={person.id}
@@ -143,6 +180,10 @@ export default async function PersonDetailPage({
           catalogueTags={catalogueTags}
         />
 
+        <PersonMembershipsPanel customerId={person.id} />
+
+        <PersonBookingsPanel customerId={person.id} />
+
         <EditCustomerPanel
           customerId={person.id}
           firstName={person.firstName ?? ""}
@@ -150,6 +191,12 @@ export default async function PersonDetailPage({
           email={person.email ?? ""}
           phone={person.phone ?? ""}
           marketingConsent={person.marketingConsent ?? false}
+          addressLine1={person.addressLine1 ?? ""}
+          addressLine2={person.addressLine2 ?? ""}
+          city={person.city ?? ""}
+          county={person.county ?? ""}
+          postcode={person.postcode ?? ""}
+          country={person.country ?? "GB"}
         />
 
         <div className="flex gap-3">

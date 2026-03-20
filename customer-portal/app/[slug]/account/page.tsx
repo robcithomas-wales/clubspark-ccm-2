@@ -135,7 +135,7 @@ export default function AccountPage() {
           </button>
 
           {membership && membershipExpanded && (
-            <div className="border-t border-slate-100 px-6 py-4 bg-slate-50">
+            <div className="border-t border-slate-100 px-6 py-4 bg-slate-50 space-y-4">
               <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
                 <Stat label="Plan" value={membership.planName} />
                 <Stat label="Status" value={membership.status} />
@@ -143,6 +143,14 @@ export default function AccountPage() {
                 {membership.endDate && <Stat label="Expires" value={format(parseISO(membership.endDate), "d MMM yyyy")} />}
                 <Stat label="Price" value={`£${parseFloat(membership.price).toFixed(2)}`} />
               </dl>
+              <Link
+                href={`/${org.slug}/memberships`}
+                className="inline-block text-xs font-semibold"
+                style={{ color: primary }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                Browse all plans →
+              </Link>
             </div>
           )}
         </div>

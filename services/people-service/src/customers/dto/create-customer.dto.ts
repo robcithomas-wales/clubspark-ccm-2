@@ -26,4 +26,34 @@ export class CreateCustomerDto {
   @IsString()
   @IsOptional()
   phone?: string
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  addressLine1?: string
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  addressLine2?: string
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  city?: string
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  county?: string
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  postcode?: string
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  country?: string
 }

@@ -106,7 +106,7 @@ export class MembershipPlansRepository {
         currency: input.currency ?? 'GBP',
         billingInterval: input.billingInterval ?? null,
         instalmentCount: input.instalmentCount ?? null,
-        eligibility: input.eligibility ?? undefined,
+        eligibility: (input.eligibility ?? undefined) as any,
         gracePeriodDays: input.gracePeriodDays ?? null,
         termsAndConditions: input.termsAndConditions ?? null,
       },
@@ -123,7 +123,7 @@ export class MembershipPlansRepository {
 
     const plan = await this.prisma.membershipPlan.update({
       where: { id },
-      data: { eligibility },
+      data: { eligibility: eligibility as any },
       include: { scheme: { select: { name: true } } },
     })
     return this.format(plan)
@@ -156,7 +156,7 @@ export class MembershipPlansRepository {
         currency: input.currency ?? existing.currency,
         billingInterval: input.billingInterval !== undefined ? input.billingInterval : existing.billingInterval,
         instalmentCount: input.instalmentCount !== undefined ? input.instalmentCount : existing.instalmentCount,
-        eligibility: input.eligibility !== undefined ? input.eligibility : (existing.eligibility as Record<string, unknown> | null),
+        eligibility: (input.eligibility !== undefined ? input.eligibility : existing.eligibility) as any,
         gracePeriodDays: input.gracePeriodDays !== undefined ? input.gracePeriodDays : existing.gracePeriodDays,
         termsAndConditions: input.termsAndConditions !== undefined ? input.termsAndConditions : existing.termsAndConditions,
       },

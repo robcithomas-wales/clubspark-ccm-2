@@ -17,6 +17,7 @@ import { PageSection } from "@/components/ui/page-section"
 import { SurfaceCard } from "@/components/ui/surface-card"
 import { EditPlanEligibilityPanel } from "@/components/edit-plan-eligibility-panel"
 import { EditPlanConfigPanel } from "@/components/edit-plan-config-panel"
+import { EditMemberDiscountPanel } from "@/components/edit-member-discount-panel"
 
 type EntitlementItem = {
   id?: string
@@ -222,6 +223,13 @@ export default async function MembershipPlanDetailPage({
             gracePeriodDays={plan.gracePeriodDays}
             termsAndConditions={plan.termsAndConditions}
           />
+        </PageSection>
+
+        <PageSection
+          title="Member Discount"
+          description="Percentage off the rack rate applied automatically when an active member books"
+        >
+          <EditMemberDiscountPanel planId={id} entitlements={entitlementItems} />
         </PageSection>
 
         <PageSection

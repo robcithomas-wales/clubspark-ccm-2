@@ -43,6 +43,23 @@ export class CustomersService {
     return { data: customer }
   }
 
+  async bulkImport(tenantId: string, rows: CreateCustomerDto[]) {
+    const results = { created: 0, skipped: 0, errors: 0 }
+    for (const row of rows) {
+      try {
+        if (row.email) {
+          const existing = await this.repo.findByEmail(tenantId, row.email)
+          if (existing) { results.skipped++; continue }
+        }
+        await this.repo.create(tenantId, row)
+        results.created++
+      } catch {
+        results.errors++
+      }
+    }
+    return results
+  }
+
   async update(tenantId: string, id: string, dto: UpdateCustomerDto) {
     const existing = await this.repo.findById(tenantId, id)
     if (!existing) throw new NotFoundException('Customer not found')

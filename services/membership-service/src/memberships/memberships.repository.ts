@@ -54,6 +54,7 @@ interface WriteInput {
   customerId?: string | null
   ownerType?: string | null
   ownerId?: string | null
+  memberRole?: string | null
   status: string
   startDate: string
   endDate?: string | null
@@ -125,6 +126,7 @@ export class MembershipsRepository {
         customerId: input.customerId ?? null,
         ownerType: input.ownerType ?? null,
         ownerId: input.ownerId ?? null,
+        memberRole: input.memberRole ?? null,
         status: input.status,
         startDate: new Date(input.startDate),
         endDate: input.endDate ? new Date(input.endDate) : null,
@@ -148,6 +150,7 @@ export class MembershipsRepository {
         customerId: input.customerId ?? null,
         ownerType: input.ownerType ?? null,
         ownerId: input.ownerId ?? null,
+        memberRole: input.memberRole ?? null,
         status: input.status,
         startDate: new Date(input.startDate),
         endDate: input.endDate ? new Date(input.endDate) : null,

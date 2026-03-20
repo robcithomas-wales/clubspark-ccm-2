@@ -90,13 +90,21 @@ export default async function MembershipsPage({
                 : `memberships${status ? ` · ${formatLabel(status)}` : ""}${paymentStatus ? ` · ${formatLabel(paymentStatus)}` : ""}`}
             </p>
           </div>
-          <Link
-            href="/membership/memberships/new"
-            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-          >
-            <Plus className="h-4 w-4" />
-            Create Membership
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/membership/memberships/bulk-assign"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Bulk assign
+            </Link>
+            <Link
+              href="/membership/memberships/new"
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+            >
+              <Plus className="h-4 w-4" />
+              Create Membership
+            </Link>
+          </div>
         </div>
 
         {/* Status tabs */}

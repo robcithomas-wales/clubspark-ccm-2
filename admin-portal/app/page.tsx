@@ -26,6 +26,7 @@ import {
   getMembershipSchemes,
   getMemberships,
   getMembershipsRenewalsDue,
+  getMembershipsWithFilter,
   getOrganisation,
   getResources,
   getVenues,
@@ -116,6 +117,7 @@ export default async function DashboardPage() {
     statsResult,
     dailyStatsResult,
     renewalsDueResult,
+    unpaidMembershipsResult,
   ] = await Promise.allSettled([
     getVenues(),
     getResources(),
@@ -131,6 +133,7 @@ export default async function DashboardPage() {
     getBookingStats(),
     getBookingDailyStats(30),
     getMembershipsRenewalsDue(30),
+    getMembershipsWithFilter({ status: "active", paymentStatus: "unpaid", limit: 100 }),
   ])
 
   const venuesResponse = venuesResult.status === "fulfilled" ? venuesResult.value : null
@@ -147,6 +150,7 @@ export default async function DashboardPage() {
   const bookingStats = statsResult.status === "fulfilled" ? statsResult.value : null
   const dailyStats = dailyStatsResult.status === "fulfilled" ? dailyStatsResult.value : []
   const renewalsDue: any[] = renewalsDueResult.status === "fulfilled" ? ((renewalsDueResult.value as any)?.data ?? []) : []
+  const unpaidMemberships: any[] = unpaidMembershipsResult.status === "fulfilled" ? ((unpaidMembershipsResult.value as any)?.data ?? []) : []
 
   function extractData(r: any): any[] {
     if (!r) return []
@@ -230,10 +234,10 @@ export default async function DashboardPage() {
       summary: `${activeBookings.length} active bookings with live availability controls`,
     },
     {
-      title: "Customers",
-      href: "/customers",
+      title: "People",
+      href: "/people",
       icon: Users,
-      summary: `${customers.length} customer records linked to bookings and memberships`,
+      summary: `${customers.length} contact records linked to bookings and memberships`,
     },
     {
       title: "Membership",
@@ -423,7 +427,41 @@ export default async function DashboardPage() {
           </SectionCard>
         </div>
 
-        {/* Renewal alerts widget */}
+        {/* Operational alerts */}
+        {(renewalsDue.length > 0 || unpaidMemberships.length > 0) && (
+          <div className="grid gap-4 md:grid-cols-2">
+            {renewalsDue.length > 0 && (
+              <Link href="/membership/memberships?paymentStatus=renewals" className="group flex items-center justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 transition hover:border-amber-300 hover:bg-amber-100">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 group-hover:bg-amber-200">
+                    <CalendarDays className="h-5 w-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-amber-900">{renewalsDue.length} renewal{renewalsDue.length !== 1 ? "s" : ""} due</div>
+                    <div className="text-xs text-amber-700">Within the next 30 days</div>
+                  </div>
+                </div>
+                <ArrowRight className="h-4 w-4 shrink-0 text-amber-500" />
+              </Link>
+            )}
+            {unpaidMemberships.length > 0 && (
+              <Link href="/membership/memberships?paymentStatus=unpaid" className="group flex items-center justify-between gap-4 rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 transition hover:border-rose-300 hover:bg-rose-100">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-100 group-hover:bg-rose-200">
+                    <PoundSterling className="h-5 w-5 text-rose-600" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-rose-900">{unpaidMemberships.length} unpaid membership{unpaidMemberships.length !== 1 ? "s" : ""}</div>
+                    <div className="text-xs text-rose-700">Active members with outstanding payment</div>
+                  </div>
+                </div>
+                <ArrowRight className="h-4 w-4 shrink-0 text-rose-500" />
+              </Link>
+            )}
+          </div>
+        )}
+
+        {/* Renewal detail widget */}
         {renewalsDue.length > 0 && (
           <SectionCard
             title={`Renewals Due (${renewalsDue.length})`}

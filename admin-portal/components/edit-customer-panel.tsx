@@ -11,6 +11,12 @@ interface EditCustomerPanelProps {
   email: string
   phone: string
   marketingConsent: boolean
+  addressLine1?: string
+  addressLine2?: string
+  city?: string
+  county?: string
+  postcode?: string
+  country?: string
 }
 
 export function EditCustomerPanel({
@@ -20,12 +26,21 @@ export function EditCustomerPanel({
   email,
   phone,
   marketingConsent,
+  addressLine1 = "",
+  addressLine2 = "",
+  city = "",
+  county = "",
+  postcode = "",
+  country = "GB",
 }: EditCustomerPanelProps) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [form, setForm] = useState({ firstName, lastName, email, phone, marketingConsent })
+  const [form, setForm] = useState({
+    firstName, lastName, email, phone, marketingConsent,
+    addressLine1, addressLine2, city, county, postcode, country,
+  })
 
   async function handleSave() {
     setSaving(true)
@@ -106,6 +121,49 @@ export function EditCustomerPanel({
                 onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#1857E0]"
               />
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Address</div>
+            <div className="grid gap-3">
+              <input
+                type="text"
+                placeholder="Address line 1"
+                value={form.addressLine1}
+                onChange={(e) => setForm((f) => ({ ...f, addressLine1: e.target.value }))}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#1857E0]"
+              />
+              <input
+                type="text"
+                placeholder="Address line 2 (optional)"
+                value={form.addressLine2}
+                onChange={(e) => setForm((f) => ({ ...f, addressLine2: e.target.value }))}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#1857E0]"
+              />
+              <div className="grid gap-3 md:grid-cols-3">
+                <input
+                  type="text"
+                  placeholder="Town / City"
+                  value={form.city}
+                  onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#1857E0]"
+                />
+                <input
+                  type="text"
+                  placeholder="County"
+                  value={form.county}
+                  onChange={(e) => setForm((f) => ({ ...f, county: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#1857E0]"
+                />
+                <input
+                  type="text"
+                  placeholder="Postcode"
+                  value={form.postcode}
+                  onChange={(e) => setForm((f) => ({ ...f, postcode: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#1857E0]"
+                />
+              </div>
             </div>
           </div>
 

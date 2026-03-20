@@ -5,185 +5,270 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { UserPlus } from "lucide-react"
 
-const tenantId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+const INPUT_CLS =
+  "w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-[#1857E0] focus:ring-2 focus:ring-[#1857E0]/10 placeholder:text-slate-400"
 
-export function NewCustomerForm({
-  returnTo = "/customers",
+function Field({
+  label,
+  required,
+  children,
 }: {
-  returnTo?: string
+  label: string
+  required?: boolean
+  children: React.ReactNode
 }) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-xs font-medium text-slate-600">
+        {label}
+        {required && <span className="ml-0.5 text-rose-500">*</span>}
+      </label>
+      {children}
+    </div>
+  )
+}
+
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-3 pt-2">
+      <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">{children}</div>
+      <div className="flex-1 border-t border-slate-100" />
+    </div>
+  )
+}
+
+export function NewCustomerForm({ returnTo = "/people" }: { returnTo?: string }) {
   const router = useRouter()
 
-  const [firstName, setFirstName] = React.useState("")
-  const [lastName, setLastName] = React.useState("")
-  const [email, setEmail] = React.useState("")
-  const [phone, setPhone] = React.useState("")
+  const [form, setForm] = React.useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    addressLine1: "",
+    addressLine2: "",
+    city: "",
+    county: "",
+    postcode: "",
+    country: "GB",
+    marketingConsent: false,
+  })
+
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  function set(field: keyof typeof form) {
+    return (e: React.ChangeEvent<HTMLInputElement>) =>
+      setForm((f) => ({ ...f, [field]: e.target.value }))
+  }
 
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
     setError(null)
 
-    if (!firstName.trim() || !lastName.trim()) {
+    if (!form.firstName.trim() || !form.lastName.trim()) {
       setError("First name and last name are required.")
       return
     }
 
     setIsSubmitting(true)
-
     try {
       const response = await fetch("/api/customers", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tenantId,
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-          email: email.trim() || null,
-          phone: phone.trim() || null,
+          firstName: form.firstName.trim(),
+          lastName: form.lastName.trim(),
+          email: form.email.trim() || null,
+          phone: form.phone.trim() || null,
+          addressLine1: form.addressLine1.trim() || null,
+          addressLine2: form.addressLine2.trim() || null,
+          city: form.city.trim() || null,
+          county: form.county.trim() || null,
+          postcode: form.postcode.trim() || null,
+          country: form.country.trim() || "GB",
+          marketingConsent: form.marketingConsent,
         }),
       })
 
       const result = await response.json().catch(() => null)
 
       if (!response.ok) {
-        setError(result?.error || "Failed to create customer.")
+        setError(result?.error ?? result?.message ?? "Failed to create person.")
         return
       }
 
-      const separator = returnTo.includes("?") ? "&" : "?"
-      router.push(`${returnTo}${separator}customerId=${encodeURIComponent(result.id)}`)
+      const newId = result?.data?.id ?? result?.id
+      router.push(newId ? `/people/${newId}` : returnTo)
       router.refresh()
     } catch {
-      setError("Something went wrong while creating the customer.")
+      setError("Something went wrong. Please try again.")
     } finally {
       setIsSubmitting(false)
     }
   }
 
   return (
-    <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-200 px-6 py-5">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#1857E0] text-white">
-            <UserPlus className="h-5 w-5" />
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold text-slate-900">
-              Create customer
-            </h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Add a customer record so bookings can be made on their behalf.
-            </p>
-          </div>
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md">
+      {/* Header */}
+      <div className="flex items-center gap-4 border-b border-slate-200 px-6 py-5">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#1857E0] text-white">
+          <UserPlus className="h-5 w-5" />
+        </div>
+        <div>
+          <h2 className="text-base font-semibold text-slate-900">New person</h2>
+          <p className="mt-0.5 text-sm text-slate-500">
+            Fill in what you know — only name is required.
+          </p>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6 px-6 py-6">
-        <div className="grid gap-4 md:grid-cols-2">
-          <div>
-            <label
-              htmlFor="firstName"
-              className="mb-2 block text-sm font-medium text-slate-700"
-            >
-              First name
-            </label>
+      <form onSubmit={handleSubmit} className="space-y-5 px-6 py-6">
+        {/* Name */}
+        <SectionHeading>Name</SectionHeading>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="First name" required>
             <input
-              id="firstName"
               type="text"
-              value={firstName}
-              onChange={(event) => setFirstName(event.target.value)}
-              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none"
+              autoFocus
+              value={form.firstName}
+              onChange={set("firstName")}
+              className={INPUT_CLS}
               placeholder="Sarah"
             />
-          </div>
-
-          <div>
-            <label
-              htmlFor="lastName"
-              className="mb-2 block text-sm font-medium text-slate-700"
-            >
-              Last name
-            </label>
+          </Field>
+          <Field label="Last name" required>
             <input
-              id="lastName"
               type="text"
-              value={lastName}
-              onChange={(event) => setLastName(event.target.value)}
-              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none"
+              value={form.lastName}
+              onChange={set("lastName")}
+              className={INPUT_CLS}
               placeholder="Jones"
             />
-          </div>
+          </Field>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <div>
-            <label
-              htmlFor="email"
-              className="mb-2 block text-sm font-medium text-slate-700"
-            >
-              Email
-            </label>
+        {/* Contact */}
+        <SectionHeading>Contact</SectionHeading>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Email">
             <input
-              id="email"
               type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none"
+              value={form.email}
+              onChange={set("email")}
+              className={INPUT_CLS}
               placeholder="sarah.jones@example.com"
             />
-          </div>
-
-          <div>
-            <label
-              htmlFor="phone"
-              className="mb-2 block text-sm font-medium text-slate-700"
-            >
-              Phone
-            </label>
+          </Field>
+          <Field label="Phone">
             <input
-              id="phone"
-              type="text"
-              value={phone}
-              onChange={(event) => setPhone(event.target.value)}
-              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none"
-              placeholder="07700900123"
+              type="tel"
+              value={form.phone}
+              onChange={set("phone")}
+              className={INPUT_CLS}
+              placeholder="07700 900123"
             />
+          </Field>
+        </div>
+
+        {/* Address */}
+        <SectionHeading>Address</SectionHeading>
+        <div className="space-y-3">
+          <Field label="Address line 1">
+            <input
+              type="text"
+              value={form.addressLine1}
+              onChange={set("addressLine1")}
+              className={INPUT_CLS}
+              placeholder="12 Highfield Road"
+            />
+          </Field>
+          <Field label="Address line 2">
+            <input
+              type="text"
+              value={form.addressLine2}
+              onChange={set("addressLine2")}
+              className={INPUT_CLS}
+              placeholder="Apartment, suite, etc. (optional)"
+            />
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label="Town / City">
+              <input
+                type="text"
+                value={form.city}
+                onChange={set("city")}
+                className={INPUT_CLS}
+                placeholder="Birmingham"
+              />
+            </Field>
+            <Field label="County">
+              <input
+                type="text"
+                value={form.county}
+                onChange={set("county")}
+                className={INPUT_CLS}
+                placeholder="West Midlands"
+              />
+            </Field>
+            <Field label="Postcode">
+              <input
+                type="text"
+                value={form.postcode}
+                onChange={set("postcode")}
+                className={INPUT_CLS}
+                placeholder="B1 1AA"
+              />
+            </Field>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-            Tenant
+        {/* Preferences */}
+        <SectionHeading>Preferences</SectionHeading>
+        <label className="flex cursor-pointer items-start gap-3">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={form.marketingConsent}
+            onClick={() => setForm((f) => ({ ...f, marketingConsent: !f.marketingConsent }))}
+            className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#1857E0] focus:ring-offset-2 ${
+              form.marketingConsent ? "bg-[#1857E0]" : "bg-slate-200"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                form.marketingConsent ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
+          <div>
+            <div className="text-sm font-medium text-slate-900">Marketing consent</div>
+            <div className="text-xs text-slate-500">
+              Person has agreed to receive marketing communications.
+            </div>
           </div>
-          <div className="mt-2 break-all text-sm text-slate-700">
-            {tenantId}
-          </div>
-        </div>
+        </label>
 
-        {error ? (
-          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+        {/* Error */}
+        {error && (
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
             {error}
           </div>
-        ) : null}
+        )}
 
-        <div className="flex items-center gap-3 pt-2">
+        {/* Actions */}
+        <div className="flex items-center gap-3 border-t border-slate-100 pt-4">
           <button
             type="submit"
             disabled={isSubmitting}
-            className="inline-flex items-center gap-2 rounded-xl bg-[#1857E0] px-4 py-2 text-sm font-semibold !text-white shadow-sm transition hover:bg-[#1832A8] disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-xl bg-[#1857E0] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1749C7] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <UserPlus className="h-4 w-4 !text-white" />
-            {isSubmitting ? "Creating customer..." : "Create customer"}
+            <UserPlus className="h-4 w-4" />
+            {isSubmitting ? "Creating…" : "Create person"}
           </button>
-
           <Link
             href={returnTo}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
           >
             Cancel
           </Link>

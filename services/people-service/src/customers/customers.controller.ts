@@ -57,6 +57,16 @@ export class CustomersController {
     return this.service.create(req.tenantContext.tenantId, dto)
   }
 
+  @Post('import')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Bulk import customers from parsed CSV rows' })
+  bulkImport(
+    @Request() req: FastifyRequest & { tenantContext: { tenantId: string } },
+    @Body() body: { rows: CreateCustomerDto[] },
+  ) {
+    return this.service.bulkImport(req.tenantContext.tenantId, body.rows)
+  }
+
   @Patch(':id')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update a customer' })

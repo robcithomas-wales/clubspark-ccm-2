@@ -1,9 +1,11 @@
+import { Suspense } from "react"
 import Link from "next/link"
-import { Plus } from "lucide-react"
+import { Plus, Upload } from "lucide-react"
 import { getCustomers } from "@/lib/api"
 import { PortalLayout } from "@/components/portal-layout"
 import { PaginationBar } from "@/components/pagination-bar"
 import { LifecycleBadge } from "@/components/lifecycle-panel"
+import { PeopleSearchBar } from "@/components/people-search-bar"
 
 type Person = {
   id: string
@@ -68,25 +70,37 @@ export default async function PeoplePage({
         </section>
 
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-col gap-4 border-b border-slate-200 px-6 py-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">People</h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Records available for phone, admin, and future app bookings.
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="hidden rounded-xl bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600 md:block">
-                {pagination?.total ?? 0} records
+          <div className="border-b border-slate-200 px-6 py-4 space-y-4">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">People</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Records available for phone, admin, and future app bookings.
+                </p>
               </div>
-              <Link
-                href="/people/new"
-                className="inline-flex items-center gap-2 rounded-xl bg-[#1857E0] px-4 py-2 text-sm font-semibold !text-white shadow-sm transition hover:bg-[#1832A8]"
-              >
-                <Plus className="h-4 w-4 !text-white" />
-                New person
-              </Link>
+              <div className="flex items-center gap-3">
+                <div className="hidden rounded-xl bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600 md:block">
+                  {pagination?.total ?? 0} records
+                </div>
+                <Link
+                  href="/people/import"
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+                >
+                  <Upload className="h-4 w-4" />
+                  Import CSV
+                </Link>
+                <Link
+                  href="/people/new"
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#1857E0] px-4 py-2 text-sm font-semibold !text-white shadow-sm transition hover:bg-[#1832A8]"
+                >
+                  <Plus className="h-4 w-4 !text-white" />
+                  New person
+                </Link>
+              </div>
             </div>
+            <Suspense>
+              <PeopleSearchBar />
+            </Suspense>
           </div>
 
           {people.length === 0 ? (

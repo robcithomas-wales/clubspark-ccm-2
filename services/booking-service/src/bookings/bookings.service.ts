@@ -9,6 +9,7 @@ import {
 import { BookingsRepository } from './bookings.repository.js'
 import { AvailabilityRepository } from '../availability/availability.repository.js'
 import { BookingRulesService } from '../booking-rules/booking-rules.service.js'
+import { MembershipClient } from '../membership/membership.client.js'
 import type { CreateBookingDto } from './dto/create-booking.dto.js'
 import type { CreateBookingAddOnDto } from './dto/create-booking-add-on.dto.js'
 import type { UpdatePaymentStatusDto } from './dto/update-payment-status.dto.js'
@@ -23,6 +24,7 @@ export class BookingsService {
     private readonly repo: BookingsRepository,
     private readonly availabilityRepo: AvailabilityRepository,
     private readonly rulesService: BookingRulesService,
+    private readonly membershipClient: MembershipClient,
   ) {}
 
   async list(
@@ -70,6 +72,20 @@ export class BookingsService {
     const conflictMap = await this.availabilityRepo.getConflictMapForUnits([dto.bookableUnitId])
     const unitIds = conflictMap.get(dto.bookableUnitId) ?? [dto.bookableUnitId]
 
+    // Apply member pricing discount (Option A — percentage off rack rate)
+    let resolvedDto = dto
+    if (dto.customerId && dto.price != null) {
+      const discountPct = await this.membershipClient.resolveMemberDiscount(ctx.tenantId, dto.customerId)
+      if (discountPct != null && discountPct > 0) {
+        const discountedPrice = parseFloat((dto.price * (1 - discountPct / 100)).toFixed(2))
+        resolvedDto = { ...dto, price: discountedPrice }
+        this.logger.log(
+          { customerId: dto.customerId, discountPct, original: dto.price, discounted: discountedPrice },
+          'Member discount applied',
+        )
+      }
+    }
+
     this.logger.log(
       { organisationId: ctx.organisationId, bookableUnitId: dto.bookableUnitId },
       'Creating booking',
@@ -80,7 +96,7 @@ export class BookingsService {
       ctx.tenantId,
       ctx.organisationId,
       unitIds,
-      dto,
+      resolvedDto,
     )
 
     return booking

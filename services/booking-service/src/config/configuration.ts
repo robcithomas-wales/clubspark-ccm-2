@@ -12,6 +12,10 @@ export const configuration = () => ({
     defaultTenantId: process.env['DEFAULT_TENANT_ID'] ?? 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
     defaultOrgId: process.env['DEFAULT_ORG_ID'] ?? '11111111-1111-1111-1111-111111111111',
   },
+
+  membershipService: {
+    url: process.env['MEMBERSHIP_SERVICE_URL'] ?? 'http://localhost:4010',
+  },
 })
 
 export type AppConfig = ReturnType<typeof configuration>

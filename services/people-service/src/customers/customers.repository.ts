@@ -45,6 +45,7 @@ export class CustomersRepository {
       where: { tenantId, id },
       include: {
         personTags: { include: { tag: true }, orderBy: { appliedAt: 'desc' } },
+        personRoles: { where: { status: 'active' }, orderBy: { createdAt: 'desc' } },
       },
     })
   }
@@ -91,6 +92,12 @@ export class CustomersRepository {
         lastName: dto.lastName,
         email: dto.email ?? null,
         phone: dto.phone ?? null,
+        addressLine1: dto.addressLine1 ?? null,
+        addressLine2: dto.addressLine2 ?? null,
+        city: dto.city ?? null,
+        county: dto.county ?? null,
+        postcode: dto.postcode ?? null,
+        country: dto.country ?? 'GB',
       },
     })
   }
@@ -105,6 +112,12 @@ export class CustomersRepository {
       data.marketingConsent = dto.marketingConsent
       data.consentRecordedAt = new Date()
     }
+    if (dto.addressLine1 !== undefined) data.addressLine1 = dto.addressLine1 ?? null
+    if (dto.addressLine2 !== undefined) data.addressLine2 = dto.addressLine2 ?? null
+    if (dto.city !== undefined) data.city = dto.city ?? null
+    if (dto.county !== undefined) data.county = dto.county ?? null
+    if (dto.postcode !== undefined) data.postcode = dto.postcode ?? null
+    if (dto.country !== undefined) data.country = dto.country ?? null
     return this.prisma.customer.updateMany({
       where: { tenantId, id },
       data,

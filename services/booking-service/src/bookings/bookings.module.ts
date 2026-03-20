@@ -5,9 +5,10 @@ import { BookingsRepository } from './bookings.repository.js'
 import { BookingExpiryTask } from './tasks/booking-expiry.task.js'
 import { AvailabilityModule } from '../availability/availability.module.js'
 import { BookingRulesModule } from '../booking-rules/booking-rules.module.js'
+import { MembershipModule } from '../membership/membership.module.js'
 
 @Module({
-  imports: [AvailabilityModule, BookingRulesModule],
+  imports: [AvailabilityModule, BookingRulesModule, MembershipModule],
   controllers: [BookingsController],
   providers: [BookingsService, BookingsRepository, BookingExpiryTask],
 })

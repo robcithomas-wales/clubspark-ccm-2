@@ -23,6 +23,14 @@ model Customer {
   marketingConsent    Boolean   @default(false) @map("marketing_consent")
   consentRecordedAt   DateTime? @map("consent_recorded_at")
 
+  // Address
+  addressLine1        String?   @map("address_line1")
+  addressLine2        String?   @map("address_line2")
+  city                String?
+  county              String?
+  postcode            String?
+  country             String?   @default("GB")
+
   // People platform fields
   lifecycleState      String    @default("active") @map("lifecycle_state")
   lifecycleChangedAt  DateTime? @map("lifecycle_changed_at")
@@ -39,8 +47,12 @@ model Customer {
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at")
 
-  lifecycleHistory    LifecycleHistory[]
-  personTags          PersonTag[]
+  lifecycleHistory      LifecycleHistory[]
+  personTags            PersonTag[]
+  personRoles           PersonRole[]
+  householdMemberships  HouseholdMember[]
+  relationshipsFrom     PersonRelationship[] @relation("RelationshipFrom")
+  relationshipsTo       PersonRelationship[] @relation("RelationshipTo")
 
   @@map("customers")
   @@schema("customer")
@@ -85,6 +97,31 @@ model Tag {
   @@index([tenantId])
 }
 
+model PersonRole {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  customerId   String    @map("customer_id") @db.Uuid
+  role         String
+  contextType  String?   @map("context_type")
+  contextId    String?   @map("context_id") @db.Uuid
+  contextLabel String?   @map("context_label")
+  status       String    @default("active")
+  startsAt     DateTime? @map("starts_at") @db.Date
+  endsAt       DateTime? @map("ends_at") @db.Date
+  notes        String?
+  assignedBy   String?   @map("assigned_by")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@map("person_roles")
+  @@schema("customer")
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([tenantId, role])
+}
+
 model PersonTag {
   customerId String    @map("customer_id") @db.Uuid
   tagId      String    @map("tag_id") @db.Uuid
@@ -101,5 +138,57 @@ model PersonTag {
   @@schema("customer")
   @@index([customerId])
   @@index([tagId])
+  @@index([tenantId])
+}
+
+model Household {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  members HouseholdMember[]
+
+  @@map("households")
+  @@schema("customer")
+  @@index([tenantId])
+}
+
+model HouseholdMember {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  householdId String   @map("household_id") @db.Uuid
+  customerId  String   @map("customer_id") @db.Uuid
+  role        String   @default("member")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  customer  Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([householdId, customerId])
+  @@map("household_members")
+  @@schema("customer")
+  @@index([householdId])
+  @@index([customerId])
+  @@index([tenantId])
+}
+
+model PersonRelationship {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String   @map("tenant_id") @db.Uuid
+  fromCustomerId   String   @map("from_customer_id") @db.Uuid
+  toCustomerId     String   @map("to_customer_id") @db.Uuid
+  relationship     String   // 'parent' | 'guardian' | 'child' | 'sibling' | 'spouse' | 'other'
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  fromCustomer Customer @relation("RelationshipFrom", fields: [fromCustomerId], references: [id], onDelete: Cascade)
+  toCustomer   Customer @relation("RelationshipTo",   fields: [toCustomerId],   references: [id], onDelete: Cascade)
+
+  @@unique([fromCustomerId, toCustomerId, relationship])
+  @@map("person_relationships")
+  @@schema("customer")
+  @@index([fromCustomerId])
+  @@index([toCustomerId])
   @@index([tenantId])
 }

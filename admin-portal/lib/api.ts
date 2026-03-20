@@ -83,12 +83,13 @@ const BOOKING_SERVICE =
 export async function getBookings(
   page = 1,
   limit = 25,
-  filters: { status?: string; fromDate?: string; toDate?: string } = {},
+  filters: { status?: string; fromDate?: string; toDate?: string; customerId?: string } = {},
 ) {
   const qs = new URLSearchParams({ page: String(page), limit: String(limit) })
   if (filters.status && filters.status !== "all") qs.set("status", filters.status)
   if (filters.fromDate) qs.set("fromDate", filters.fromDate)
   if (filters.toDate) qs.set("toDate", filters.toDate)
+  if (filters.customerId) qs.set("customerId", filters.customerId)
   const res = await fetch(`${BOOKING_SERVICE}/bookings?${qs}`, {
     headers: await getAuthHeaders(),
     cache: "no-store",
@@ -546,6 +547,7 @@ export async function createMembership(input: {
   reference?: string
   source?: string
   notes?: string
+  memberRole?: string
 }) {
   const res = await fetch(`${MEMBERSHIP_SERVICE}/memberships`, {
     method: "POST",
@@ -583,6 +585,34 @@ export async function getCustomerById(id: string) {
   })
   if (!res.ok) throw new Error(`Failed to load customer: ${res.status}`)
   return res.json() as Promise<{ data: any }>
+}
+
+export async function getPersonRelationships(customerId: string) {
+  const res = await fetch(`${PEOPLE_SERVICE}/people/${customerId}/relationships`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return []
+  return res.json() as Promise<any[]>
+}
+
+export async function getHouseholds(): Promise<any[]> {
+  const res = await fetch(`${PEOPLE_SERVICE}/households`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data ?? json ?? []
+}
+
+export async function getPersonHouseholds(customerId: string) {
+  const res = await fetch(`${PEOPLE_SERVICE}/people/${customerId}/households`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return []
+  return res.json() as Promise<any[]>
 }
 
 export async function transitionLifecycle(customerId: string, toState: string, reason?: string) {
@@ -742,6 +772,17 @@ export async function getMembershipsWithFilter(opts: {
     data: json.data ?? [],
     pagination: { total: p.total ?? 0, page, limit, totalPages: Math.ceil((p.total ?? 0) / limit) },
   }
+}
+
+export async function getMembershipsByCustomer(customerId: string) {
+  const qs = new URLSearchParams({ customerId, limit: "10", offset: "0" })
+  const res = await fetch(`${MEMBERSHIP_SERVICE}/memberships?${qs}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data ?? []
 }
 
 export async function getMembershipsRenewalsDue(withinDays = 30) {
