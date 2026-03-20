@@ -68,7 +68,7 @@ export default async function RevenueReportPage({
     }
   }
   const revenueBySourceRows = Object.entries(revenueBySource)
-    .map(([label, value]) => ({ label, value: Math.round(value) }))
+    .map(([label, value]) => ({ label, value: Math.round(value), valueFormatted: `£${Math.round(value).toLocaleString()}` }))
     .sort((a, b) => b.value - a.value)
 
   // Add-on category catalogue pricing (not date-filtered — catalogue is static)
@@ -78,7 +78,7 @@ export default async function RevenueReportPage({
     return map
   }, {})
   const categoryRows = Object.entries(addOnByCategory)
-    .map(([label, value]) => ({ label, value: Math.round(value as number) }))
+    .map(([label, value]) => ({ label, value: Math.round(value as number), valueFormatted: `£${Math.round(value as number).toLocaleString()}` }))
     .sort((a, b) => b.value - a.value)
 
   // Payment status from filtered bookings
@@ -136,13 +136,13 @@ export default async function RevenueReportPage({
                 label: d.date.slice(5),
                 primary: parseFloat((d.revenue ?? 0).toFixed(2)),
                 secondary: parseFloat(d.addOnRevenue.toFixed(2)),
+                primaryFormatted: `£${(d.revenue ?? 0).toFixed(2)}`,
+                secondaryFormatted: `£${d.addOnRevenue.toFixed(2)}`,
               }))}
               primaryColour="#10b981"
               secondaryColour="#8b5cf6"
               primaryLabel="Booking revenue"
               secondaryLabel="Add-on revenue"
-              formatPrimary={(v) => `£${v.toFixed(2)}`}
-              formatSecondary={(v) => `£${v.toFixed(2)}`}
             />
           </div>
         )}
@@ -152,7 +152,7 @@ export default async function RevenueReportPage({
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h3 className="mb-4 text-base font-semibold text-slate-900">Revenue by booking source</h3>
             {revenueBySourceRows.length > 0 ? (
-              <HBarChart rows={revenueBySourceRows} colour="#1857E0" formatValue={(v) => `£${v.toLocaleString()}`} />
+              <HBarChart rows={revenueBySourceRows} colour="#1857E0" />
             ) : (
               <p className="text-sm text-slate-400">No source data in selected range.</p>
             )}
@@ -177,7 +177,7 @@ export default async function RevenueReportPage({
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h3 className="mb-1 text-base font-semibold text-slate-900">Add-on catalogue price by category</h3>
             <p className="mb-4 text-xs text-slate-400">Catalogue pricing — not date filtered</p>
-            <HBarChart rows={categoryRows} colour="#8b5cf6" formatValue={(v) => `£${v.toLocaleString()}`} />
+            <HBarChart rows={categoryRows} colour="#8b5cf6" />
           </div>
         )}
 

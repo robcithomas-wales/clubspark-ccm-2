@@ -118,9 +118,8 @@ export default async function UtilisationReportPage({
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h3 className="mb-4 text-base font-semibold text-slate-900">Daily booked hours ({days} days)</h3>
             <VBarChart
-              rows={daily.map((d) => ({ label: d.date.slice(5), value: parseFloat(d.bookedHours.toFixed(1)) }))}
+              rows={daily.map((d) => { const v = parseFloat(d.bookedHours.toFixed(1)); return { label: d.date.slice(5), value: v, valueFormatted: `${v}h` } })}
               colour="#1857E0"
-              formatValue={(v) => `${v}h`}
             />
           </div>
         )}

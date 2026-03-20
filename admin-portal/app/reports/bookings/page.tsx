@@ -110,7 +110,7 @@ export default async function BookingsReportPage({
     }
   }
   const revenueBySourceRows = Object.entries(revenueBySource)
-    .map(([label, value]) => ({ label, value: Math.round(value) }))
+    .map(([label, value]) => ({ label, value: Math.round(value), valueFormatted: `£${Math.round(value).toLocaleString()}` }))
     .sort((a, b) => b.value - a.value)
 
   // Payment status from filtered data
@@ -226,7 +226,7 @@ export default async function BookingsReportPage({
         {revenueBySourceRows.length > 0 && (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h3 className="mb-4 text-base font-semibold text-slate-900">Revenue by booking source</h3>
-            <HBarChart rows={revenueBySourceRows} colour="#10b981" formatValue={(v) => `£${v.toLocaleString()}`} />
+            <HBarChart rows={revenueBySourceRows} colour="#10b981" />
           </div>
         )}
 
@@ -239,13 +239,13 @@ export default async function BookingsReportPage({
                 label: d.date.slice(5),
                 primary: d.bookingCount,
                 secondary: d.revenue,
+                primaryFormatted: `${d.bookingCount} bookings`,
+                secondaryFormatted: formatCurrency(d.revenue),
               }))}
               primaryColour="#1857E0"
               secondaryColour="#10b981"
               primaryLabel="Bookings"
               secondaryLabel="Revenue (£)"
-              formatPrimary={(v) => `${v} bookings`}
-              formatSecondary={(v) => formatCurrency(v)}
             />
           </div>
         )}
@@ -255,9 +255,8 @@ export default async function BookingsReportPage({
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h3 className="mb-4 text-base font-semibold text-slate-900">Daily booked hours ({days} days)</h3>
             <VBarChart
-              rows={daily.map((d) => ({ label: d.date.slice(5), value: d.bookedHours }))}
+              rows={daily.map((d) => ({ label: d.date.slice(5), value: d.bookedHours, valueFormatted: `${d.bookedHours.toFixed(1)} h` }))}
               colour="#6366f1"
-              formatValue={formatHours}
             />
           </div>
         )}

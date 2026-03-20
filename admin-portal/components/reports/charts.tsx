@@ -1,4 +1,7 @@
-// Pure SVG chart components — server-renderable, no dependencies.
+'use client'
+
+// SVG chart components — client-only to avoid SSR/hydration mismatches
+// (charts are visual and data-driven; SSR provides no benefit here).
 
 const CHART_W = 560
 const CHART_H = 100
@@ -8,11 +11,9 @@ const LABEL_H = 20
 export function HBarChart({
   rows,
   colour = "#1857E0",
-  formatValue,
 }: {
-  rows: { label: string; value: number }[]
+  rows: { label: string; value: number; valueFormatted?: string }[]
   colour?: string
-  formatValue?: (v: number) => string
 }) {
   if (rows.length === 0) return <p className="text-sm text-slate-400">No data</p>
   const max = Math.max(...rows.map((r) => r.value), 1)
@@ -34,7 +35,7 @@ export function HBarChart({
               </text>
               <rect x={labelW} y={y + 4} width={barW} height={rowH - 10} rx={3} fill={colour} opacity={0.82} />
               <text x={labelW + barW + 6} y={y + rowH / 2 + 4} fontSize={11} fill="#334155" fontWeight="600">
-                {formatValue ? formatValue(row.value) : row.value}
+                {row.valueFormatted ?? row.value}
               </text>
             </g>
           )
@@ -48,11 +49,9 @@ export function HBarChart({
 export function VBarChart({
   rows,
   colour = "#1857E0",
-  formatValue,
 }: {
-  rows: { label: string; value: number }[]
+  rows: { label: string; value: number; valueFormatted?: string }[]
   colour?: string
-  formatValue?: (v: number) => string
 }) {
   if (rows.length === 0) return <p className="text-sm text-slate-400">No data</p>
   const max = Math.max(...rows.map((r) => r.value), 1)
@@ -68,7 +67,7 @@ export function VBarChart({
           return (
             <g key={row.label}>
               <rect x={x} y={y} width={barW} height={barH} rx={3} fill={colour} opacity={0.82} />
-              <title>{row.label}: {formatValue ? formatValue(row.value) : row.value}</title>
+              <title>{row.label}: {row.valueFormatted ?? row.value}</title>
               {barW >= 18 && (
                 <text x={x + barW / 2} y={CHART_H + 14} textAnchor="middle" fontSize={9} fill="#94a3b8">
                   {row.label}
@@ -158,16 +157,12 @@ export function DualVBarChart({
   rows,
   primaryColour = "#1857E0",
   secondaryColour = "#10b981",
-  formatPrimary,
-  formatSecondary,
   primaryLabel,
   secondaryLabel,
 }: {
-  rows: { label: string; primary: number; secondary: number }[]
+  rows: { label: string; primary: number; secondary: number; primaryFormatted?: string; secondaryFormatted?: string }[]
   primaryColour?: string
   secondaryColour?: string
-  formatPrimary?: (v: number) => string
-  formatSecondary?: (v: number) => string
   primaryLabel?: string
   secondaryLabel?: string
 }) {
@@ -189,10 +184,10 @@ export function DualVBarChart({
           return (
             <g key={row.label}>
               <rect x={x} y={CHART_H - h1} width={barW} height={h1} rx={2} fill={primaryColour} opacity={0.85}>
-                <title>{row.label}: {formatPrimary ? formatPrimary(row.primary) : row.primary}</title>
+                <title>{row.label}: {row.primaryFormatted ?? row.primary}</title>
               </rect>
               <rect x={x + barW + 1} y={CHART_H - h2} width={barW} height={h2} rx={2} fill={secondaryColour} opacity={0.85}>
-                <title>{row.label}: {formatSecondary ? formatSecondary(row.secondary) : row.secondary}</title>
+                <title>{row.label}: {row.secondaryFormatted ?? row.secondary}</title>
               </rect>
               {pairW >= 14 && (
                 <text x={x + pairW / 2} y={CHART_H + 14} textAnchor="middle" fontSize={9} fill="#94a3b8">

@@ -60,7 +60,7 @@ export default async function AddOnsReportPage({
   // Catalogue value by category
   const catalogueValueRows = byCategoryRows
     .filter((r) => r.catalogueValue > 0)
-    .map((r) => ({ label: r.label, value: Math.round(r.catalogueValue * 100) / 100 }))
+    .map((r) => { const v = Math.round(r.catalogueValue * 100) / 100; return { label: r.label, value: v, valueFormatted: `£${v.toFixed(2)}` } })
     .sort((a, b) => b.value - a.value)
 
   // By resource type
@@ -167,7 +167,6 @@ export default async function AddOnsReportPage({
             <HBarChart
               rows={catalogueValueRows}
               colour="#10b981"
-              formatValue={(v) => `£${v.toFixed(2)}`}
             />
           </div>
         )}
