@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 
-const CUSTOMER_SERVICE = process.env.NEXT_PUBLIC_CUSTOMER_SERVICE_URL || "http://127.0.0.1:4004"
+const PEOPLE_SERVICE = process.env.NEXT_PUBLIC_PEOPLE_SERVICE_URL || "http://127.0.0.1:4004"
 
 async function getAuthHeaders() {
   const supabase = await createClient()
@@ -20,7 +20,7 @@ export async function GET(
   try {
     const { id } = await params
     const headers = await getAuthHeaders()
-    const res = await fetch(`${CUSTOMER_SERVICE}/customers/${id}/tags`, { headers, cache: "no-store" })
+    const res = await fetch(`${PEOPLE_SERVICE}/people/${id}/tags`, { headers, cache: "no-store" })
     const json = await res.json()
     return NextResponse.json(json, { status: res.status })
   } catch {
@@ -36,7 +36,7 @@ export async function POST(
     const { id } = await params
     const headers = await getAuthHeaders()
     const body = await request.json()
-    const res = await fetch(`${CUSTOMER_SERVICE}/customers/${id}/tags`, {
+    const res = await fetch(`${PEOPLE_SERVICE}/people/${id}/tags`, {
       method: "POST",
       headers,
       body: JSON.stringify(body),

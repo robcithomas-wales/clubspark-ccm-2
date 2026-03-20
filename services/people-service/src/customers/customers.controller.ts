@@ -16,8 +16,8 @@ import { CustomersService } from './customers.service.js'
 import { CreateCustomerDto } from './dto/create-customer.dto.js'
 import { UpdateCustomerDto } from './dto/update-customer.dto.js'
 
-@ApiTags('customers')
-@Controller('customers')
+@ApiTags('people')
+@Controller('people')
 export class CustomersController {
   constructor(private readonly service: CustomersService) {}
 

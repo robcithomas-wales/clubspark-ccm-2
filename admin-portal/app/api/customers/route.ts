@@ -11,7 +11,7 @@ async function getAuthHeaders() {
   }
 }
 
-const customerServiceBaseUrl = "http://127.0.0.1:4004"
+const peopleServiceBaseUrl = "http://127.0.0.1:4004"
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
   if (limit) params.set("limit", limit)
 
   const qs = params.toString()
-  const url = `${customerServiceBaseUrl}/customers${qs ? `?${qs}` : ""}`
+  const url = `${peopleServiceBaseUrl}/customers${qs ? `?${qs}` : ""}`
 
   try {
     const response = await fetch(url, {
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
 
-    const response = await fetch(`${customerServiceBaseUrl}/customers`, {
+    const response = await fetch(`${peopleServiceBaseUrl}/customers`, {
       method: "POST",
       headers: await getAuthHeaders(),
       body: JSON.stringify(body),

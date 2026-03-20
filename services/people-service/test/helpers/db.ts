@@ -8,7 +8,7 @@ export const prisma = new PrismaClient({
 
 /**
  * Delete all customers created during the test run.
- * Uses raw SQL because the customer-service Prisma client targets the
+ * Uses raw SQL because the people-service Prisma client targets the
  * customer schema directly.
  */
 export async function cleanCustomers(): Promise<void> {

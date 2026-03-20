@@ -2,7 +2,7 @@ import { supabase } from './supabase'
 
 const VENUE_URL = process.env.EXPO_PUBLIC_VENUE_SERVICE_URL!
 const BOOKING_URL = process.env.EXPO_PUBLIC_BOOKING_SERVICE_URL!
-const CUSTOMER_URL = process.env.EXPO_PUBLIC_CUSTOMER_SERVICE_URL!
+const CUSTOMER_URL = process.env.EXPO_PUBLIC_PEOPLE_SERVICE_URL!
 const MEMBERSHIP_URL = process.env.EXPO_PUBLIC_MEMBERSHIP_SERVICE_URL!
 
 // ─── Public (no auth) ────────────────────────────────────────────────────────
@@ -256,7 +256,7 @@ export type CustomerProfile = {
 
 export async function fetchMyProfile(tenantId: string, customerId: string): Promise<CustomerProfile> {
   const headers = await authHeaders(tenantId)
-  const res = await fetch(`${CUSTOMER_URL}/customers/${customerId}`, { headers })
+  const res = await fetch(`${CUSTOMER_URL}/people/${customerId}`, { headers })
   if (!res.ok) throw new Error('Failed to fetch profile')
   const json = await res.json()
   return json.data

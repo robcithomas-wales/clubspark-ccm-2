@@ -561,14 +561,14 @@ export async function createMembership(input: {
   return res.json()
 }
 
-const CUSTOMER_SERVICE =
-  process.env.NEXT_PUBLIC_CUSTOMER_SERVICE_URL || "http://127.0.0.1:4004"
+const PEOPLE_SERVICE =
+  process.env.NEXT_PUBLIC_PEOPLE_SERVICE_URL || "http://127.0.0.1:4004"
 
 export async function getCustomers(page = 1, limit = 25, opts?: { search?: string; lifecycle?: string }) {
   const qs = new URLSearchParams({ page: String(page), limit: String(limit) })
   if (opts?.search) qs.set("search", opts.search)
   if (opts?.lifecycle) qs.set("lifecycle", opts.lifecycle)
-  const res = await fetch(`${CUSTOMER_SERVICE}/customers?${qs}`, {
+  const res = await fetch(`${PEOPLE_SERVICE}/people?${qs}`, {
     headers: await getAuthHeaders(),
     cache: "no-store",
   })
@@ -577,7 +577,7 @@ export async function getCustomers(page = 1, limit = 25, opts?: { search?: strin
 }
 
 export async function getCustomerById(id: string) {
-  const res = await fetch(`${CUSTOMER_SERVICE}/customers/${id}`, {
+  const res = await fetch(`${PEOPLE_SERVICE}/people/${id}`, {
     headers: await getAuthHeaders(),
     cache: "no-store",
   })
@@ -586,7 +586,7 @@ export async function getCustomerById(id: string) {
 }
 
 export async function transitionLifecycle(customerId: string, toState: string, reason?: string) {
-  const res = await fetch(`${CUSTOMER_SERVICE}/customers/${customerId}/lifecycle`, {
+  const res = await fetch(`${PEOPLE_SERVICE}/people/${customerId}/lifecycle`, {
     method: "PATCH",
     headers: await getAuthHeaders(),
     body: JSON.stringify({ toState, reason }),
@@ -596,7 +596,7 @@ export async function transitionLifecycle(customerId: string, toState: string, r
 }
 
 export async function getTags() {
-  const res = await fetch(`${CUSTOMER_SERVICE}/tags`, {
+  const res = await fetch(`${PEOPLE_SERVICE}/tags`, {
     headers: await getAuthHeaders(),
     cache: "no-store",
   })
@@ -605,7 +605,7 @@ export async function getTags() {
 }
 
 export async function createTag(name: string, colour?: string) {
-  const res = await fetch(`${CUSTOMER_SERVICE}/tags`, {
+  const res = await fetch(`${PEOPLE_SERVICE}/tags`, {
     method: "POST",
     headers: await getAuthHeaders(),
     body: JSON.stringify({ name, colour }),
@@ -615,7 +615,7 @@ export async function createTag(name: string, colour?: string) {
 }
 
 export async function applyTagToPerson(customerId: string, tagId: string) {
-  const res = await fetch(`${CUSTOMER_SERVICE}/customers/${customerId}/tags`, {
+  const res = await fetch(`${PEOPLE_SERVICE}/people/${customerId}/tags`, {
     method: "POST",
     headers: await getAuthHeaders(),
     body: JSON.stringify({ tagId }),
@@ -625,7 +625,7 @@ export async function applyTagToPerson(customerId: string, tagId: string) {
 }
 
 export async function removeTagFromPerson(customerId: string, tagId: string) {
-  const res = await fetch(`${CUSTOMER_SERVICE}/customers/${customerId}/tags/${tagId}`, {
+  const res = await fetch(`${PEOPLE_SERVICE}/people/${customerId}/tags/${tagId}`, {
     method: "DELETE",
     headers: await getAuthHeaders(),
   })
@@ -1304,7 +1304,7 @@ export async function getTopCustomers(limit = 20): Promise<{
   totalHours: number
   addOnSpend: number
 }[]> {
-  const res = await fetch(`${BOOKING_SERVICE}/bookings/stats/customers?limit=${limit}`, {
+  const res = await fetch(`${BOOKING_SERVICE}/bookings/stats/people?limit=${limit}`, {
     headers: await getAuthHeaders(),
     cache: "no-store",
   })

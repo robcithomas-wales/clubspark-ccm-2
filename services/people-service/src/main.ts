@@ -51,7 +51,7 @@ async function bootstrap(): Promise<void> {
   app.enableCors()
 
   await app.listen(port, '0.0.0.0')
-  logger.log(`Customer service running on http://localhost:${port} [${nodeEnv}]`)
+  logger.log(`People service running on http://localhost:${port} [${nodeEnv}]`)
 }
 
 bootstrap().catch((err: unknown) => {

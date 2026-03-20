@@ -41,10 +41,10 @@ describe('Customer service — integration', () => {
   // Create customer
   // ══════════════════════════════════════════════════════════════════════════
 
-  describe('POST /customers', () => {
+  describe('POST /people', () => {
     it('creates a customer and returns 201 with an id', async () => {
       const res = await request
-        .post('/customers')
+        .post('/people')
         .set(JSON_HEADERS)
         .send(VALID_CUSTOMER)
 
@@ -57,7 +57,7 @@ describe('Customer service — integration', () => {
 
     it('creates a customer with default lifecycleState of active', async () => {
       const res = await request
-        .post('/customers')
+        .post('/people')
         .set(JSON_HEADERS)
         .send(VALID_CUSTOMER)
 
@@ -67,7 +67,7 @@ describe('Customer service — integration', () => {
 
     it('creates a customer with only required fields (no email or phone)', async () => {
       const res = await request
-        .post('/customers')
+        .post('/people')
         .set(JSON_HEADERS)
         .send({ firstName: 'Bob', lastName: 'Jones' })
 
@@ -79,7 +79,7 @@ describe('Customer service — integration', () => {
     it('accepts a pre-supplied id', async () => {
       const customId = '30000000-0000-4000-8000-000000000001'
       const res = await request
-        .post('/customers')
+        .post('/people')
         .set(JSON_HEADERS)
         .send({ id: customId, firstName: 'Custom', lastName: 'Id' })
 
@@ -89,7 +89,7 @@ describe('Customer service — integration', () => {
 
     it('returns 400 when firstName is missing', async () => {
       const res = await request
-        .post('/customers')
+        .post('/people')
         .set(JSON_HEADERS)
         .send({ lastName: 'Smith', email: 'x@x.com' })
 
@@ -98,7 +98,7 @@ describe('Customer service — integration', () => {
 
     it('returns 400 when lastName is missing', async () => {
       const res = await request
-        .post('/customers')
+        .post('/people')
         .set(JSON_HEADERS)
         .send({ firstName: 'Jane', email: 'x@x.com' })
 
@@ -107,7 +107,7 @@ describe('Customer service — integration', () => {
 
     it('returns 400 when email is not a valid email address', async () => {
       const res = await request
-        .post('/customers')
+        .post('/people')
         .set(JSON_HEADERS)
         .send({ firstName: 'Jane', lastName: 'Smith', email: 'not-an-email' })
 
@@ -116,7 +116,7 @@ describe('Customer service — integration', () => {
 
     it('returns 401 when auth headers are missing', async () => {
       const res = await request
-        .post('/customers')
+        .post('/people')
         .send(VALID_CUSTOMER)
 
       expect(res.status).toBe(401)
@@ -127,9 +127,9 @@ describe('Customer service — integration', () => {
   // List customers
   // ══════════════════════════════════════════════════════════════════════════
 
-  describe('GET /customers', () => {
+  describe('GET /people', () => {
     it('returns an empty list when no customers exist', async () => {
-      const res = await request.get('/customers').set(HEADERS)
+      const res = await request.get('/people').set(HEADERS)
 
       expect(res.status).toBe(200)
       const list = Array.isArray(res.body) ? res.body : res.body.data ?? res.body
@@ -138,11 +138,11 @@ describe('Customer service — integration', () => {
     })
 
     it('lists customers for the tenant', async () => {
-      await request.post('/customers').set(JSON_HEADERS).send(VALID_CUSTOMER)
-      await request.post('/customers').set(JSON_HEADERS)
+      await request.post('/people').set(JSON_HEADERS).send(VALID_CUSTOMER)
+      await request.post('/people').set(JSON_HEADERS)
         .send({ firstName: 'Alice', lastName: 'Brown' })
 
-      const res = await request.get('/customers').set(HEADERS)
+      const res = await request.get('/people').set(HEADERS)
 
       expect(res.status).toBe(200)
       const list = Array.isArray(res.body) ? res.body : res.body.data ?? res.body
@@ -150,12 +150,12 @@ describe('Customer service — integration', () => {
     })
 
     it('searches by name', async () => {
-      await request.post('/customers').set(JSON_HEADERS).send(VALID_CUSTOMER)
-      await request.post('/customers').set(JSON_HEADERS)
+      await request.post('/people').set(JSON_HEADERS).send(VALID_CUSTOMER)
+      await request.post('/people').set(JSON_HEADERS)
         .send({ firstName: 'Alice', lastName: 'Brown' })
 
       const res = await request
-        .get('/customers?search=Jane')
+        .get('/people?search=Jane')
         .set(HEADERS)
 
       expect(res.status).toBe(200)
@@ -165,17 +165,17 @@ describe('Customer service — integration', () => {
     })
 
     it('filters by lifecycle state', async () => {
-      await request.post('/customers').set(JSON_HEADERS).send(VALID_CUSTOMER)
-      const created = await request.post('/customers').set(JSON_HEADERS)
+      await request.post('/people').set(JSON_HEADERS).send(VALID_CUSTOMER)
+      const created = await request.post('/people').set(JSON_HEADERS)
         .send({ firstName: 'Alice', lastName: 'Brown' })
 
       // Transition Alice to lapsed
       await request
-        .patch(`/customers/${created.body.data.id}/lifecycle`)
+        .patch(`/people/${created.body.data.id}/lifecycle`)
         .set(JSON_HEADERS)
         .send({ toState: 'lapsed' })
 
-      const res = await request.get('/customers?lifecycle=lapsed').set(HEADERS)
+      const res = await request.get('/people?lifecycle=lapsed').set(HEADERS)
       expect(res.status).toBe(200)
       const list = Array.isArray(res.body) ? res.body : res.body.data ?? res.body
       expect(list.every((c: any) => c.lifecycleState === 'lapsed')).toBe(true)
@@ -183,11 +183,11 @@ describe('Customer service — integration', () => {
 
     it('respects the limit parameter', async () => {
       for (let i = 0; i < 5; i++) {
-        await request.post('/customers').set(JSON_HEADERS)
+        await request.post('/people').set(JSON_HEADERS)
           .send({ firstName: `User${i}`, lastName: 'Test' })
       }
 
-      const res = await request.get('/customers?limit=2').set(HEADERS)
+      const res = await request.get('/people?limit=2').set(HEADERS)
 
       expect(res.status).toBe(200)
       const list = Array.isArray(res.body) ? res.body : res.body.data ?? res.body
@@ -195,13 +195,13 @@ describe('Customer service — integration', () => {
     })
 
     it('enforces max limit of 100', async () => {
-      const res = await request.get('/customers?limit=500').set(HEADERS)
+      const res = await request.get('/people?limit=500').set(HEADERS)
 
       expect(res.status).toBe(200)
     })
 
     it('returns 401 when auth headers are missing', async () => {
-      const res = await request.get('/customers')
+      const res = await request.get('/people')
 
       expect(res.status).toBe(401)
     })
@@ -211,15 +211,15 @@ describe('Customer service — integration', () => {
   // Get customer by ID
   // ══════════════════════════════════════════════════════════════════════════
 
-  describe('GET /customers/:id', () => {
+  describe('GET /people/:id', () => {
     it('retrieves a customer by id', async () => {
       const created = await request
-        .post('/customers')
+        .post('/people')
         .set(JSON_HEADERS)
         .send(VALID_CUSTOMER)
 
       const res = await request
-        .get(`/customers/${created.body.data.id}`)
+        .get(`/people/${created.body.data.id}`)
         .set(HEADERS)
 
       expect(res.status).toBe(200)
@@ -229,12 +229,12 @@ describe('Customer service — integration', () => {
 
     it('includes personTags in the response', async () => {
       const created = await request
-        .post('/customers')
+        .post('/people')
         .set(JSON_HEADERS)
         .send(VALID_CUSTOMER)
 
       const res = await request
-        .get(`/customers/${created.body.data.id}`)
+        .get(`/people/${created.body.data.id}`)
         .set(HEADERS)
 
       expect(res.status).toBe(200)
@@ -243,14 +243,14 @@ describe('Customer service — integration', () => {
 
     it('returns 404 for a non-existent customer', async () => {
       const res = await request
-        .get(`/customers/${TEST_NONEXISTENT_ID}`)
+        .get(`/people/${TEST_NONEXISTENT_ID}`)
         .set(HEADERS)
 
       expect(res.status).toBe(404)
     })
 
     it('returns 401 when auth headers are missing', async () => {
-      const res = await request.get(`/customers/${TEST_NONEXISTENT_ID}`)
+      const res = await request.get(`/people/${TEST_NONEXISTENT_ID}`)
 
       expect(res.status).toBe(401)
     })
@@ -260,15 +260,15 @@ describe('Customer service — integration', () => {
   // Update customer
   // ══════════════════════════════════════════════════════════════════════════
 
-  describe('PATCH /customers/:id', () => {
+  describe('PATCH /people/:id', () => {
     it('updates customer firstName', async () => {
       const created = await request
-        .post('/customers')
+        .post('/people')
         .set(JSON_HEADERS)
         .send(VALID_CUSTOMER)
 
       const res = await request
-        .patch(`/customers/${created.body.data.id}`)
+        .patch(`/people/${created.body.data.id}`)
         .set(JSON_HEADERS)
         .send({ firstName: 'Janet' })
 
@@ -278,12 +278,12 @@ describe('Customer service — integration', () => {
 
     it('updates customer email', async () => {
       const created = await request
-        .post('/customers')
+        .post('/people')
         .set(JSON_HEADERS)
         .send(VALID_CUSTOMER)
 
       const res = await request
-        .patch(`/customers/${created.body.data.id}`)
+        .patch(`/people/${created.body.data.id}`)
         .set(JSON_HEADERS)
         .send({ email: 'updated@example.com' })
 
@@ -293,12 +293,12 @@ describe('Customer service — integration', () => {
 
     it('updates marketingConsent flag', async () => {
       const created = await request
-        .post('/customers')
+        .post('/people')
         .set(JSON_HEADERS)
         .send(VALID_CUSTOMER)
 
       const res = await request
-        .patch(`/customers/${created.body.data.id}`)
+        .patch(`/people/${created.body.data.id}`)
         .set(JSON_HEADERS)
         .send({ marketingConsent: true })
 
@@ -308,12 +308,12 @@ describe('Customer service — integration', () => {
 
     it('returns 400 when email in update is invalid', async () => {
       const created = await request
-        .post('/customers')
+        .post('/people')
         .set(JSON_HEADERS)
         .send(VALID_CUSTOMER)
 
       const res = await request
-        .patch(`/customers/${created.body.data.id}`)
+        .patch(`/people/${created.body.data.id}`)
         .set(JSON_HEADERS)
         .send({ email: 'bad-email' })
 
@@ -322,7 +322,7 @@ describe('Customer service — integration', () => {
 
     it('returns 404 when updating a non-existent customer', async () => {
       const res = await request
-        .patch(`/customers/${TEST_NONEXISTENT_ID}`)
+        .patch(`/people/${TEST_NONEXISTENT_ID}`)
         .set(JSON_HEADERS)
         .send({ firstName: 'Ghost' })
 
@@ -331,7 +331,7 @@ describe('Customer service — integration', () => {
 
     it('returns 401 when auth headers are missing', async () => {
       const res = await request
-        .patch(`/customers/${TEST_NONEXISTENT_ID}`)
+        .patch(`/people/${TEST_NONEXISTENT_ID}`)
         .send({ firstName: 'Ghost' })
 
       expect(res.status).toBe(401)
@@ -342,15 +342,15 @@ describe('Customer service — integration', () => {
   // Lifecycle transitions
   // ══════════════════════════════════════════════════════════════════════════
 
-  describe('PATCH /customers/:id/lifecycle', () => {
+  describe('PATCH /people/:id/lifecycle', () => {
     it('transitions lifecycle state and returns updated customer', async () => {
       const created = await request
-        .post('/customers')
+        .post('/people')
         .set(JSON_HEADERS)
         .send(VALID_CUSTOMER)
 
       const res = await request
-        .patch(`/customers/${created.body.data.id}/lifecycle`)
+        .patch(`/people/${created.body.data.id}/lifecycle`)
         .set(JSON_HEADERS)
         .send({ toState: 'inactive', reason: 'No bookings in 60 days' })
 
@@ -361,15 +361,15 @@ describe('Customer service — integration', () => {
 
     it('records history on each transition', async () => {
       const created = await request
-        .post('/customers')
+        .post('/people')
         .set(JSON_HEADERS)
         .send(VALID_CUSTOMER)
       const id = created.body.data.id
 
-      await request.patch(`/customers/${id}/lifecycle`).set(JSON_HEADERS).send({ toState: 'inactive' })
-      await request.patch(`/customers/${id}/lifecycle`).set(JSON_HEADERS).send({ toState: 'lapsed' })
+      await request.patch(`/people/${id}/lifecycle`).set(JSON_HEADERS).send({ toState: 'inactive' })
+      await request.patch(`/people/${id}/lifecycle`).set(JSON_HEADERS).send({ toState: 'lapsed' })
 
-      const res = await request.get(`/customers/${id}/lifecycle/history`).set(HEADERS)
+      const res = await request.get(`/people/${id}/lifecycle/history`).set(HEADERS)
 
       expect(res.status).toBe(200)
       expect(res.body.data.length).toBeGreaterThanOrEqual(2)
@@ -379,12 +379,12 @@ describe('Customer service — integration', () => {
 
     it('returns 400 for an invalid lifecycle state', async () => {
       const created = await request
-        .post('/customers')
+        .post('/people')
         .set(JSON_HEADERS)
         .send(VALID_CUSTOMER)
 
       const res = await request
-        .patch(`/customers/${created.body.data.id}/lifecycle`)
+        .patch(`/people/${created.body.data.id}/lifecycle`)
         .set(JSON_HEADERS)
         .send({ toState: 'flying' })
 
@@ -393,7 +393,7 @@ describe('Customer service — integration', () => {
 
     it('returns 404 for a non-existent customer', async () => {
       const res = await request
-        .patch(`/customers/${TEST_NONEXISTENT_ID}/lifecycle`)
+        .patch(`/people/${TEST_NONEXISTENT_ID}/lifecycle`)
         .set(JSON_HEADERS)
         .send({ toState: 'inactive' })
 
@@ -430,18 +430,18 @@ describe('Customer service — integration', () => {
       const tagRes = await request.post('/tags').set(JSON_HEADERS).send({ name: 'Coach' })
       const tagId = tagRes.body.data.id
 
-      const custRes = await request.post('/customers').set(JSON_HEADERS).send(VALID_CUSTOMER)
+      const custRes = await request.post('/people').set(JSON_HEADERS).send(VALID_CUSTOMER)
       const customerId = custRes.body.data.id
 
       const apply = await request
-        .post(`/customers/${customerId}/tags`)
+        .post(`/people/${customerId}/tags`)
         .set(JSON_HEADERS)
         .send({ tagId })
 
       expect(apply.status).toBe(200)
       expect(apply.body.data.name).toBe('Coach')
 
-      const tags = await request.get(`/customers/${customerId}/tags`).set(HEADERS)
+      const tags = await request.get(`/people/${customerId}/tags`).set(HEADERS)
       expect(tags.status).toBe(200)
       expect(tags.body.data.some((t: any) => t.name === 'Coach')).toBe(true)
     })
@@ -450,18 +450,18 @@ describe('Customer service — integration', () => {
       const tagRes = await request.post('/tags').set(JSON_HEADERS).send({ name: 'Trial' })
       const tagId = tagRes.body.data.id
 
-      const custRes = await request.post('/customers').set(JSON_HEADERS).send(VALID_CUSTOMER)
+      const custRes = await request.post('/people').set(JSON_HEADERS).send(VALID_CUSTOMER)
       const customerId = custRes.body.data.id
 
-      await request.post(`/customers/${customerId}/tags`).set(JSON_HEADERS).send({ tagId })
+      await request.post(`/people/${customerId}/tags`).set(JSON_HEADERS).send({ tagId })
 
       const remove = await request
-        .delete(`/customers/${customerId}/tags/${tagId}`)
+        .delete(`/people/${customerId}/tags/${tagId}`)
         .set(HEADERS)
 
       expect(remove.status).toBe(200)
 
-      const tags = await request.get(`/customers/${customerId}/tags`).set(HEADERS)
+      const tags = await request.get(`/people/${customerId}/tags`).set(HEADERS)
       expect(tags.body.data.some((t: any) => t.name === 'Trial')).toBe(false)
     })
 
@@ -484,12 +484,12 @@ describe('Customer service — integration', () => {
   describe('Tenant isolation', () => {
     it('does not return customers belonging to another tenant', async () => {
       const created = await request
-        .post('/customers')
+        .post('/people')
         .set(JSON_HEADERS)
         .send(VALID_CUSTOMER)
 
       const res = await request
-        .get(`/customers/${created.body.data.id}`)
+        .get(`/people/${created.body.data.id}`)
         .set({ 'x-tenant-id': '99000000-0000-4000-8000-000000000099' })
 
       expect(res.status).toBe(404)

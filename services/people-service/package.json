@@ -1,7 +1,7 @@
 {
-  "name": "@clubspark/customer-service",
+  "name": "@clubspark/people-service",
   "version": "1.0.0",
-  "description": "ClubSpark customer service — customer profiles",
+  "description": "ClubSpark people service — person profiles, lifecycle and tags",
   "private": true,
   "scripts": {
     "build": "nest build",

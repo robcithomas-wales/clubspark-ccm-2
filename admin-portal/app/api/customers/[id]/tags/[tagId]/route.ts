@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 
-const CUSTOMER_SERVICE = process.env.NEXT_PUBLIC_CUSTOMER_SERVICE_URL || "http://127.0.0.1:4004"
+const PEOPLE_SERVICE = process.env.NEXT_PUBLIC_PEOPLE_SERVICE_URL || "http://127.0.0.1:4004"
 
 async function getAuthHeaders() {
   const supabase = await createClient()
@@ -20,7 +20,7 @@ export async function DELETE(
   try {
     const { id, tagId } = await params
     const headers = await getAuthHeaders()
-    const res = await fetch(`${CUSTOMER_SERVICE}/customers/${id}/tags/${tagId}`, {
+    const res = await fetch(`${PEOPLE_SERVICE}/people/${id}/tags/${tagId}`, {
       method: "DELETE",
       headers,
       cache: "no-store",

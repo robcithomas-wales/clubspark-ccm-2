@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 
-const CUSTOMER_SERVICE = process.env.NEXT_PUBLIC_CUSTOMER_SERVICE_URL || "http://127.0.0.1:4004"
+const PEOPLE_SERVICE = process.env.NEXT_PUBLIC_PEOPLE_SERVICE_URL || "http://127.0.0.1:4004"
 
 async function getAuthHeaders() {
   const supabase = await createClient()
@@ -21,7 +21,7 @@ export async function PATCH(
     const { id } = await params
     const headers = await getAuthHeaders()
     const body = await request.json()
-    const res = await fetch(`${CUSTOMER_SERVICE}/customers/${id}/lifecycle`, {
+    const res = await fetch(`${PEOPLE_SERVICE}/people/${id}/lifecycle`, {
       method: "PATCH",
       headers,
       body: JSON.stringify(body),

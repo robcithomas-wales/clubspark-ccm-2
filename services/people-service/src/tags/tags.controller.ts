@@ -46,7 +46,7 @@ export class TagsController {
 // ─── Person tags ─────────────────────────────────────────────────────────────
 
 @ApiTags('tags')
-@Controller('customers/:customerId/tags')
+@Controller('people/:customerId/tags')
 export class PersonTagsController {
   constructor(private readonly service: TagsService) {}
 

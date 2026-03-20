@@ -6,7 +6,7 @@ import { LifecycleService } from './lifecycle.service.js'
 import { TransitionLifecycleDto } from './dto/transition-lifecycle.dto.js'
 
 @ApiTags('lifecycle')
-@Controller('customers/:id/lifecycle')
+@Controller('people/:id/lifecycle')
 export class LifecycleController {
   constructor(private readonly service: LifecycleService) {}
 

@@ -89,9 +89,9 @@ export class OrganisationsController {
 
     const { user } = await res.json() as { user: { id: string } }
 
-    const customerServiceUrl = process.env['CUSTOMER_SERVICE_URL']
+    const customerServiceUrl = process.env['PEOPLE_SERVICE_URL']
     if (customerServiceUrl && user?.id) {
-      await fetch(`${customerServiceUrl}/customers`, {
+      await fetch(`${customerServiceUrl}/people`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

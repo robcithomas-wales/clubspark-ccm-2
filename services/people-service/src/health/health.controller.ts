@@ -11,7 +11,7 @@ export class HealthController {
 
   @Get()
   liveness() {
-    return { status: 'ok', service: 'customer-service' }
+    return { status: 'ok', service: 'people-service' }
   }
 
   @Get('db')
