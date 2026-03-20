@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import supertest from 'supertest'
 import { getApp, closeApp } from './helpers/app.js'
-import { prisma, seedFixtures, teardownFixtures } from './helpers/db.js'
+import { prisma, seedFixtures, teardownFixtures, checkDbAvailable } from './helpers/db.js'
 import {
   TEST_TENANT_ID,
   TEST_ORG_ID,
@@ -24,7 +24,9 @@ const JSON_HEADERS = {
 
 // ─── Suite ──────────────────────────────────────────────────────────────────
 
-describe('Venue service — integration', () => {
+const DB_AVAILABLE = await checkDbAvailable()
+
+describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
   let request: ReturnType<typeof supertest>
 
   beforeAll(async () => {
