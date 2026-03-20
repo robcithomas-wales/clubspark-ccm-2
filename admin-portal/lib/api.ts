@@ -1372,3 +1372,83 @@ export async function getOrganisation(): Promise<Organisation | null> {
     return null
   }
 }
+
+// ─── Admin Service ────────────────────────────────────────────────────────────
+
+const ADMIN_SERVICE =
+  process.env.NEXT_PUBLIC_ADMIN_SERVICE_URL || "http://127.0.0.1:4006"
+
+export type AdminRole = 'super' | 'bookings' | 'membership' | 'website' | 'coaching' | 'reports'
+
+export interface AdminUser {
+  id: string
+  userId: string
+  tenantId: string
+  role: AdminRole
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export async function getMyAdminUser(): Promise<AdminUser | null> {
+  try {
+    const res = await fetch(`${ADMIN_SERVICE}/admin-users/me`, {
+      headers: await getAuthHeaders(),
+      cache: "no-store",
+    })
+    if (!res.ok) return null
+    const json = await res.json()
+    return json.data ?? null
+  } catch {
+    return null
+  }
+}
+
+export async function listAdminUsers(): Promise<AdminUser[]> {
+  const res = await fetch(`${ADMIN_SERVICE}/admin-users`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to load admin users")
+  const json = await res.json()
+  return json.data ?? []
+}
+
+export async function createAdminUser(userId: string, role: AdminRole): Promise<AdminUser> {
+  const res = await fetch(`${ADMIN_SERVICE}/admin-users`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({ userId, role }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw Object.assign(new Error(err.message ?? "Failed to create admin user"), { status: res.status })
+  }
+  const json = await res.json()
+  return json.data
+}
+
+export async function updateAdminUser(id: string, patch: { role?: AdminRole; isActive?: boolean }): Promise<AdminUser> {
+  const res = await fetch(`${ADMIN_SERVICE}/admin-users/${id}`, {
+    method: "PATCH",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(patch),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw Object.assign(new Error(err.message ?? "Failed to update admin user"), { status: res.status })
+  }
+  const json = await res.json()
+  return json.data
+}
+
+export async function deleteAdminUser(id: string): Promise<void> {
+  const res = await fetch(`${ADMIN_SERVICE}/admin-users/${id}`, {
+    method: "DELETE",
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw Object.assign(new Error(err.message ?? "Failed to delete admin user"), { status: res.status })
+  }
+}

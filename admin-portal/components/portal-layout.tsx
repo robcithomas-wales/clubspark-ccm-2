@@ -131,6 +131,7 @@ const navSections = [
         icon: Settings,
         children: [
           { label: "Organisation", href: "/settings/organisation" },
+          { label: "Admin Users", href: "/settings/admin-users" },
         ],
       },
     ],
