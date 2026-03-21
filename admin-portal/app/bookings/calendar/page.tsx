@@ -17,7 +17,7 @@ function addDays(dateStr: string, delta: number): string {
 }
 
 function formatDateDisplay(dateStr: string): string {
-  return new Intl.DateTimeFormat("en-GB", { dateStyle: "full" }).format(
+  return new Intl.DateTimeFormat("en-GB", { dateStyle: "full", timeZone: "UTC" }).format(
     new Date(`${dateStr}T00:00:00Z`),
   )
 }
@@ -47,7 +47,7 @@ export default async function BookingCalendarPage({
 
   const activeUnits = units.filter((u) => u.isActive !== false)
 
-  // Map: unitId → bookings
+  // Map: unitId → bookings (direct)
   const bookingsByUnit = new Map<string, any[]>()
   for (const unit of activeUnits) {
     bookingsByUnit.set(unit.id, [])
@@ -58,18 +58,46 @@ export default async function BookingCalendarPage({
     if (list) list.push(booking)
   }
 
-  // For each cell (unit × slot), check if a booking covers it
-  function bookingForCell(unitId: string, slotLabel: string): any | null {
-    const [h, m] = slotLabel.split(":").map(Number)
-    const slotMinutes = h * 60 + m
-    const list = bookingsByUnit.get(unitId) ?? []
-    for (const b of list) {
-      const start = new Date(b.startsAt)
-      const end = new Date(b.endsAt)
-      const startMin = start.getUTCHours() * 60 + start.getUTCMinutes()
-      const endMin = end.getUTCHours() * 60 + end.getUTCMinutes()
-      if (slotMinutes >= startMin && slotMinutes < endMin) return b
+  // Map: parentUnitId → child unit IDs (for blocking parent when child is booked)
+  const childrenByParent = new Map<string, string[]>()
+  for (const unit of activeUnits) {
+    if (unit.parentUnitId) {
+      const siblings = childrenByParent.get(unit.parentUnitId) ?? []
+      siblings.push(unit.id)
+      childrenByParent.set(unit.parentUnitId, siblings)
     }
+  }
+
+  function slotMinutesFor(slotLabel: string): number {
+    const [h, m] = slotLabel.split(":").map(Number)
+    return h * 60 + m
+  }
+
+  function bookingCoversSlot(booking: any, slotMinutes: number): boolean {
+    const start = new Date(booking.startsAt)
+    const end = new Date(booking.endsAt)
+    const startMin = start.getUTCHours() * 60 + start.getUTCMinutes()
+    const endMin = end.getUTCHours() * 60 + end.getUTCMinutes()
+    return slotMinutes >= startMin && slotMinutes < endMin
+  }
+
+  // For each cell (unit × slot), check if a booking covers it.
+  // Also marks parent units as blocked when any child unit is booked.
+  function bookingForCell(unitId: string, slotLabel: string): { booking: any; isParentBlock: boolean } | null {
+    const slotMin = slotMinutesFor(slotLabel)
+
+    // Direct booking on this unit
+    for (const b of bookingsByUnit.get(unitId) ?? []) {
+      if (bookingCoversSlot(b, slotMin)) return { booking: b, isParentBlock: false }
+    }
+
+    // Parent blocked by a child booking
+    for (const childId of childrenByParent.get(unitId) ?? []) {
+      for (const b of bookingsByUnit.get(childId) ?? []) {
+        if (bookingCoversSlot(b, slotMin)) return { booking: b, isParentBlock: true }
+      }
+    }
+
     return null
   }
 
@@ -90,14 +118,18 @@ export default async function BookingCalendarPage({
       <div className="mb-6 flex items-center justify-between">
         <Link
           href={`/bookings/calendar?date=${prevDate}`}
-          className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-[#1857E0]/30 hover:text-[#1857E0]"
+          className="inline-flex flex-col items-center gap-0.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-slate-700 shadow-sm transition hover:border-[#1857E0]/30 hover:text-[#1857E0]"
         >
-          <ChevronLeft className="h-4 w-4" />
-          {prevDate}
+          <span className="flex items-center gap-1 text-sm font-medium">
+            <ChevronLeft className="h-4 w-4" />
+            Previous
+          </span>
+          <span className="text-xs text-slate-400">{prevDate}</span>
         </Link>
 
         <div className="text-center">
           <h2 className="text-lg font-semibold text-slate-900">{formatDateDisplay(date)}</h2>
+          <p className="text-xs text-slate-400">{date}</p>
           {date !== today && (
             <Link
               href="/bookings/calendar"
@@ -110,10 +142,13 @@ export default async function BookingCalendarPage({
 
         <Link
           href={`/bookings/calendar?date=${nextDate}`}
-          className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-[#1857E0]/30 hover:text-[#1857E0]"
+          className="inline-flex flex-col items-center gap-0.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-slate-700 shadow-sm transition hover:border-[#1857E0]/30 hover:text-[#1857E0]"
         >
-          {nextDate}
-          <ChevronRight className="h-4 w-4" />
+          <span className="flex items-center gap-1 text-sm font-medium">
+            Next
+            <ChevronRight className="h-4 w-4" />
+          </span>
+          <span className="text-xs text-slate-400">{nextDate}</span>
         </Link>
       </div>
 
@@ -146,25 +181,31 @@ export default async function BookingCalendarPage({
                     {slot}
                   </td>
                   {activeUnits.map((unit) => {
-                    const booking = bookingForCell(unit.id, slot)
+                    const result = bookingForCell(unit.id, slot)
                     return (
                       <td key={unit.id} className="border-r border-slate-200 px-1.5 py-1">
-                        {booking ? (
-                          <Link
-                            href={`/bookings/${booking.id}`}
-                            className={`block rounded-lg border px-2 py-1 leading-tight transition hover:opacity-80 ${statusColour[booking.status] ?? "bg-slate-100 text-slate-700 border-slate-200"}`}
-                          >
-                            <div className="font-semibold">
-                              {booking.bookingReference}
+                        {result ? (
+                          result.isParentBlock ? (
+                            <div className="block rounded-lg border border-slate-200 bg-slate-100 px-2 py-1 leading-tight text-slate-400 text-[10px]">
+                              Not Available
                             </div>
-                            {(booking.customerFirstName || booking.customerLastName) && (
-                              <div className="truncate text-[10px] opacity-75">
-                                {[booking.customerFirstName, booking.customerLastName]
-                                  .filter(Boolean)
-                                  .join(" ")}
+                          ) : (
+                            <Link
+                              href={`/bookings/${result.booking.id}`}
+                              className={`block rounded-lg border px-2 py-1 leading-tight transition hover:opacity-80 ${statusColour[result.booking.status] ?? "bg-slate-100 text-slate-700 border-slate-200"}`}
+                            >
+                              <div className="font-semibold">
+                                {result.booking.bookingReference}
                               </div>
-                            )}
-                          </Link>
+                              {(result.booking.customerFirstName || result.booking.customerLastName) && (
+                                <div className="truncate text-[10px] opacity-75">
+                                  {[result.booking.customerFirstName, result.booking.customerLastName]
+                                    .filter(Boolean)
+                                    .join(" ")}
+                                </div>
+                              )}
+                            </Link>
+                          )
                         ) : null}
                       </td>
                     )

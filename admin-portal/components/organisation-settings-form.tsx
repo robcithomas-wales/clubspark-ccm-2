@@ -26,6 +26,7 @@ type DesignPassthrough = {
   headingFont?: string | null
   bodyFont?: string | null
   navLayout?: string
+  portalTemplate?: string
   homePageContent?: any
 }
 
@@ -76,6 +77,7 @@ function extractDesign(data: any): DesignPassthrough {
     headingFont:     data?.headingFont,
     bodyFont:        data?.bodyFont,
     navLayout:       data?.navLayout,
+    portalTemplate:  data?.portalTemplate,
     homePageContent: data?.homePageContent,
   }
 }

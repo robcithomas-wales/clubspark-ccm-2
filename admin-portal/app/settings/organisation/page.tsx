@@ -1,17 +1,21 @@
 import { PortalLayout } from "@/components/portal-layout"
 import { OrganisationSettingsForm } from "@/components/organisation-settings-form"
+import { createClient } from "@/lib/supabase/server"
+
+const VENUE_SERVICE = "http://127.0.0.1:4003"
 
 async function getOrganisation() {
   try {
-    const { cookies } = await import("next/headers")
-    const cookieStore = await cookies()
-    const res = await fetch("http://127.0.0.1:3000/api/organisations", {
-      headers: { Cookie: cookieStore.toString() },
+    const supabase = await createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return null
+    const res = await fetch(`${VENUE_SERVICE}/organisations/me`, {
+      headers: { "Authorization": `Bearer ${session.access_token}` },
       cache: "no-store",
     })
     if (!res.ok) return null
     const json = await res.json()
-    return json.data ?? null
+    return json?.data ?? null
   } catch {
     return null
   }
