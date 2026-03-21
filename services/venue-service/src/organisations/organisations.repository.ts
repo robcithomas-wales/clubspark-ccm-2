@@ -30,7 +30,8 @@ export class OrganisationsRepository {
         ...(dto.faviconUrl      !== undefined ? { faviconUrl:      dto.faviconUrl      } : {}),
         ...(dto.headingFont     !== undefined ? { headingFont:     dto.headingFont     } : {}),
         ...(dto.bodyFont        !== undefined ? { bodyFont:        dto.bodyFont        } : {}),
-        ...(dto.navLayout       !== undefined ? { navLayout:       dto.navLayout       } : {}),
+        ...(dto.navLayout        !== undefined ? { navLayout:        dto.navLayout        } : {}),
+        ...(dto.portalTemplate  !== undefined ? { portalTemplate:   dto.portalTemplate  } : {}),
       },
     })
   }
@@ -61,6 +62,7 @@ export class OrganisationsRepository {
       bodyFont: dto.bodyFont ?? null,
       navLayout: dto.navLayout ?? 'dark-inline',
       faviconUrl: dto.faviconUrl ?? null,
+      portalTemplate: dto.portalTemplate ?? 'bold',
     }
     return this.prisma.write.organisation.upsert({
       where: { tenantId },

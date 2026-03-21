@@ -2,6 +2,7 @@ import { notFound } from "next/navigation"
 import { OrgProvider } from "@/lib/org-context"
 import { SiteNav } from "@/components/site-nav"
 import { SiteFooter } from "@/components/site-footer"
+import { SideNav } from "@/components/side-nav"
 import { fetchOrgBySlug } from "@/lib/api"
 
 // Google Fonts URL for a given font name
@@ -48,11 +49,29 @@ export default async function SlugLayout({
         h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); }
       `}</style>
 
-      <div className="flex min-h-screen flex-col">
-        <SiteNav />
-        <main className="flex-1">{children}</main>
-        <SiteFooter />
-      </div>
+      {org.portalTemplate === "club" ? (
+        /* ── Club template: fixed sidebar + scrollable content area ── */
+        <div className="flex min-h-screen bg-slate-50">
+          <SideNav />
+          {/* Offset for desktop sidebar (w-60 = 240px) and mobile top bar (h-14) */}
+          <div className="flex flex-1 flex-col lg:ml-60">
+            <main className="flex-1 px-4 py-6 pt-20 lg:px-8 lg:pt-8">
+              {children}
+            </main>
+            {/* Slim footer for club template */}
+            <footer className="mt-auto border-t border-slate-200 px-4 py-4 lg:px-8">
+              <p className="text-xs text-slate-400">© {new Date().getFullYear()} {org.name}</p>
+            </footer>
+          </div>
+        </div>
+      ) : (
+        /* ── Bold template: top nav + full-width content + footer ── */
+        <div className="flex min-h-screen flex-col">
+          <SiteNav />
+          <main className="flex-1">{children}</main>
+          <SiteFooter />
+        </div>
+      )}
     </OrgProvider>
   )
 }

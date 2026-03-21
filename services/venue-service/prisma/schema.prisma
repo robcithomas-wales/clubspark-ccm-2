@@ -237,6 +237,7 @@ model Organisation {
   bodyFont        String?   @map("body_font")
   navLayout       String    @default("dark-inline") @map("nav_layout")
   faviconUrl      String?   @map("favicon_url")
+  portalTemplate  String    @default("bold") @map("portal_template")
   homePageContent Json?     @map("home_page_content")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")

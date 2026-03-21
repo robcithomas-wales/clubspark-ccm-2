@@ -21,6 +21,7 @@ export type Org = {
   navLayout: string
   faviconUrl: string | null
   homePageContent: HomePageContent | null
+  portalTemplate: string
 }
 
 export type HomePageContent = {

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation"
-import { fetchOrgBySlug, fetchLatestNews, type NewsPost } from "@/lib/api"
+import { fetchOrgBySlug, fetchLatestNews } from "@/lib/api"
 import { HomePageClient } from "./home-page-client"
+import { ClubHomePageClient } from "./club-home-page-client"
 
 export default async function HomePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
@@ -8,6 +9,10 @@ export default async function HomePage({ params }: { params: Promise<{ slug: str
   if (!org) notFound()
 
   const latestNews = await fetchLatestNews(org.tenantId, 3)
+
+  if (org.portalTemplate === "club") {
+    return <ClubHomePageClient org={org} latestNews={latestNews} />
+  }
 
   return <HomePageClient org={org} latestNews={latestNews} />
 }

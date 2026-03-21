@@ -28,6 +28,7 @@ export async function GET() {
         headingFont:     org.headingFont     ?? "Inter",
         bodyFont:        org.bodyFont        ?? "Inter",
         navLayout:       org.navLayout       ?? "dark-inline",
+        portalTemplate:  org.portalTemplate  ?? "bold",
         name:            org.name            ?? "",
       }
     }, { status: res.status })

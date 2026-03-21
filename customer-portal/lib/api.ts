@@ -39,6 +39,7 @@ export type Org = {
   navLayout: string
   faviconUrl: string | null
   homePageContent: Record<string, any> | null
+  portalTemplate: string
 }
 
 // ─── News (public) ────────────────────────────────────────────────────────────

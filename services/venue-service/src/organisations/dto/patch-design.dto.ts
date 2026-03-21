@@ -8,4 +8,5 @@ export class PatchDesignDto {
   @IsOptional() @IsString() headingFont?: string | null
   @IsOptional() @IsString() bodyFont?: string | null
   @IsOptional() @IsString() navLayout?: string
+  @IsOptional() @IsString() portalTemplate?: string
 }

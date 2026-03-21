@@ -12,6 +12,7 @@ type DesignData = {
   headingFont: string
   bodyFont: string
   navLayout: string
+  portalTemplate: string
   name: string
 }
 
@@ -55,6 +56,7 @@ function normalise(data: any): DesignData {
     headingFont:     data?.headingFont     ?? "Inter",
     bodyFont:        data?.bodyFont        ?? "Inter",
     navLayout:       data?.navLayout       ?? "dark-inline",
+    portalTemplate:  data?.portalTemplate  ?? "bold",
     name:            data?.name            ?? "",
   }
 }
@@ -85,6 +87,7 @@ export function DesignSettingsForm({ initial }: { initial: any }) {
           headingFont:     form.headingFont     || null,
           bodyFont:        form.bodyFont        || null,
           navLayout:       form.navLayout       || "dark-inline",
+          portalTemplate:  form.portalTemplate  || "bold",
         }),
       })
       const json = await res.json()
@@ -220,6 +223,120 @@ export function DesignSettingsForm({ initial }: { initial: any }) {
           <p style={{ fontFamily: `'${form.bodyFont}', system-ui, sans-serif`, fontSize: "0.875rem", color: "#64748b", marginTop: "4px" }}>
             Book courts, join classes and manage your membership.
           </p>
+        </div>
+      </Section>
+
+      {/* Portal template */}
+      <Section title="Portal template">
+        <p className="text-xs text-slate-500 -mt-2 mb-2">Choose the overall layout of your customer-facing website.</p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {/* Bold template */}
+          <label className={[
+            "cursor-pointer rounded-2xl border-2 overflow-hidden transition",
+            form.portalTemplate === "bold"
+              ? "border-[#1857E0] shadow-md"
+              : "border-slate-200 hover:border-slate-300",
+          ].join(" ")}>
+            <input
+              type="radio"
+              name="portalTemplate"
+              value="bold"
+              checked={form.portalTemplate === "bold"}
+              onChange={() => set("portalTemplate", "bold")}
+              className="sr-only"
+            />
+            {/* Thumbnail */}
+            <div className="h-36 bg-slate-800 relative overflow-hidden">
+              {/* Top nav bar */}
+              <div className="absolute inset-x-0 top-0 h-6 bg-slate-700 flex items-center px-3 gap-2">
+                <div className="w-8 h-2 rounded bg-white/40" />
+                <div className="flex-1" />
+                <div className="w-4 h-1.5 rounded bg-white/20" />
+                <div className="w-4 h-1.5 rounded bg-white/20" />
+                <div className="w-4 h-1.5 rounded bg-white/20" />
+              </div>
+              {/* Hero area */}
+              <div className="absolute inset-x-0 top-6 bottom-0 flex flex-col items-start justify-center px-4"
+                style={{ backgroundColor: form.primaryColour + "cc" }}>
+                <div className="w-24 h-3 rounded bg-white/80 mb-1.5" />
+                <div className="w-16 h-2 rounded bg-white/40" />
+                <div className="mt-3 flex gap-1.5">
+                  <div className="w-10 h-3.5 rounded bg-white" />
+                  <div className="w-10 h-3.5 rounded bg-white/30" />
+                </div>
+              </div>
+            </div>
+            <div className="p-3 bg-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">Bold</div>
+                  <div className="text-xs text-slate-500">Full-screen hero, top navigation</div>
+                </div>
+                {form.portalTemplate === "bold" && (
+                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#1857E0]">
+                    <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </div>
+                )}
+              </div>
+            </div>
+          </label>
+
+          {/* Club template */}
+          <label className={[
+            "cursor-pointer rounded-2xl border-2 overflow-hidden transition",
+            form.portalTemplate === "club"
+              ? "border-[#1857E0] shadow-md"
+              : "border-slate-200 hover:border-slate-300",
+          ].join(" ")}>
+            <input
+              type="radio"
+              name="portalTemplate"
+              value="club"
+              checked={form.portalTemplate === "club"}
+              onChange={() => set("portalTemplate", "club")}
+              className="sr-only"
+            />
+            {/* Thumbnail */}
+            <div className="h-36 bg-white relative overflow-hidden flex">
+              {/* Sidebar */}
+              <div className="w-14 h-full flex flex-col pt-3 px-2 gap-1.5"
+                style={{ backgroundColor: form.primaryColour }}>
+                <div className="w-8 h-2 rounded bg-white/60 mb-1" />
+                <div className="w-full h-1.5 rounded bg-white/40" />
+                <div className="w-full h-1.5 rounded bg-white/40" />
+                <div className="w-full h-1.5 rounded bg-white/40" />
+                <div className="w-full h-1.5 rounded bg-white/40" />
+                <div className="w-full h-1.5 rounded bg-white/20" />
+              </div>
+              {/* Content area */}
+              <div className="flex-1 p-3">
+                {/* Welcome strip */}
+                <div className="rounded-lg h-10 mb-2 flex items-center px-2"
+                  style={{ backgroundColor: form.primaryColour + "20" }}>
+                  <div className="w-16 h-2 rounded" style={{ backgroundColor: form.primaryColour + "80" }} />
+                </div>
+                {/* Cards */}
+                <div className="grid grid-cols-2 gap-1.5">
+                  {[0,1,2,3].map(i => (
+                    <div key={i} className="rounded bg-slate-100 h-7" />
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="p-3 bg-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">Club</div>
+                  <div className="text-xs text-slate-500">Sidebar navigation, dashboard layout</div>
+                </div>
+                {form.portalTemplate === "club" && (
+                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#1857E0]">
+                    <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </div>
+                )}
+              </div>
+            </div>
+          </label>
         </div>
       </Section>
 

@@ -85,6 +85,10 @@ export class UpsertOrganisationDto {
   faviconUrl?: string | null
 
   @IsOptional()
+  @IsString()
+  portalTemplate?: string
+
+  @IsOptional()
   @IsIn(['enterprise', 'operator', 'club'])
   tenantType?: TenantType
 }
