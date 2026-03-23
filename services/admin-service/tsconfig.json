@@ -6,6 +6,8 @@
     "outDir": "dist",
     "rootDir": "src",
     "baseUrl": ".",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
     "paths": {}
   },
   "include": ["src/**/*"],
