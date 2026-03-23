@@ -5,16 +5,22 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY package.json package-lock.json ./
+COPY admin-portal/package.json ./admin-portal/
 COPY services/venue-service/package.json ./services/venue-service/
+COPY services/people-service/package.json ./services/people-service/
+COPY services/booking-service/package.json ./services/booking-service/
+COPY services/admin-service/package.json ./services/admin-service/
+COPY services/membership-service/package.json ./services/membership-service/
+COPY services/template-service/package.json ./services/template-service/
+
 COPY services/venue-service/prisma ./services/venue-service/prisma/
 
-RUN npm ci --workspace=@clubspark/venue-service
+RUN npm ci
 
 RUN cd services/venue-service && npx prisma generate
 
 COPY services/venue-service/tsconfig*.json services/venue-service/nest-cli.json ./services/venue-service/
 COPY services/venue-service/src ./services/venue-service/src
-
 RUN cd services/venue-service && npm run build
 
 # ─── Production stage ─────────────────────────────────────────────────────────
@@ -25,11 +31,16 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 COPY package.json package-lock.json ./
+COPY admin-portal/package.json ./admin-portal/
 COPY services/venue-service/package.json ./services/venue-service/
+COPY services/people-service/package.json ./services/people-service/
+COPY services/booking-service/package.json ./services/booking-service/
+COPY services/admin-service/package.json ./services/admin-service/
+COPY services/membership-service/package.json ./services/membership-service/
+COPY services/template-service/package.json ./services/template-service/
 COPY services/venue-service/prisma ./services/venue-service/prisma/
 
-RUN npm ci --workspace=@clubspark/venue-service --omit=dev && \
-    cd services/venue-service && npx prisma generate
+RUN npm ci --omit=dev && cd services/venue-service && npx prisma generate
 
 COPY --from=builder /app/services/venue-service/dist ./services/venue-service/dist
 
