@@ -77,7 +77,7 @@ export default function BookPage() {
       const s = await fetchAvailability(tenantId, selectedVenue.id, selectedResource.id, format(date, "yyyy-MM-dd"))
       setSlots(s)
       setStep("slots")
-    } catch { setError("Could not load availability") }
+    } catch (e: any) { setError(e?.message ?? "Could not load availability") }
     finally { setLoading(false) }
   }
 

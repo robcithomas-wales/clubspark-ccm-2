@@ -2,7 +2,7 @@ import { createClient } from "./supabase/client"
 
 const VENUE_URL = process.env.NEXT_PUBLIC_VENUE_SERVICE_URL!
 const BOOKING_URL = process.env.NEXT_PUBLIC_BOOKING_SERVICE_URL!
-const CUSTOMER_URL = process.env.NEXT_PUBLIC_PEOPLE_SERVICE_URL!
+const CUSTOMER_URL = process.env.NEXT_PUBLIC_CUSTOMER_SERVICE_URL!
 const MEMBERSHIP_URL = process.env.NEXT_PUBLIC_MEMBERSHIP_SERVICE_URL!
 
 // ─── Auth headers ─────────────────────────────────────────────────────────────
@@ -153,7 +153,8 @@ export async function fetchAvailability(
     fetch(`${BOOKING_URL}/availability/day?venueId=${venueId}&date=${date}`, { headers, cache: "no-store" }),
   ])
 
-  if (!unitsRes.ok || !availRes.ok) throw new Error("Failed to fetch availability")
+  if (!unitsRes.ok) throw new Error(`Failed to fetch units (${unitsRes.status})`)
+  if (!availRes.ok) throw new Error(`Failed to fetch availability (${availRes.status})`)
 
   const unitsJson = await unitsRes.json()
   const availJson = await availRes.json()

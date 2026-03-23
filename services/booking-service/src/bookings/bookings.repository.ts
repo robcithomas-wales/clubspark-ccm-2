@@ -110,7 +110,7 @@ export class BookingsRepository {
           u.name               AS "unitName",
           COUNT(*) OVER()::int AS "totalCount"
         FROM booking.bookings b
-        LEFT JOIN customer.customers c ON c.id = b.customer_id
+        LEFT JOIN people.persons c ON c.id = b.customer_id
         LEFT JOIN venue.venues v ON v.id = b.venue_id
         LEFT JOIN venue.resources r ON r.id = b.resource_id
         LEFT JOIN venue.bookable_units u ON u.id = b.bookable_unit_id
@@ -165,7 +165,7 @@ export class BookingsRepository {
           r.name               AS "resourceName",
           u.name               AS "unitName"
         FROM booking.bookings b
-        LEFT JOIN customer.customers c ON c.id = b.customer_id
+        LEFT JOIN people.persons c ON c.id = b.customer_id
         LEFT JOIN venue.venues v ON v.id = b.venue_id
         LEFT JOIN venue.resources r ON r.id = b.resource_id
         LEFT JOIN venue.bookable_units u ON u.id = b.bookable_unit_id
@@ -780,7 +780,7 @@ export class BookingsRepository {
         COALESCE(SUM(EXTRACT(EPOCH FROM (b.ends_at - b.starts_at)) / 3600), 0)::float AS "totalHours",
         COALESCE(SUM(ba.price * ba.quantity), 0)::float                             AS "addOnSpend"
       FROM booking.bookings b
-      JOIN customer.customers c ON c.id = b.customer_id
+      JOIN people.persons c ON c.id = b.customer_id
       LEFT JOIN booking.booking_add_ons ba ON ba.booking_id = b.id AND ba.status = 'active'
       WHERE b.tenant_id    = ${tenantId}::uuid
         AND b.status       = 'active'

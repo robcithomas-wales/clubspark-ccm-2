@@ -146,7 +146,7 @@ export class BookingSeriesRepository {
         c.email              AS "customerEmail",
         c.phone              AS "customerPhone"
       FROM booking.bookings b
-      LEFT JOIN customer.customers c ON c.id = b.customer_id
+      LEFT JOIN people.persons c ON c.id = b.customer_id
       WHERE b.tenant_id = ${tenantId}::uuid
         AND b.series_id = ${seriesId}::uuid
       ORDER BY b.starts_at ASC

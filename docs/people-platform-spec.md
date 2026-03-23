@@ -74,19 +74,19 @@ The admin portal has a customer list, a detail view and a create form. There is 
 
 | Capability | Current state | Gap |
 |---|---|---|
-| Unified person record | Partial — 6 fields, no lifecycle, no roles | Major |
-| Identity dedup | Basic rehome() | Moderate |
-| Roles | None | Major |
-| Segmentation | None | Major |
-| Lifecycle management | None | Major |
-| Activity timeline | None | Major |
-| Engagement scoring | None | Major |
-| Financial profile | None — no link to payments/bookings in people layer | Major |
-| Communication | Marketing consent flag only | Major |
-| Automation / workflows | None | Major |
-| Relationship model | None — parent/child not modelled | Major |
-| Reporting / insights | None | Major |
-| Multi-org identity | None | Major |
+| Unified person record | Built — extended model with lifecycle, address, DOB, avatar, engagement fields | Remaining: financial fields, gdpr_deleted_at, external_ids |
+| Identity dedup | rehome() on create; merge UI/API not yet built | Moderate |
+| Roles | Built — full CRUD, contextual roles, time-bound, admin UI | None (pilot scope) |
+| Segmentation | Not built — no segments table, no rule engine, no UI | Major |
+| Lifecycle management | Built — state machine, manual transitions, history, admin UI | Remaining: auto-transitions from events |
+| Activity timeline | Not built — no person_activities table, no event subscribers | Major |
+| Engagement scoring | Model fields exist (score, band); computation job not built | Moderate |
+| Financial profile | Not built — lifetime_value/balance fields not on model, no job | Major |
+| Communication | comms_preferences field on model; comms-service not built | Major |
+| Automation / workflows | Not started | Major |
+| Relationship model | Built — households, parent/child, guardian, relationships API + UI | None (pilot scope) |
+| Reporting / insights | Not started | Major |
+| Multi-org identity | Not built (is_coach, home_tenant_id fields not on model) | Low (Phase 4) |
 
 ### Root cause
 
@@ -170,7 +170,9 @@ All of these are delivery mechanisms only. The platform owns the logic, scheduli
 
 ### Naming convention
 
-The `customer-service` is **renamed and evolved** into `people-service`. All existing endpoints are preserved with backward-compatible additions. The renaming reflects what it actually is: the system of record for people, not just customers.
+The `customer-service` has been **renamed to `people-service`** (port 4004). All existing endpoints are preserved with backward-compatible additions. The service name and API routes now use `/people/*`.
+
+> **Pending:** The PostgreSQL schema namespace is still `customer.*` (tables: `customer.customers`, `customer.tags`, etc.). The target is `people.*` (`people.persons`). This migration has not yet been applied — it requires a coordinated rename across Prisma schema, migrations, and any cross-schema SQL in other services (booking-service, membership-service reference `customer_id` columns).
 
 ---
 
@@ -421,19 +423,19 @@ CREATE TABLE people.lifecycle_history (
 **Technology:** NestJS + Fastify + PostgreSQL + Prisma
 **Renamed from:** `customer-service` → `people-service`
 
-**New modules added:**
+**Modules:**
 
-| Module | Responsibility |
-|--------|---------------|
-| `PersonsModule` | Extended person CRUD — lifecycle, engagement, financial profile |
-| `RolesModule` | Role assignment, contextual roles, RBAC permissions |
-| `RelationshipsModule` | Parent/child, household, coach/participant relationships |
-| `TagsModule` | Tag management, auto-apply rules, expiry |
-| `SegmentsModule` | Segment definitions, rule evaluation engine, member counts |
-| `ActivityModule` | Activity event subscriber, timeline queries |
-| `LifecycleModule` | State machine, transition rules, automation triggers |
-| `InsightsModule` | Computed metrics — engagement score, LTV, at-risk signals |
-| `ActivitySubscriberModule` | Azure Service Bus subscriber for domain events from other services |
+| Module | Responsibility | Status |
+|--------|---------------|--------|
+| `CustomersModule` | Extended person CRUD — lifecycle, engagement fields | ✅ Built |
+| `LifecycleModule` | State machine, manual transitions, history | ✅ Built |
+| `RolesModule` | Role assignment, contextual roles, time-bound | ✅ Built |
+| `HouseholdsModule` | Household groups, members, relationships | ✅ Built |
+| `TagsModule` | Tag catalogue management, person tag apply/remove/expiry | ✅ Built |
+| `SegmentsModule` | Segment definitions, rule evaluation engine, member counts | Not built |
+| `ActivityModule` | Activity event subscriber, timeline queries | Not built |
+| `InsightsModule` | Computed metrics — engagement score, LTV, at-risk signals | Not built |
+| `ActivitySubscriberModule` | Azure Service Bus subscriber for domain events | Not built |
 
 **Key API additions:**
 
@@ -785,20 +787,22 @@ This makes the tagging system live — tags reflect current state automatically.
 **Goal:** A real system of record. Every person has lifecycle state, engagement signals and a complete activity history. The basics of a unified profile exist in the admin portal.
 
 **Deliverables:**
-- [ ] Rename and migrate `customer-service` → `people-service`
-- [ ] Migrate `customer.customers` → `people.persons` (all new fields, backward-compatible)
-- [ ] Add lifecycle state machine with manual transitions
-- [ ] Add lifecycle history table and API
+- [x] Rename `customer-service` → `people-service` (service renamed; DB schema still `customer.*` — see note below)
+- [ ] Migrate `customer.customers` → `people.persons` DB schema rename (still on `customer.*`)
+- [x] Add lifecycle state machine with manual transitions
+- [x] Add lifecycle history table and API (`GET /people/:id/lifecycle/history`)
 - [ ] Domain event publisher pattern in `booking-service` and `membership-service`
 - [ ] `ActivitySubscriberModule` in `people-service`
 - [ ] `person_activities` table and timeline API
-- [ ] Background job: engagement score computation
-- [ ] Background job: financial profile computation (LTV, balance)
-- [ ] Tag management (manual tags — API and admin UI)
-- [ ] Updated person profile page (overview tab with engagement, lifecycle, recent activity)
-- [ ] Activity timeline tab
-- [ ] Financial tab (basic)
-- [ ] Admin portal: `/people` replacing `/customers`
+- [ ] Background job: engagement score computation (fields exist on model; job not yet built)
+- [ ] Background job: financial profile computation — `lifetime_value`, `outstanding_balance`, `last_payment_at` (fields not yet on model)
+- [x] Tag management (manual tags — API and admin UI)
+- [x] Updated person profile page (overview tab with lifecycle, tags, roles — engagement score display not yet wired)
+- [ ] Activity timeline tab on person detail
+- [ ] Financial tab on person detail
+- [x] Admin portal: `/people` replacing `/customers`
+
+> **Note on DB schema rename:** The service is named `people-service` but the Prisma schema still maps to `@@schema("customer")` / `customers` table. The spec target of `people.persons` is a pending migration.
 
 **What this unlocks:** For the first time, every person has a meaningful profile. You can see who is engaged, who is drifting, who owes money, and what they've done on the platform. This is the system-of-record foundation.
 
@@ -809,18 +813,21 @@ This makes the tagging system live — tags reflect current state automatically.
 **Goal:** Know who each person is, who they are connected to, and be able to group them intelligently.
 
 **Deliverables:**
-- [ ] Roles model and API
-- [ ] Roles UI (assign, expire, contextual roles)
-- [ ] Relationships model and API (parent/child, household, coach/participant)
-- [ ] Relationships UI on person profile
+- [x] Roles model and API (assign, update status, remove — `GET/POST/PATCH/DELETE /people/:id/roles`)
+- [x] Roles UI on person detail (PersonRolesPanel)
+- [x] Relationships model and API (parent/child, household, coach/participant)
+- [x] Relationships UI on person profile (PersonRelationshipsPanel)
+- [x] Households model and API (`POST /households`, `POST /households/:id/members`)
 - [ ] Static segments (manual lists) — API and admin UI
 - [ ] Dynamic segments — rule engine, up to 10 supported rule fields initially
-- [ ] Segment builder UI
-- [ ] Segment evaluation job (runs every 30 minutes, updates member counts)
+- [ ] Segment builder UI (`/segments` section not built)
+- [ ] Segment evaluation job
 - [ ] Tag auto-apply on membership events (membership plan → tags → person)
-- [ ] Bulk operations: lifecycle update, tag apply, segment assign
-- [ ] Import / export (CSV with all extended fields)
-- [ ] Advanced search with lifecycle, role, segment filters
+- [x] Import — CSV bulk import (`POST /people/import`, admin portal `/people/import`)
+- [ ] Export — CSV export (`GET /people/export` not yet built)
+- [ ] Bulk operations: lifecycle update, tag apply, segment assign (`PATCH /people/bulk` not yet built)
+- [x] Advanced search with lifecycle filter and name/email search
+- [ ] Role and segment filters in search (not yet built)
 
 **What this unlocks:** You can ask questions like "show me all active members with the Junior role whose last booking was over 30 days ago" and get an answer in seconds. Segments become the unit of targeting for everything that follows.
 
@@ -831,17 +838,17 @@ This makes the tagging system live — tags reflect current state automatically.
 **Goal:** Send the right message to the right person at the right time, through the right channel.
 
 **Deliverables:**
-- [ ] `comms-service` scaffold and schema
+- [ ] `comms-service` scaffold and schema (not started)
 - [ ] Template management (email, SMS) — API and admin UI
 - [ ] Brevo email provider integration
 - [ ] Twilio SMS provider integration
 - [ ] Send to individual person (from person profile)
 - [ ] Send to segment / static group (campaign)
 - [ ] Communication history per person (admin UI tab)
-- [ ] Consent management — per-channel preferences
-- [ ] GDPR suppression list
+- [ ] Consent management — per-channel preferences (comms_preferences field exists on model; UI not built)
+- [ ] GDPR suppression list (gdpr_deleted_at field not yet on model)
 - [ ] Event-triggered sends: booking reminder (24h before), payment reminder (7d overdue)
-- [ ] Campaign list and detail view in admin portal
+- [ ] Campaign list and detail view in admin portal (`/communications` section not built)
 - [ ] Basic open/delivery tracking
 
 WhatsApp and push notifications are Phase 4.

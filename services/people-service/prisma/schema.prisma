@@ -1,5 +1,5 @@
-// ClubSpark — Customer Service Prisma Schema
-// Owns the customer schema: customers, lifecycle_history, tags, person_tags
+// ClubSpark — People Service Prisma Schema
+// Owns the people schema: persons, lifecycle_history, tags, person_tags, person_roles, households, person_relationships
 
 generator client {
   provider        = "prisma-client-js"
@@ -10,7 +10,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  schemas  = ["customer"]
+  schemas  = ["people"]
 }
 
 model Customer {
@@ -54,8 +54,8 @@ model Customer {
   relationshipsFrom     PersonRelationship[] @relation("RelationshipFrom")
   relationshipsTo       PersonRelationship[] @relation("RelationshipTo")
 
-  @@map("customers")
-  @@schema("customer")
+  @@map("persons")
+  @@schema("people")
   @@index([tenantId])
   @@index([tenantId, email])
   @@index([tenantId, lifecycleState])
@@ -76,7 +76,7 @@ model LifecycleHistory {
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@map("lifecycle_history")
-  @@schema("customer")
+  @@schema("people")
   @@index([customerId, changedAt])
   @@index([tenantId])
 }
@@ -93,7 +93,7 @@ model Tag {
 
   @@unique([tenantId, name])
   @@map("tags")
-  @@schema("customer")
+  @@schema("people")
   @@index([tenantId])
 }
 
@@ -116,7 +116,7 @@ model PersonRole {
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@map("person_roles")
-  @@schema("customer")
+  @@schema("people")
   @@index([tenantId])
   @@index([customerId])
   @@index([tenantId, role])
@@ -135,7 +135,7 @@ model PersonTag {
 
   @@id([customerId, tagId])
   @@map("person_tags")
-  @@schema("customer")
+  @@schema("people")
   @@index([customerId])
   @@index([tagId])
   @@index([tenantId])
@@ -151,7 +151,7 @@ model Household {
   members HouseholdMember[]
 
   @@map("households")
-  @@schema("customer")
+  @@schema("people")
   @@index([tenantId])
 }
 
@@ -168,7 +168,7 @@ model HouseholdMember {
 
   @@unique([householdId, customerId])
   @@map("household_members")
-  @@schema("customer")
+  @@schema("people")
   @@index([householdId])
   @@index([customerId])
   @@index([tenantId])
@@ -187,7 +187,7 @@ model PersonRelationship {
 
   @@unique([fromCustomerId, toCustomerId, relationship])
   @@map("person_relationships")
-  @@schema("customer")
+  @@schema("people")
   @@index([fromCustomerId])
   @@index([toCustomerId])
   @@index([tenantId])

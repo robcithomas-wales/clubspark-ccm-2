@@ -22,12 +22,12 @@ export async function checkDbAvailable(): Promise<boolean> {
 /**
  * Delete all customers created during the test run.
  * Uses raw SQL because the people-service Prisma client targets the
- * customer schema directly.
+ * people schema directly.
  */
 export async function cleanCustomers(): Promise<void> {
-  // Tags must be deleted before customers (FK cascade handles person_tags/lifecycle_history)
-  await prisma.$executeRaw`DELETE FROM customer.tags WHERE tenant_id = ${TEST_TENANT_ID}::uuid`
-  await prisma.$executeRaw`DELETE FROM customer.customers WHERE tenant_id = ${TEST_TENANT_ID}::uuid`
+  // Tags must be deleted before persons (FK cascade handles person_tags/lifecycle_history)
+  await prisma.$executeRaw`DELETE FROM people.tags WHERE tenant_id = ${TEST_TENANT_ID}::uuid`
+  await prisma.$executeRaw`DELETE FROM people.persons WHERE tenant_id = ${TEST_TENANT_ID}::uuid`
 }
 
 export async function teardown(): Promise<void> {

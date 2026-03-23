@@ -3,7 +3,7 @@
 > **Document purpose:** Records all architectural decisions, the target platform design, and the phased implementation plan. Used as the reference for all development work.
 >
 > **Last updated:** March 2026
-> **Status:** Active — Phase 0 in progress (0.1 ✅ 0.2 ✅ 0.3 ✅)
+> **Status:** Active — Phase 0 complete. Phase 1+ in progress.
 
 ---
 
@@ -57,41 +57,67 @@ The existing platform runs on ASP.NET + SQL Server. Core issues:
 
 ### Services (as of March 2026)
 
-| Service | Port | Language | Module | Status |
-|---|---|---|---|---|
-| venue-service | 4003 | **NestJS / TypeScript** | Fastify 4 | ✅ Phase 0.2 complete |
-| customer-service | 4004 | TypeScript/ESM | Fastify 4 | Active — needs Phase 0 work |
-| booking-service | 4005 | **NestJS / TypeScript** | Fastify 4 | ✅ Phase 0.3 complete |
-| membership-service | 4010 | TypeScript/ESM | Fastify 5 | Active — Phase 1+ work |
-| admin-portal | 3000 | TypeScript/Next.js 16 | React | Active |
+| Service | Port | Stack | Status |
+|---|---|---|---|
+| template-service | 4000 | NestJS / TypeScript / Fastify | ✅ Live — two-template system (Bold / Club) |
+| venue-service | 4003 | NestJS / TypeScript / Fastify | ✅ Live |
+| people-service | 4004 | NestJS / TypeScript / Fastify | ✅ Live (renamed from customer-service) |
+| booking-service | 4005 | NestJS / TypeScript / Fastify | ✅ Live |
+| admin-service | 4006 | NestJS / TypeScript / Fastify | ✅ Live — admin users, RBAC |
+| membership-service | 4010 | NestJS / TypeScript / Fastify | ✅ Live |
+| admin-portal | 3000 | Next.js / React | ✅ Live |
+| customer-portal | — | Next.js / React | ✅ Live — multi-tenant via `/[slug]` |
+| mobile-app | — | Expo / React Native | ✅ Live |
 
-### Known issues to fix in Phase 0
+### Phase 0 issues (all resolved)
 
-- [ ] `venue-service` add-ons are **in-memory only** — all data lost on restart
-- [ ] `venue-service` availability service **queries `booking.bookings` directly** — cross-service schema coupling
-- [ ] `booking-service` uses **JavaScript, not TypeScript** — inconsistent with all other services
-- [ ] `booking-service` uses **CommonJS** (`require`) — inconsistent with all other services using ESM
-- [ ] **No migration system** — schemas exist only as implicit knowledge in query strings
-- [ ] **Race condition in booking creation** — check-then-insert TOCTOU window allows double-bookings under concurrent load
-- [ ] **Booking reference** uses `BK-${Date.now()}` — collision-prone under concurrent load
-- [ ] **No indexes defined** — queries will degrade as data grows
-- [ ] **No connection pooling** — each service creates its own pg.Pool; connection exhaustion under load
+- [x] `venue-service` add-ons persisted to `venue.add_ons` DB table
+- [x] Cross-service schema coupling removed — venue-service no longer queries booking DB directly
+- [x] booking-service rewritten in NestJS + TypeScript
+- [x] Migration system in place (Prisma) across all services
+- [x] Race condition fixed — atomic INSERT with SERIALIZABLE transaction + btree_gist exclusion constraint
+- [x] Booking reference fixed — `BK-${randomBytes(5).hex().toUpperCase()}`
+- [x] Indexes defined on all critical tables
+- [x] Connection pooling fixed — single PrismaClient per service with `connection_limit=2` (Supabase session mode)
 
-### Current database schemas (implicit)
+### Current database schemas
 
 ```
-booking.bookings            — core booking records
-booking.booking_add_ons     — add-ons linked to bookings (references in-memory add-on IDs)
-venue.venues                — venue records
-venue.resources             — resources within venues
-venue.bookable_units        — bookable units within resources
-venue.unit_conflicts        — which units conflict with each other
-customer.customers          — individual customer records
-membership.memberships      — membership records
-membership.membership_plans — membership plan definitions
-membership.membership_schemes — top-level scheme groupings
-membership.membership_plan_entitlements — entitlements on plans
-membership.entitlement_policies — policy definitions
+-- booking schema
+booking.bookings            — core booking records (with series_id, booking_subject_type/id, pricing fields)
+booking.booking_add_ons     — add-ons linked to bookings
+booking.booking_series      — recurring series (iCal RRULE, slot time, season dates)
+booking.booking_rules       — access/pricing rules (belongs in booking module, not membership)
+
+-- venue schema
+venue.venues
+venue.resources
+venue.bookable_units        — includes isOptionalExtra flag
+venue.unit_conflicts
+venue.add_ons               — product add-ons (persisted)
+venue.availability_configs
+venue.blackout_dates
+venue.resource_groups
+venue.organisations
+venue.affiliations
+venue.news_posts
+
+-- people schema (was customer)
+people.customers
+people.households           — parent/child, guardian relationships
+people.roles                — person roles within an org
+people.tags                 — segmentation tags
+people.lifecycle            — membership lifecycle tracking
+
+-- membership schema
+membership.membership_schemes
+membership.membership_plans
+membership.memberships
+membership.entitlement_policies
+membership.membership_plan_entitlements
+
+-- admin schema
+admin.admin_users
 ```
 
 ---
@@ -217,15 +243,19 @@ Azure DevOps              — CI/CD pipelines (familiar from .NET)
 
 ### Service responsibilities
 
-| Service | Responsibility |
-|---|---|
-| **venue-service** | Venues, resources, bookable units, resource configurations, add-on catalogue, pricing rules |
-| **booking-service** | Bookings (individual + team), booking series, booking add-ons, availability checking |
-| **pricing-service** | Price calculation at booking time — applies pricing rules, surcharges, discounts |
-| **access-rules-service** | Who can book what, when, advance windows, booking limits — independent of membership |
-| **identity-service** | Individuals, teams, clubs, roles, team membership roster |
-| **membership-service** | Membership schemes, plans, memberships — provides subject data to access-rules-service |
-| **admin-portal** | Next.js admin interface |
+| Service | Responsibility | Status |
+|---|---|---|
+| **template-service** | Portal template system (Bold top-nav / Club sidebar-nav) | ✅ Built |
+| **venue-service** | Venues, resources, bookable units, add-on catalogue, availability configs, blackout dates, resource groups, organisations, affiliations | ✅ Built |
+| **people-service** | People (customers), households, roles, tags, lifecycle | ✅ Built |
+| **booking-service** | Bookings, series, booking add-ons, availability checking, booking rules | ✅ Built |
+| **admin-service** | Admin users, RBAC | ✅ Built |
+| **membership-service** | Membership schemes, plans, memberships, entitlement policies | ✅ Built |
+| **pricing-service** | Price calculation at booking time — applies pricing rules, surcharges, discounts | Phase 2 — not started |
+| **access-rules-service** | Who can book what, when, advance windows, booking limits — independent of membership | Phase 4 — not started |
+| **admin-portal** | Next.js admin interface | ✅ Built |
+| **customer-portal** | Multi-tenant Next.js customer-facing portal | ✅ Built |
+| **mobile-app** | Expo React Native app | ✅ Built |
 
 ---
 
@@ -290,11 +320,13 @@ This means a club using booking without membership can still configure rules. A 
 
 ## 6. Target Database Schemas
 
-### customer schema (extended)
+### people schema (extended — was: customer schema)
+
+> Note: `customer-service` has been renamed to `people-service`. Schema uses `people.*` namespace going forward. The models below represent the target; households/roles/tags/lifecycle are built; clubs/teams are Phase 1.
 
 ```sql
--- Existing — no changes
-customer.customers (
+-- Existing
+people.customers (
   id uuid primary key,
   tenant_id uuid not null,
   first_name text,
@@ -304,8 +336,8 @@ customer.customers (
   created_at timestamptz default now()
 )
 
--- New: clubs
-customer.clubs (
+-- Phase 1: clubs
+people.clubs (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null,
   organisation_id uuid not null,
@@ -316,8 +348,8 @@ customer.clubs (
   updated_at timestamptz default now()
 )
 
--- New: teams
-customer.teams (
+-- Phase 1: teams
+people.teams (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null,
   organisation_id uuid not null,
@@ -330,11 +362,11 @@ customer.teams (
   updated_at timestamptz default now()
 )
 
--- New: team membership roster
-customer.team_members (
+-- Phase 1: team membership roster
+people.team_members (
   id uuid primary key default gen_random_uuid(),
-  team_id uuid not null references customer.teams(id),
-  customer_id uuid not null references customer.customers(id),
+  team_id uuid not null references people.teams(id),
+  customer_id uuid not null references people.customers(id),
   role text not null,                -- 'captain' | 'manager' | 'player' | 'coach'
   joined_at timestamptz default now(),
   left_at timestamptz,
@@ -342,11 +374,11 @@ customer.team_members (
 )
 
 -- Indexes
-CREATE INDEX customers_tenant_email_idx ON customer.customers (tenant_id, lower(email));
-CREATE INDEX customers_tenant_name_idx ON customer.customers (tenant_id, last_name, first_name);
-CREATE INDEX teams_tenant_idx ON customer.teams (tenant_id, organisation_id);
-CREATE INDEX team_members_team_idx ON customer.team_members (team_id, customer_id) WHERE left_at IS NULL;
-CREATE INDEX team_members_customer_idx ON customer.team_members (customer_id);
+CREATE INDEX customers_tenant_email_idx ON people.customers (tenant_id, lower(email));
+CREATE INDEX customers_tenant_name_idx ON people.customers (tenant_id, last_name, first_name);
+CREATE INDEX teams_tenant_idx ON people.teams (tenant_id, organisation_id);
+CREATE INDEX team_members_team_idx ON people.team_members (team_id, customer_id) WHERE left_at IS NULL;
+CREATE INDEX team_members_customer_idx ON people.team_members (customer_id);
 ```
 
 ### venue schema (extended)
@@ -757,12 +789,12 @@ pg_restore --no-owner -d $AZURE_POSTGRES_URL clubspark_$(date +%Y%m%d).dump
 
 > Fix live risks and establish the correct foundation before any new features are built.
 
-#### 0.1 — Development tooling and standards
+#### 0.1 — Development tooling and standards ✅
 
-- [ ] Add ESLint + Prettier config enforced across all services
-- [ ] Add shared `tsconfig.base.json` for consistent TypeScript settings
-- [ ] Create NestJS service template (Dockerfile, health check, config module, Prisma setup, Fastify adapter)
-- [ ] Set up Prisma with initial migrations for all existing schemas
+- [x] Add ESLint + Prettier config enforced across all services
+- [x] Add shared `tsconfig.base.json` for consistent TypeScript settings
+- [x] Create NestJS service template (Dockerfile, health check, config module, Prisma setup, Fastify adapter)
+- [x] Set up Prisma with initial migrations for all existing schemas
 
 #### 0.2 — Fix venue-service ✅
 
@@ -783,12 +815,15 @@ pg_restore --no-owner -d $AZURE_POSTGRES_URL clubspark_$(date +%Y%m%d).dump
 - [x] Add all booking schema indexes
 - [x] Add `organisation_id` to bookings (was missing)
 
-#### 0.4 — Migrate customer-service to NestJS
+#### 0.4 — People platform (was: migrate customer-service to NestJS) ✅
 
-- [ ] Rewrite customer-service in NestJS
-- [ ] Add customer schema indexes
+- [x] Rewrite customer-service as `people-service` in NestJS (port 4004)
+- [x] Extend model: households, roles, tags, lifecycle
+- [x] Admin portal: people list, detail, create, import pages
+- [x] Add `admin-service` (port 4006) with admin-users and RBAC
+- [x] Add `template-service` (port 4000) with Bold/Club two-template system
 
-#### 0.5 — Infrastructure
+#### 0.5 — Infrastructure (deferred — pilot must prove value first)
 
 - [ ] Add Redis (local Docker for development)
 - [ ] Add `docker-compose.yml` for local development environment
@@ -797,18 +832,23 @@ pg_restore --no-owner -d $AZURE_POSTGRES_URL clubspark_$(date +%Y%m%d).dump
 - [ ] Implement RLS policies on all tables
 - [ ] Add `pg_stat_statements` extension in Supabase
 
-#### 0.6 — Admin portal
+#### 0.6 — Admin portal ✅
 
-- [ ] Update admin portal API calls to match any changed response shapes
+- [x] Admin portal fully built: operations, membership, venue setup, reports, website, settings sections
+- [x] Customer portal built (multi-tenant `/[slug]`): home, book, account, memberships, coaching, competitions, events, news
+- [x] Mobile app built (Expo): auth, home, book, account, booking flow
+- [x] Supabase auth integrated across admin portal
+- [x] Integration tests across all services (with graceful DB-skip)
+- [x] Playwright e2e suite: 5 test files
 
 ---
 
 ### Phase 1 — Identity: teams, clubs, and roles
 
-- [ ] Add `customer.clubs` table and migration
-- [ ] Add `customer.teams` table and migration
-- [ ] Add `customer.team_members` table and migration
-- [ ] Extend booking to support `booking_subject_type` and `booking_subject_id`
+- [ ] Add `people.clubs` table and migration
+- [ ] Add `people.teams` table and migration
+- [ ] Add `people.team_members` table and migration
+- [ ] Extend booking to support `booking_subject_type = 'team'` and `booking_subject_id`
 - [ ] Admin UI: club management pages
 - [ ] Admin UI: team management pages (create team, add/remove members, assign captain)
 - [ ] Admin UI: create booking on behalf of a team
@@ -827,14 +867,14 @@ pg_restore --no-owner -d $AZURE_POSTGRES_URL clubspark_$(date +%Y%m%d).dump
 
 ---
 
-### Phase 3 — Series / recurring bookings
+### Phase 3 — Series / recurring bookings (partially complete)
 
-- [ ] Add `booking.booking_series` table and migration
-- [ ] Implement series creation (generates individual booking records per occurrence)
+- [x] Add `booking.booking_series` table and migration
+- [x] Implement series creation (basic — generates individual booking records per occurrence)
 - [ ] Implement series cancellation (cancel all future occurrences)
 - [ ] Implement single-occurrence cancellation within a series
 - [ ] Implement series amendment (change time / unit from a given date)
-- [ ] Admin UI: series booking creation flow
+- [ ] Admin UI: series booking creation flow (reports page has series view; creation flow not yet full)
 - [ ] Admin UI: series management (view occurrences, cancel, amend)
 
 ---

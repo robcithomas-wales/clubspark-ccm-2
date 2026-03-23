@@ -74,7 +74,7 @@ export class CustomersRepository {
           AND tenant_id = ${tenantId}::uuid
       `,
       this.prisma.$executeRaw`
-        UPDATE customer.customers
+        UPDATE people.persons
         SET id = ${newId}::uuid
         WHERE id = ${oldId}::uuid
           AND tenant_id = ${tenantId}::uuid
