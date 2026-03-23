@@ -6,7 +6,7 @@ WORKDIR /app
 # Copy package files and install ALL dependencies (including dev for build)
 COPY package*.json ./
 COPY prisma ./prisma/
-RUN npm ci
+RUN npm install
 
 # Generate Prisma client
 RUN npx prisma generate
@@ -26,7 +26,7 @@ ENV NODE_ENV=production
 # Copy package files and install production dependencies only
 COPY package*.json ./
 COPY prisma ./prisma/
-RUN npm ci --omit=dev && npx prisma generate
+RUN npm install --omit=dev && npx prisma generate
 
 # Copy compiled output from builder
 COPY --from=builder /app/dist ./dist
