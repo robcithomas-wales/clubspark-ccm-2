@@ -50,7 +50,7 @@ export async function seedFixtures(): Promise<void> {
   `
 
   await prisma.$executeRaw`
-    INSERT INTO customer.customers (id, tenant_id)
+    INSERT INTO people.persons (id, tenant_id)
     VALUES (${TEST_CUSTOMER_ID}::uuid, ${TEST_TENANT_ID}::uuid)
     ON CONFLICT (id) DO NOTHING
   `
@@ -87,6 +87,6 @@ export async function teardownFixtures(): Promise<void> {
     where: { tenantId: TEST_TENANT_ID },
   })
   await prisma.$executeRaw`
-    DELETE FROM customer.customers WHERE id = ${TEST_CUSTOMER_ID}::uuid
+    DELETE FROM people.persons WHERE id = ${TEST_CUSTOMER_ID}::uuid
   `
 }
