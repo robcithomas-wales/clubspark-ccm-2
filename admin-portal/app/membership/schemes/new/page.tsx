@@ -13,13 +13,14 @@ async function createSchemeAction(formData: FormData) {
     throw new Error("Scheme name is required")
   }
 
-  await createMembershipScheme({
+  const result = await createMembershipScheme({
     name,
     description: description || undefined,
     status: status || "active",
   })
 
-  redirect("/membership/schemes")
+  const id = result?.data?.id ?? result?.id
+  redirect(id ? `/membership/schemes/${id}` : "/membership/schemes")
 }
 
 export default function NewMembershipSchemePage() {

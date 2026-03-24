@@ -53,7 +53,7 @@ test.describe('Customers', () => {
     await page.goto('/customers/new')
 
     // Submit empty form — JS validation fires before API call
-    await page.getByRole('button', { name: /create customer/i }).click()
+    await page.getByRole('button', { name: /create person/i }).click()
 
     // Should stay on the form page
     await expect(page).toHaveURL(/\/customers\/new/)

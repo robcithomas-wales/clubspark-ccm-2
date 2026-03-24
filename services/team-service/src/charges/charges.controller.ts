@@ -31,7 +31,7 @@ export class ChargesController {
     @Param('fixtureId') fixtureId: string,
     @Body() dto: CreateChargeRunDto,
   ) {
-    const initiatedBy = req.tenantContext.userId ?? 'system'
+    const initiatedBy = req.tenantContext.userId ?? null
     return this.service.createRun(req.tenantContext.tenantId, teamId, fixtureId, dto, initiatedBy)
   }
 

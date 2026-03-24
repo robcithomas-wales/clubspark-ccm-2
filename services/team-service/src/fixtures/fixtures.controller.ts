@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Param, Body, Query, HttpCode, HttpStatus, Request } from '@nestjs/common'
+import { Controller, Get, Post, Patch, Param, Body, Query, HttpCode, HttpStatus, Request, BadRequestException } from '@nestjs/common'
 import { ApiTags, ApiOperation } from '@nestjs/swagger'
 import type { FastifyRequest } from 'fastify'
 import { FixturesService } from './fixtures.service.js'
@@ -51,5 +51,16 @@ export class FixturesController {
     @Body() dto: UpdateFixtureDto,
   ) {
     return this.service.update(req.tenantContext.tenantId, teamId, id, dto)
+  }
+
+  @Post(':id/cancel')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cancel a fixture' })
+  cancel(
+    @Request() req: FastifyRequest & { tenantContext: { tenantId: string } },
+    @Param('teamId') teamId: string,
+    @Param('id') id: string,
+  ) {
+    return this.service.update(req.tenantContext.tenantId, teamId, id, { status: 'cancelled' })
   }
 }

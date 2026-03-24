@@ -24,7 +24,7 @@ test.describe('Reports — core pages', () => {
     await page.goto('/reports/revenue')
 
     await expect(page.getByRole('heading', { name: /revenue report/i })).toBeVisible()
-    await expect(page.getByText(/total booking revenue/i).first()).toBeVisible()
+    await expect(page.getByText(/booking revenue/i).first()).toBeVisible()
     await expect(page.getByText(/revenue per booked hour/i).first()).toBeVisible()
   })
 
@@ -39,14 +39,14 @@ test.describe('Reports — core pages', () => {
     await page.goto('/reports/customers')
 
     await expect(page.getByRole('heading', { name: /customer report/i })).toBeVisible()
-    await expect(page.getByText(/total customers/i).first()).toBeVisible()
+    await expect(page.getByText(/customers registered/i).first()).toBeVisible()
   })
 
   test('membership report loads with membership KPIs', async ({ page }) => {
     await page.goto('/reports/membership')
 
     await expect(page.getByRole('heading', { name: /membership report/i })).toBeVisible()
-    await expect(page.getByText(/total memberships/i).first()).toBeVisible()
+    await expect(page.getByText(/memberships in range/i).first()).toBeVisible()
     await expect(page.getByText(/renewals due/i).first()).toBeVisible({ timeout: 10_000 })
   })
 
@@ -54,7 +54,7 @@ test.describe('Reports — core pages', () => {
     await page.goto('/reports/series')
 
     await expect(page.getByRole('heading', { name: /series report/i })).toBeVisible()
-    await expect(page.getByText(/total series/i).first()).toBeVisible()
+    await expect(page.getByText(/series in range/i).first()).toBeVisible()
     await expect(page.getByText(/cancellation rate/i).first()).toBeVisible()
   })
 })
@@ -78,7 +78,7 @@ test.describe('Reports — new pages', () => {
     await page.goto('/reports/addons')
 
     await expect(page.getByRole('heading', { name: /add-ons report/i })).toBeVisible()
-    await expect(page.getByText(/total add-ons/i).first()).toBeVisible()
+    await expect(page.getByText(/add-ons in range/i).first()).toBeVisible()
     await expect(page.getByText(/avg catalogue price/i).first()).toBeVisible()
   })
 

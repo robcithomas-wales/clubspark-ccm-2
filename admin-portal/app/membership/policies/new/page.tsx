@@ -19,14 +19,15 @@ async function createPolicyAction(formData: FormData) {
     throw new Error("Policy type is required")
   }
 
-  await createEntitlementPolicy({
+  const result = await createEntitlementPolicy({
     name,
     policyType,
     description: description || undefined,
     status: status as "active" | "draft" | "inactive",
   })
 
-  redirect("/membership/policies")
+  const id = result?.data?.id ?? result?.id
+  redirect(id ? `/membership/policies/${id}` : "/membership/policies")
 }
 
 const policyTypes = [

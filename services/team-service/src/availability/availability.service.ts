@@ -24,6 +24,6 @@ export class AvailabilityService {
 
   async requestAll(tenantId: string, fixtureId: string, teamId: string) {
     const responses = await this.repo.requestForAllMembers(fixtureId, teamId, tenantId)
-    return { data: responses, requested: responses.length }
+    return { data: responses, created: responses.length }
   }
 }

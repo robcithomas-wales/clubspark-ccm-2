@@ -7,7 +7,7 @@ import type { UpdateMemberDto } from './dto/update-member.dto.js'
 export class RosterService {
   constructor(private readonly repo: RosterRepository) {}
 
-  async list(tenantId: string, teamId: string, activeOnly?: boolean) {
+  async list(tenantId: string, teamId: string, activeOnly = true) {
     const members = await this.repo.list(tenantId, teamId, activeOnly)
     return { data: members, pagination: { total: members.length } }
   }

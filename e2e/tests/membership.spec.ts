@@ -31,7 +31,7 @@ test.describe('Membership Schemes', () => {
   test('schemes list page loads', async ({ page }) => {
     await page.goto('/membership/schemes')
 
-    await expect(page.getByRole('heading', { name: /schemes/i })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /schemes/i }).first()).toBeVisible()
   })
 
   test('new scheme link navigates to create form', async ({ page }) => {
@@ -45,7 +45,7 @@ test.describe('Membership Schemes', () => {
   test('new scheme form requires a name', async ({ page }) => {
     await page.goto('/membership/schemes/new')
 
-    await page.getByRole('button', { name: /create/i }).click()
+    await page.getByRole('button', { name: /save scheme/i }).click()
 
     // Should stay on form and show error
     await expect(page).toHaveURL(/\/membership\/schemes\/new/)
@@ -57,10 +57,10 @@ test.describe('Membership Schemes', () => {
     const uniqueName = `E2E Scheme ${Date.now()}`
     await page.getByLabel(/name/i).fill(uniqueName)
 
-    await page.getByRole('button', { name: /create/i }).click()
+    await page.getByRole('button', { name: /save scheme/i }).click()
 
     await expect(page).toHaveURL(/\/membership\/schemes\/[0-9a-f-]{36}/, { timeout: 10_000 })
-    await expect(page.getByText(uniqueName)).toBeVisible()
+    await expect(page.getByText(uniqueName).first()).toBeVisible()
   })
 
   test('scheme detail page shows edit button', async ({ page }) => {
@@ -92,7 +92,7 @@ test.describe('Membership Plans', () => {
   test('plans list page loads', async ({ page }) => {
     await page.goto('/membership/plans')
 
-    await expect(page.getByRole('heading', { name: /plans/i })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /plans/i }).first()).toBeVisible()
   })
 
   test('new plan link navigates to create form', async ({ page }) => {
@@ -121,13 +121,13 @@ test.describe('Entitlement Policies', () => {
   test('policies list page loads', async ({ page }) => {
     await page.goto('/membership/policies')
 
-    await expect(page.getByRole('heading', { name: /polic/i })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /polic/i }).first()).toBeVisible()
   })
 
   test('new policy link navigates to create form', async ({ page }) => {
     await page.goto('/membership/policies')
 
-    await page.getByRole('link', { name: /new policy/i }).click()
+    await page.getByRole('link', { name: /create policy/i }).click()
     await expect(page).toHaveURL(/\/membership\/policies\/new/)
   })
 
@@ -143,11 +143,12 @@ test.describe('Entitlement Policies', () => {
 
     const uniqueName = `E2E Policy ${Date.now()}`
     await page.getByLabel(/name/i).fill(uniqueName)
+    await page.selectOption('[name="policyType"]', 'advance_booking')
 
-    await page.getByRole('button', { name: /create/i }).click()
+    await page.getByRole('button', { name: /create policy/i }).click()
 
     await expect(page).toHaveURL(/\/membership\/policies\/[0-9a-f-]{36}/, { timeout: 10_000 })
-    await expect(page.getByText(uniqueName)).toBeVisible()
+    await expect(page.getByText(uniqueName).first()).toBeVisible()
   })
 
   test('policy detail shows edit button', async ({ page }) => {
@@ -182,20 +183,20 @@ test.describe('Memberships list and create', () => {
   test('memberships list page loads', async ({ page }) => {
     await page.goto('/membership/memberships')
 
-    await expect(page.getByRole('heading', { name: /memberships/i })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /memberships/i }).first()).toBeVisible()
   })
 
   test('new membership link navigates to create form', async ({ page }) => {
     await page.goto('/membership/memberships')
 
-    await page.getByRole('link', { name: /new membership/i }).click()
+    await page.getByRole('link', { name: /create membership/i }).click()
     await expect(page).toHaveURL(/\/membership\/memberships\/new/)
   })
 
   test('membership detail is accessible from list', async ({ page }) => {
     await page.goto('/membership/memberships')
 
-    const firstRow = page.locator('a[href^="/membership/memberships/"]:not([href="/membership/memberships/new"])').first()
+    const firstRow = page.locator('a[href^="/membership/memberships/"]:not([href="/membership/memberships/new"]):not([href="/membership/memberships/bulk-assign"])').first()
     const hasRow = await firstRow.isVisible().catch(() => false)
 
     if (hasRow) {
