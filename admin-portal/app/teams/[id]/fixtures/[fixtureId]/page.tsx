@@ -164,10 +164,21 @@ export default function FixtureDetailPage() {
     setActionLoading(false)
   }
 
-  if (loading || !fixture) {
+  if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+      </div>
+    )
+  }
+
+  if (!fixture) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
+        <p className="text-sm font-medium text-slate-500">Fixture not found.</p>
+        <Link href={`/teams/${teamId}`} className="text-sm text-blue-600 hover:underline">
+          Back to team
+        </Link>
       </div>
     )
   }
