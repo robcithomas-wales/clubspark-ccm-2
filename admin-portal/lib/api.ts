@@ -1637,3 +1637,123 @@ export async function updateLessonType(id: string, input: {
   if (!res.ok) throw new Error("Failed to update lesson type")
   return res.json()
 }
+
+// ── Team Service ──────────────────────────────────────────────────────────────
+
+const TEAM_SERVICE =
+  process.env.NEXT_PUBLIC_TEAM_SERVICE_URL || "http://127.0.0.1:4008"
+
+export type Team = {
+  id: string
+  name: string
+  sport: string
+  season?: string
+  ageGroup?: string
+  gender?: string
+  defaultMatchFee?: number
+  juniorMatchFee?: number
+  substituteMatchFee?: number
+  chargeRule?: string
+  isActive: boolean
+  _count?: { members: number; fixtures: number }
+}
+
+export type TeamMember = {
+  id: string
+  displayName: string
+  email?: string
+  phone?: string
+  position?: string
+  shirtNumber?: number
+  isGuest: boolean
+  isJunior: boolean
+  guardianName?: string
+  guardianEmail?: string
+  guardianPhone?: string
+  isActive: boolean
+}
+
+export type Fixture = {
+  id: string
+  opponent: string
+  homeAway: string
+  venue?: string
+  kickoffAt: string
+  meetTime?: string
+  durationMinutes?: number
+  matchType?: string
+  status: string
+  notes?: string
+  externalRef?: string
+  _count?: { availability: number; selections: number }
+}
+
+export async function getTeams(): Promise<Team[]> {
+  const res = await fetch(`${TEAM_SERVICE}/teams`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to load teams")
+  const json = await res.json()
+  return json.data ?? []
+}
+
+export async function getTeam(id: string): Promise<Team & { members: TeamMember[]; fixtures: Fixture[] }> {
+  const res = await fetch(`${TEAM_SERVICE}/teams/${id}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to load team")
+  const json = await res.json()
+  return json.data
+}
+
+export async function createTeam(input: Omit<Team, "id" | "_count">) {
+  const res = await fetch(`${TEAM_SERVICE}/teams`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(input),
+  })
+  if (!res.ok) throw new Error("Failed to create team")
+  return res.json()
+}
+
+export async function updateTeam(id: string, input: Partial<Omit<Team, "id" | "_count">>) {
+  const res = await fetch(`${TEAM_SERVICE}/teams/${id}`, {
+    method: "PATCH",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(input),
+  })
+  if (!res.ok) throw new Error("Failed to update team")
+  return res.json()
+}
+
+export async function getRoster(teamId: string): Promise<TeamMember[]> {
+  const res = await fetch(`${TEAM_SERVICE}/teams/${teamId}/roster`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to load roster")
+  const json = await res.json()
+  return json.data ?? []
+}
+
+export async function getFixtures(teamId: string): Promise<Fixture[]> {
+  const res = await fetch(`${TEAM_SERVICE}/teams/${teamId}/fixtures`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to load fixtures")
+  const json = await res.json()
+  return json.data ?? []
+}
+
+export async function getFixture(teamId: string, fixtureId: string): Promise<Fixture & { availability: any[]; selections: any[]; chargeRuns: any[] }> {
+  const res = await fetch(`${TEAM_SERVICE}/teams/${teamId}/fixtures/${fixtureId}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to load fixture")
+  const json = await res.json()
+  return json.data
+}

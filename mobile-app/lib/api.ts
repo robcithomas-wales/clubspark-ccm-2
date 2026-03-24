@@ -5,6 +5,7 @@ const BOOKING_URL = process.env.EXPO_PUBLIC_BOOKING_SERVICE_URL!
 const CUSTOMER_URL = process.env.EXPO_PUBLIC_PEOPLE_SERVICE_URL!
 const MEMBERSHIP_URL = process.env.EXPO_PUBLIC_MEMBERSHIP_SERVICE_URL!
 const COACHING_URL = process.env.EXPO_PUBLIC_COACHING_SERVICE_URL!
+const TEAM_URL = process.env.EXPO_PUBLIC_TEAM_SERVICE_URL!
 
 // ─── Public (no auth) ────────────────────────────────────────────────────────
 
@@ -474,4 +475,60 @@ export async function createCoachingBooking(
     const json = await res.json().catch(() => ({}))
     throw new Error(json?.message ?? 'Failed to create booking')
   }
+}
+
+// ─── Team Service ─────────────────────────────────────────────────────────────
+
+export type PlayerTeam = {
+  id: string
+  name: string
+  sport: string
+  season?: string
+  ageGroup?: string
+}
+
+export type PlayerFixture = {
+  id: string
+  teamId: string
+  teamName: string
+  opponent: string
+  homeAway: string
+  venue?: string
+  kickoffAt: string
+  meetTime?: string
+  status: string
+  matchType?: string
+  myAvailability?: string | null
+}
+
+export async function fetchMyTeams(tenantId: string, personId: string): Promise<PlayerTeam[]> {
+  const headers = await authHeaders(tenantId)
+  const res = await fetch(`${TEAM_URL}/teams?personId=${personId}`, { headers })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data ?? []
+}
+
+export async function fetchTeamFixtures(tenantId: string, teamId: string): Promise<PlayerFixture[]> {
+  const headers = await authHeaders(tenantId)
+  const res = await fetch(`${TEAM_URL}/teams/${teamId}/fixtures`, { headers })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data ?? []
+}
+
+export async function respondAvailability(
+  tenantId: string,
+  teamId: string,
+  fixtureId: string,
+  memberId: string,
+  response: 'available' | 'unavailable' | 'maybe',
+  notes?: string,
+): Promise<void> {
+  const headers = await authHeaders(tenantId)
+  await fetch(`${TEAM_URL}/teams/${teamId}/fixtures/${fixtureId}/availability/${memberId}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ response, notes }),
+  })
 }

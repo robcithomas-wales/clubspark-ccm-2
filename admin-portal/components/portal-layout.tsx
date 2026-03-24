@@ -27,6 +27,7 @@ import {
   Globe,
   Repeat2,
   GraduationCap,
+  Shield,
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
@@ -82,6 +83,12 @@ const navSections = [
           { label: "Lesson Types", href: "/coaching/lesson-types" },
         ],
       },
+    ],
+  },
+  {
+    label: "Teams",
+    items: [
+      { label: "Teams", href: "/teams", icon: Shield },
     ],
   },
   {

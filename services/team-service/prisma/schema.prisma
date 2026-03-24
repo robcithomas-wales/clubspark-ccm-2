@@ -1,0 +1,261 @@
+// ClubSpark — Team Service Prisma Schema
+// Owns the team schema: teams, team_members, fixtures, availability_responses,
+// selections, charge_runs, charges, broadcast_logs
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+  output          = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["team"]
+}
+
+// ── Enums ────────────────────────────────────────────────────────────────────
+
+enum Sport {
+  football
+  cricket
+  other
+
+  @@schema("team")
+}
+
+enum FixtureStatus {
+  draft
+  scheduled
+  squad_selected
+  fees_requested
+  completed
+  cancelled
+
+  @@schema("team")
+}
+
+enum HomeAway {
+  home
+  away
+  neutral
+
+  @@schema("team")
+}
+
+enum PlayerAvailability {
+  available
+  maybe
+  unavailable
+  no_response
+
+  @@schema("team")
+}
+
+enum SelectionRole {
+  starter
+  substitute
+  reserve
+
+  @@schema("team")
+}
+
+enum ChargeRunStatus {
+  draft
+  sent
+  completed
+  cancelled
+
+  @@schema("team")
+}
+
+enum ChargeStatus {
+  pending
+  paid
+  waived
+
+  @@schema("team")
+}
+
+// ── Models ───────────────────────────────────────────────────────────────────
+
+// A team belonging to a club (tenant). Tracks sport, season, fee defaults.
+model Team {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String   @map("tenant_id") @db.Uuid
+  name               String
+  sport              Sport    @default(football)
+  season             String?  // e.g. "2024-25"
+  ageGroup           String?  @map("age_group")   // e.g. "Under 14", "Senior"
+  gender             String?  // "male", "female", "mixed"
+  defaultMatchFee    Decimal? @map("default_match_fee") @db.Decimal(10, 2)
+  juniorMatchFee     Decimal? @map("junior_match_fee") @db.Decimal(10, 2)
+  substituteMatchFee Decimal? @map("substitute_match_fee") @db.Decimal(10, 2)
+  // selected | starters_only | all_available | manual
+  chargeRule         String   @default("selected") @map("charge_rule")
+  isActive           Boolean  @default(true) @map("is_active")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  members  TeamMember[]
+  fixtures Fixture[]
+
+  @@map("teams")
+  @@schema("team")
+  @@index([tenantId])
+  @@index([tenantId, isActive])
+  @@index([tenantId, sport])
+}
+
+// A player on a team's roster. May be linked to a people-service person (personId)
+// or a guest with no platform account. Children have guardian contact details.
+model TeamMember {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  teamId         String    @map("team_id") @db.Uuid
+  personId       String?   @map("person_id") @db.Uuid  // soft ref to people.persons
+  displayName    String    @map("display_name")
+  email          String?
+  phone          String?
+  position       String?   // e.g. "Goalkeeper", "Wicketkeeper", "Batsman"
+  shirtNumber    Int?      @map("shirt_number")
+  isGuest        Boolean   @default(false) @map("is_guest")
+  isJunior       Boolean   @default(false) @map("is_junior")
+  dateOfBirth    DateTime? @map("date_of_birth") @db.Date
+  guardianName   String?   @map("guardian_name")
+  guardianEmail  String?   @map("guardian_email")
+  guardianPhone  String?   @map("guardian_phone")
+  isActive       Boolean   @default(true) @map("is_active")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  team         Team                   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  availability AvailabilityResponse[]
+  selections   Selection[]
+  charges      Charge[]
+
+  @@map("team_members")
+  @@schema("team")
+  @@index([tenantId])
+  @@index([teamId])
+  @@index([teamId, isActive])
+  @@index([personId])
+}
+
+// A match fixture for a team. Lifecycle state is stored here and recalculated
+// by the service whenever relevant child records change.
+model Fixture {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String        @map("tenant_id") @db.Uuid
+  teamId          String        @map("team_id") @db.Uuid
+  opponent        String
+  homeAway        HomeAway      @default(home) @map("home_away")
+  venue           String?       // location / ground name
+  kickoffAt       DateTime      @map("kickoff_at") @db.Timestamptz(6)
+  meetTime        DateTime?     @map("meet_time") @db.Timestamptz(6)
+  durationMinutes Int?          @map("duration_minutes")
+  matchType       String?       @map("match_type")  // League, Cup, Friendly, T20, etc.
+  status          FixtureStatus @default(draft)
+  notes           String?
+  externalRef     String?       @map("external_ref") // NGB / imported reference
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  team         Team                   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  availability AvailabilityResponse[]
+  selections   Selection[]
+  chargeRuns   ChargeRun[]
+
+  @@map("fixtures")
+  @@schema("team")
+  @@index([tenantId])
+  @@index([teamId])
+  @@index([teamId, kickoffAt])
+  @@index([teamId, status])
+}
+
+// One availability response per player per fixture.
+model AvailabilityResponse {
+  id           String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fixtureId    String             @map("fixture_id") @db.Uuid
+  teamMemberId String             @map("team_member_id") @db.Uuid
+  response     PlayerAvailability @default(no_response)
+  respondedAt  DateTime?          @map("responded_at") @db.Timestamptz(6)
+  notes        String?
+  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  fixture    Fixture    @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
+  teamMember TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+
+  @@unique([fixtureId, teamMemberId])
+  @@map("availability_responses")
+  @@schema("team")
+  @@index([fixtureId])
+  @@index([teamMemberId])
+}
+
+// A player's role in the selected squad for a fixture.
+model Selection {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fixtureId    String        @map("fixture_id") @db.Uuid
+  teamMemberId String        @map("team_member_id") @db.Uuid
+  role         SelectionRole @default(starter)
+  position     String?       // override position for this match
+  shirtNumber  Int?          @map("shirt_number")
+  publishedAt  DateTime?     @map("published_at") @db.Timestamptz(6)
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  fixture    Fixture    @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
+  teamMember TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+
+  @@unique([fixtureId, teamMemberId])
+  @@map("selections")
+  @@schema("team")
+  @@index([fixtureId])
+  @@index([teamMemberId])
+}
+
+// A batch charge run for a fixture — groups individual player charges.
+model ChargeRun {
+  id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String          @map("tenant_id") @db.Uuid
+  fixtureId   String          @map("fixture_id") @db.Uuid
+  initiatedBy String?         @map("initiated_by") @db.Uuid  // userId of manager
+  status      ChargeRunStatus @default(draft)
+  notes       String?
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  fixture Fixture  @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
+  charges Charge[]
+
+  @@map("charge_runs")
+  @@schema("team")
+  @@index([fixtureId])
+  @@index([tenantId])
+}
+
+// An individual player charge within a charge run.
+model Charge {
+  id                   String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  chargeRunId          String       @map("charge_run_id") @db.Uuid
+  teamMemberId         String       @map("team_member_id") @db.Uuid
+  amount               Decimal      @db.Decimal(10, 2)
+  status               ChargeStatus @default(pending)
+  stripePaymentIntentId String?     @map("stripe_payment_intent_id")
+  paidAt               DateTime?    @map("paid_at") @db.Timestamptz(6)
+  notes                String?
+  createdAt            DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  chargeRun  ChargeRun  @relation(fields: [chargeRunId], references: [id], onDelete: Cascade)
+  teamMember TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+
+  @@map("charges")
+  @@schema("team")
+  @@index([chargeRunId])
+  @@index([teamMemberId])
+  @@index([status])
+}
