@@ -6,8 +6,8 @@ export class CreateTeamDto {
   @IsString() @IsNotEmpty()
   name!: string
 
-  @ApiPropertyOptional({ enum: ['football', 'cricket', 'other'] })
-  @IsOptional() @IsIn(['football', 'cricket', 'other'])
+  @ApiPropertyOptional({ enum: ['football', 'cricket', 'rugby', 'hockey', 'netball', 'basketball', 'tennis', 'other'] })
+  @IsOptional() @IsIn(['football', 'cricket', 'rugby', 'hockey', 'netball', 'basketball', 'tennis', 'other'])
   sport?: string
 
   @ApiPropertyOptional({ example: '2024-25' })
@@ -34,8 +34,8 @@ export class CreateTeamDto {
   @IsOptional() @IsNumber()
   substituteMatchFee?: number
 
-  @ApiPropertyOptional({ enum: ['selected', 'starters_only', 'all_available', 'manual'] })
-  @IsOptional() @IsIn(['selected', 'starters_only', 'all_available', 'manual'])
+  @ApiPropertyOptional({ enum: ['per_game', 'season', 'none'] })
+  @IsOptional() @IsIn(['per_game', 'season', 'none'])
   chargeRule?: string
 
   @ApiPropertyOptional()
