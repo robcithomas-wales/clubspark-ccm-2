@@ -10,6 +10,7 @@ import {
   Clock,
   XCircle,
   AlertCircle,
+  Pencil,
 } from "lucide-react"
 import { getTeam, getRoster, getFixtures } from "@/lib/api"
 import { PortalLayout } from "@/components/portal-layout"
@@ -147,9 +148,18 @@ export default async function TeamDetailPage({
                       </span>
                     )}
                   </div>
-                  {member.email && (
-                    <span className="hidden text-xs text-slate-400 md:block">{member.email}</span>
-                  )}
+                  <div className="ml-auto flex items-center gap-3">
+                    {member.email && (
+                      <span className="hidden text-xs text-slate-400 md:block">{member.email}</span>
+                    )}
+                    <Link
+                      href={`/teams/${id}/roster/${member.id}/edit`}
+                      className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                      title="Edit player"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Link>
+                  </div>
                 </li>
               ))}
             </ul>

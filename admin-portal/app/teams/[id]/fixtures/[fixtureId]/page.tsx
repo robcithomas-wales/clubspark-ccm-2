@@ -15,6 +15,7 @@ import {
   CreditCard,
   Send,
 } from "lucide-react"
+import { PortalLayout } from "@/components/portal-layout"
 
 type AvailabilityEntry = {
   teamMemberId: string
@@ -166,28 +167,35 @@ export default function FixtureDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-      </div>
+      <PortalLayout title="" description="">
+        <div className="flex min-h-[40vh] items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+        </div>
+      </PortalLayout>
     )
   }
 
   if (!fixture) {
     return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
-        <p className="text-sm font-medium text-slate-500">Fixture not found.</p>
-        <Link href={`/teams/${teamId}`} className="text-sm text-blue-600 hover:underline">
-          Back to team
-        </Link>
-      </div>
+      <PortalLayout title="Fixture not found" description="">
+        <div className="flex flex-col items-center gap-3 py-16">
+          <p className="text-sm font-medium text-slate-500">Fixture not found.</p>
+          <Link href={`/teams/${teamId}`} className="text-sm text-blue-600 hover:underline">
+            Back to team
+          </Link>
+        </div>
+      </PortalLayout>
     )
   }
 
   const kickoff = new Date(fixture.kickoffAt)
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="mx-auto max-w-5xl space-y-6 px-4 py-8">
+    <PortalLayout
+      title={`${fixture.homeAway === "home" ? "vs" : "@"} ${fixture.opponent}`}
+      description={kickoff.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+    >
+      <div className="space-y-6">
         {/* Back link */}
         <Link
           href={`/teams/${teamId}`}
@@ -460,6 +468,6 @@ export default function FixtureDetailPage() {
           </section>
         )}
       </div>
-    </div>
+    </PortalLayout>
   )
 }

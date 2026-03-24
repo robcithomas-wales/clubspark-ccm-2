@@ -13,6 +13,20 @@ async function getAuthHeaders() {
   }
 }
 
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string; memberId: string }> }) {
+  const { id, memberId } = await params
+  try {
+    const res = await fetch(`${TEAM_SERVICE}/teams/${id}/roster/${memberId}`, {
+      headers: await getAuthHeaders(),
+      cache: "no-store",
+    })
+    const data = await res.json()
+    return NextResponse.json(data, { status: res.status })
+  } catch {
+    return NextResponse.json({ error: "Failed to load member" }, { status: 500 })
+  }
+}
+
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string; memberId: string }> }) {
   const { id, memberId } = await params
   try {
