@@ -6,13 +6,22 @@ import {
   RefreshControl,
   TouchableOpacity,
   ActivityIndicator,
+  Image,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { format, parseISO, isAfter } from 'date-fns'
 import { useAuth } from '../../contexts/AuthContext'
 import { useBranding } from '../../contexts/BrandingContext'
-import { fetchMyBookings, fetchMyMembership, type Booking, type Membership } from '../../lib/api'
-import { CalendarDays, Clock, ChevronRight, Star } from 'lucide-react-native'
+import {
+  fetchMyBookings,
+  fetchMyMembership,
+  fetchLatestNews,
+  type Booking,
+  type Membership,
+  type NewsPost,
+} from '../../lib/api'
+import { CalendarDays, Clock, ChevronRight, Star, Newspaper } from 'lucide-react-native'
+import { PoweredBy } from '../../components/PoweredBy'
 
 export default function HomeScreen() {
   const { user, appMeta } = useAuth()
@@ -21,6 +30,7 @@ export default function HomeScreen() {
 
   const [upcomingBookings, setUpcomingBookings] = useState<Booking[]>([])
   const [membership, setMembership] = useState<Membership | null>(null)
+  const [news, setNews] = useState<NewsPost[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
@@ -31,9 +41,10 @@ export default function HomeScreen() {
   async function load() {
     if (!tenantId || !customerId) return
     try {
-      const [bookings, mem] = await Promise.allSettled([
+      const [bookings, mem, latestNews] = await Promise.allSettled([
         fetchMyBookings(tenantId, customerId),
         fetchMyMembership(tenantId, customerId),
+        fetchLatestNews(tenantId, 3),
       ])
       if (bookings.status === 'fulfilled') {
         const upcoming = bookings.value
@@ -42,9 +53,8 @@ export default function HomeScreen() {
           .slice(0, 5)
         setUpcomingBookings(upcoming)
       }
-      if (mem.status === 'fulfilled') {
-        setMembership(mem.value)
-      }
+      if (mem.status === 'fulfilled') setMembership(mem.value)
+      if (latestNews.status === 'fulfilled') setNews(latestNews.value)
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -59,49 +69,88 @@ export default function HomeScreen() {
     <ScrollView
       className="flex-1 bg-surface"
       showsVerticalScrollIndicator={false}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load() }} tintColor={brandColour} />}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => { setRefreshing(true); load() }}
+          tintColor={brandColour}
+        />
+      }
     >
       {/* Header */}
-      <View
-        className="px-6 pt-16 pb-8"
-        style={{ backgroundColor: brandColour }}
-      >
-        <Text className="text-white/70 text-sm font-medium">
-          {branding?.appName ?? branding?.venueName}
-        </Text>
-        <Text className="text-white text-2xl font-bold mt-1">
-          Hello, {firstName} 👋
-        </Text>
+      <View className="px-6 pt-16 pb-10" style={{ backgroundColor: brandColour }}>
+        <View className="flex-row items-start justify-between">
+          <View className="flex-1">
+            <Text className="text-white/70 text-sm font-medium">
+              {branding?.appName ?? branding?.venueName}
+            </Text>
+            <Text className="text-white text-2xl font-bold mt-1">
+              Hello, {firstName} 👋
+            </Text>
+          </View>
+          {branding?.logoUrl ? (
+            <Image
+              source={{ uri: branding.logoUrl }}
+              style={{ width: 44, height: 44, borderRadius: 8 }}
+              resizeMode="contain"
+            />
+          ) : null}
+        </View>
       </View>
 
-      <View className="px-4 -mt-4">
-        {/* Membership card */}
-        {membership && (
-          <View
-            className="rounded-2xl p-5 mb-4 shadow-sm"
-            style={{ backgroundColor: brandColour + '15', borderWidth: 1, borderColor: brandColour + '30' }}
-          >
-            <View className="flex-row items-center justify-between">
-              <View className="flex-row items-center gap-2">
-                <Star size={16} color={brandColour} fill={brandColour} />
-                <Text className="text-sm font-semibold" style={{ color: brandColour }}>
-                  {membership.planName}
-                </Text>
-              </View>
-              <View
-                className="rounded-full px-3 py-1"
-                style={{ backgroundColor: brandColour + '25' }}
-              >
-                <Text className="text-xs font-bold capitalize" style={{ color: brandColour }}>
-                  {membership.status}
-                </Text>
-              </View>
-            </View>
-            {membership.endDate && (
-              <Text className="text-xs text-slate-500 mt-2">
-                Valid until {format(parseISO(membership.endDate), 'dd MMM yyyy')}
+      <View className="px-4 -mt-4 pb-10">
+
+        {/* Club welcome card */}
+        <View className="bg-white rounded-2xl p-5 mb-4 shadow-sm border border-slate-100">
+          <Text className="text-base font-extrabold text-slate-900">
+            Welcome to {branding?.venueName}
+          </Text>
+          {branding?.about ? (
+            <Text className="text-sm text-slate-500 mt-2 leading-relaxed" numberOfLines={4}>
+              {branding.about}
+            </Text>
+          ) : null}
+
+          {/* Membership status inline */}
+          {membership ? (
+            <View
+              className="mt-4 flex-row items-center gap-2 rounded-xl px-3 py-2"
+              style={{ backgroundColor: brandColour + '15' }}
+            >
+              <Star size={14} color={brandColour} fill={brandColour} />
+              <Text className="text-sm font-semibold flex-1" style={{ color: brandColour }}>
+                {membership.planName}
               </Text>
-            )}
+              <Text className="text-xs font-bold capitalize" style={{ color: brandColour }}>
+                {membership.status}
+              </Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              onPress={() => router.push('/(tabs)/membership')}
+              className="mt-4 flex-row items-center gap-2 rounded-xl px-3 py-2.5"
+              style={{ backgroundColor: brandColour }}
+              activeOpacity={0.85}
+            >
+              <Star size={14} color="white" />
+              <Text className="text-sm font-semibold text-white flex-1">Become a member</Text>
+              <ChevronRight size={14} color="white" />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Latest news */}
+        {news.length > 0 && (
+          <View className="mb-4">
+            <View className="flex-row items-center gap-2 px-1 mb-3">
+              <Newspaper size={15} color="#64748b" />
+              <Text className="text-base font-bold text-slate-900">Latest news</Text>
+            </View>
+            <View className="gap-3">
+              {news.map((post) => (
+                <NewsCard key={post.id} post={post} brandColour={brandColour} />
+              ))}
+            </View>
           </View>
         )}
 
@@ -144,8 +193,42 @@ export default function HomeScreen() {
             </View>
           )}
         </View>
+        <PoweredBy />
       </View>
     </ScrollView>
+  )
+}
+
+function NewsCard({ post, brandColour }: { post: NewsPost; brandColour: string }) {
+  return (
+    <View className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100">
+      {post.coverImageUrl ? (
+        <Image
+          source={{ uri: post.coverImageUrl }}
+          className="w-full h-40"
+          resizeMode="cover"
+        />
+      ) : (
+        <View className="w-full h-24 items-center justify-center" style={{ backgroundColor: brandColour + '18' }}>
+          <Newspaper size={28} color={brandColour} />
+        </View>
+      )}
+      <View className="p-4">
+        <Text className="font-bold text-slate-900 text-sm leading-snug" numberOfLines={2}>
+          {post.title}
+        </Text>
+        {post.publishedAt && (
+          <Text className="text-xs text-slate-400 mt-1">
+            {format(parseISO(post.publishedAt), 'd MMMM yyyy')}
+          </Text>
+        )}
+        {post.body ? (
+          <Text className="text-sm text-slate-500 mt-2 leading-relaxed" numberOfLines={3}>
+            {post.body}
+          </Text>
+        ) : null}
+      </View>
+    </View>
   )
 }
 

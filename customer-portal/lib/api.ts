@@ -4,6 +4,7 @@ const VENUE_URL = process.env.NEXT_PUBLIC_VENUE_SERVICE_URL!
 const BOOKING_URL = process.env.NEXT_PUBLIC_BOOKING_SERVICE_URL!
 const CUSTOMER_URL = process.env.NEXT_PUBLIC_CUSTOMER_SERVICE_URL!
 const MEMBERSHIP_URL = process.env.NEXT_PUBLIC_MEMBERSHIP_SERVICE_URL!
+const COACHING_URL = process.env.NEXT_PUBLIC_COACHING_SERVICE_URL || "http://127.0.0.1:4007"
 
 // ─── Auth headers ─────────────────────────────────────────────────────────────
 
@@ -254,19 +255,43 @@ export type Membership = {
   currency: string
 }
 
-export async function fetchMembershipPlans(tenantId: string): Promise<MembershipPlan[]> {
+export async function fetchMembershipPlans(tenantId: string, orgId?: string): Promise<MembershipPlan[]> {
   const headers = await authHeaders(tenantId)
-  const res = await fetch(`${MEMBERSHIP_URL}/membership-plans?status=active`, { headers, cache: "no-store" })
+  const qs = new URLSearchParams({ status: "active", ...(orgId ? { orgId } : {}) })
+  const res = await fetch(`${MEMBERSHIP_URL}/membership-plans?${qs}`, { headers, cache: "no-store" })
   if (!res.ok) return []
   const json = await res.json()
   return json.data ?? []
 }
 
 export async function joinMembership(tenantId: string, planId: string, customerId: string): Promise<Membership> {
-  const headers = await authHeaders(tenantId)
+  const supabase = createClient()
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error("Not authenticated")
+
+  const hdrs = {
+    "Authorization": `Bearer ${session.access_token}`,
+    "x-tenant-id": tenantId,
+    "Content-Type": "application/json",
+  }
+
+  // Ensure a people.persons record exists for this user before creating the membership
+  const meta = session.user.user_metadata ?? {}
+  const firstName: string =
+    meta.firstName || meta.first_name ||
+    (meta.full_name ?? meta.name ?? "").split(" ")[0] || "Member"
+  const lastName: string =
+    meta.lastName || meta.last_name ||
+    (meta.full_name ?? meta.name ?? "").split(" ").slice(1).join(" ") || "-"
+  await fetch(`${CUSTOMER_URL}/people`, {
+    method: "POST",
+    headers: hdrs,
+    body: JSON.stringify({ id: customerId, firstName, lastName, email: session.user.email }),
+  }).catch(() => { /* non-fatal — record may already exist */ })
+
   const res = await fetch(`${MEMBERSHIP_URL}/memberships`, {
     method: "POST",
-    headers,
+    headers: hdrs,
     body: JSON.stringify({
       planId,
       customerId,
@@ -305,4 +330,43 @@ export async function fetchMyProfile(tenantId: string, customerId: string): Prom
   if (!res.ok) return null
   const json = await res.json()
   return json.data ?? null
+}
+
+// ─── Coaching ─────────────────────────────────────────────────────────────────
+
+export type CoachPublic = {
+  id: string
+  displayName: string
+  bio?: string | null
+  avatarUrl?: string | null
+  specialties: string[]
+  lessonTypes?: { lessonType: { id: string; name: string; durationMinutes: number; pricePerSession: string; currency: string; maxParticipants: number; sport?: string | null } }[]
+}
+
+export type CoachSlot = {
+  startsAt: string
+  endsAt: string
+  durationMinutes: number
+}
+
+export async function fetchCoaches(tenantId: string): Promise<CoachPublic[]> {
+  const headers = await authHeaders(tenantId)
+  const res = await fetch(`${COACHING_URL}/coaches?activeOnly=true&limit=100`, { headers, cache: "no-store" })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data ?? []
+}
+
+export async function fetchCoachSlots(
+  tenantId: string,
+  coachId: string,
+  date: string,
+  durationMinutes: number,
+): Promise<CoachSlot[]> {
+  const headers = await authHeaders(tenantId)
+  const qs = new URLSearchParams({ date, durationMinutes: String(durationMinutes) })
+  const res = await fetch(`${COACHING_URL}/coaches/${coachId}/availability/slots?${qs}`, { headers, cache: "no-store" })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data ?? []
 }

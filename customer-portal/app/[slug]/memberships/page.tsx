@@ -26,7 +26,7 @@ export default function MembershipsPage() {
       if (!data.user) { router.push(`/${org.slug}/login`); return }
       setUser(data.user)
       Promise.all([
-        fetchMembershipPlans(org.tenantId),
+        fetchMembershipPlans(org.tenantId, org.id),
         fetchMyMembership(org.tenantId, data.user.id),
       ]).then(([p, m]) => {
         setPlans(p)

@@ -197,7 +197,7 @@ export class BookingRulesRepository {
           AND (
             time_from IS NULL
             OR time_to IS NULL
-            OR ${startsAt}::timestamptz::time BETWEEN time_from AND time_to
+            OR ${startsAt}::timestamptz::time BETWEEN time_from::time AND time_to::time
           )
         ORDER BY
           CASE scope_type

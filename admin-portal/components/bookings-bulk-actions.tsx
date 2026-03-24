@@ -48,13 +48,21 @@ function getUnitTypeClasses(unitType?: string | null) {
 
 function getSourceLabel(source?: string | null) {
   if (!source) return "Manual"
-  return source === "walk_in" ? "Walk in" : source.charAt(0).toUpperCase() + source.slice(1)
+  switch (source.toLowerCase()) {
+    case "walk_in": return "Walk in"
+    case "customer-portal":
+    case "online":
+    case "app": return "Online"
+    default: return source.charAt(0).toUpperCase() + source.slice(1)
+  }
 }
 
 function getSourceClasses(source?: string | null) {
   switch ((source || "").toLowerCase()) {
     case "phone": return "bg-sky-50 text-sky-700 ring-1 ring-sky-200"
     case "admin": return "bg-violet-50 text-violet-700 ring-1 ring-violet-200"
+    case "customer-portal":
+    case "online":
     case "app": return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
     case "walk_in": return "bg-amber-50 text-amber-700 ring-1 ring-amber-200"
     default: return "bg-slate-100 text-slate-700 ring-1 ring-slate-200"
@@ -76,6 +84,7 @@ function getCustomerName(booking: any) {
   const ln = booking.customerLastName?.trim() || ""
   const full = `${fn} ${ln}`.trim()
   if (full) return full
+  if (booking.customerEmail) return booking.customerEmail
   if (booking.customerId) return "Customer linked"
   return "Guest / unassigned"
 }
@@ -260,7 +269,14 @@ export function BookingsBulkActions({
                   <div className="min-w-0">
                     <div className="truncate font-medium text-slate-800">{getCustomerName(booking)}</div>
                     <div className="mt-0.5 truncate text-xs text-slate-400">
-                      {booking.customerEmail || booking.customerPhone || (booking.customerId ? booking.customerId : "No customer details")}
+                      {(() => {
+                        const hasName = !!(`${booking.customerFirstName || ""} ${booking.customerLastName || ""}`).trim()
+                        if (hasName && booking.customerEmail) return booking.customerEmail
+                        if (hasName && booking.customerPhone) return booking.customerPhone
+                        if (booking.customerPhone) return booking.customerPhone
+                        if (booking.customerId) return `ID ${shortId(booking.customerId)}`
+                        return "No customer details"
+                      })()}
                     </div>
                   </div>
 

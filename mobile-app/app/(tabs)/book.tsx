@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   View,
   Text,
+  Image,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
@@ -11,6 +12,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useBranding } from '../../contexts/BrandingContext'
 import { fetchVenues, fetchResources, type Venue, type Resource } from '../../lib/api'
 import { ChevronRight, Dumbbell, MapPin } from 'lucide-react-native'
+import { PoweredBy } from '../../components/PoweredBy'
 
 const RESOURCE_TYPE_LABELS: Record<string, string> = {
   court: 'Court',
@@ -82,8 +84,19 @@ export default function BookScreen() {
         className="px-6 pt-16 pb-6"
         style={{ backgroundColor: brandColour }}
       >
-        <Text className="text-white text-2xl font-bold">Book</Text>
-        <Text className="text-white/70 text-sm mt-1">Choose a court or facility</Text>
+        <View className="flex-row items-start justify-between">
+          <View className="flex-1">
+            <Text className="text-white text-2xl font-bold">Book</Text>
+            <Text className="text-white/70 text-sm mt-1">Choose a court or facility</Text>
+          </View>
+          {branding?.logoUrl ? (
+            <Image
+              source={{ uri: branding.logoUrl }}
+              style={{ width: 44, height: 44, borderRadius: 8 }}
+              resizeMode="contain"
+            />
+          ) : null}
+        </View>
       </View>
 
       {loading ? (
@@ -167,7 +180,7 @@ export default function BookScreen() {
             </View>
           )}
 
-          <View className="h-8" />
+          <PoweredBy />
         </ScrollView>
       )}
     </View>

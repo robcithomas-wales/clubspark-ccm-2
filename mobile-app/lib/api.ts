@@ -4,13 +4,16 @@ const VENUE_URL = process.env.EXPO_PUBLIC_VENUE_SERVICE_URL!
 const BOOKING_URL = process.env.EXPO_PUBLIC_BOOKING_SERVICE_URL!
 const CUSTOMER_URL = process.env.EXPO_PUBLIC_PEOPLE_SERVICE_URL!
 const MEMBERSHIP_URL = process.env.EXPO_PUBLIC_MEMBERSHIP_SERVICE_URL!
+const COACHING_URL = process.env.EXPO_PUBLIC_COACHING_SERVICE_URL!
 
 // ─── Public (no auth) ────────────────────────────────────────────────────────
 
 export type BrandingConfig = {
+  organisationId: string
   tenantId: string
   venueName: string
   appName: string
+  about: string | null
   primaryColour: string
   secondaryColour?: string | null
   logoUrl: string | null
@@ -23,6 +26,22 @@ export async function fetchPublicConfig(clubCode: string): Promise<BrandingConfi
   if (!res.ok) throw new Error('Failed to fetch club config')
   const json = await res.json()
   return json.data
+}
+
+export type NewsPost = {
+  id: string
+  title: string
+  slug: string
+  body: string | null
+  coverImageUrl: string | null
+  publishedAt: string | null
+}
+
+export async function fetchLatestNews(tenantId: string, limit = 3): Promise<NewsPost[]> {
+  const res = await fetch(`${VENUE_URL}/news-posts/public/list?tenantId=${tenantId}&limit=${limit}`)
+  if (!res.ok) return []
+  const json = await res.json()
+  return (json.data ?? []).slice(0, limit)
 }
 
 export async function registerCustomer(data: {
@@ -260,4 +279,199 @@ export async function fetchMyProfile(tenantId: string, customerId: string): Prom
   if (!res.ok) throw new Error('Failed to fetch profile')
   const json = await res.json()
   return json.data
+}
+
+// ─── Membership plans ─────────────────────────────────────────────────────────
+
+export type MembershipPlan = {
+  id: string
+  name: string
+  description: string | null
+  price: number | null
+  currency: string
+  billingInterval: string | null
+  durationType: string | null
+}
+
+export async function fetchMembershipPlans(tenantId: string, orgId: string): Promise<MembershipPlan[]> {
+  const headers = await authHeaders(tenantId)
+  const qs = new URLSearchParams({ status: 'active', orgId })
+  const res = await fetch(`${MEMBERSHIP_URL}/membership-plans?${qs}`, { headers })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data ?? []
+}
+
+export async function joinMembership(
+  tenantId: string,
+  planId: string,
+  customerId: string,
+): Promise<Membership> {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error('Not authenticated')
+
+  const hdrs = {
+    'Authorization': `Bearer ${session.access_token}`,
+    'x-tenant-id': tenantId,
+    'Content-Type': 'application/json',
+  }
+
+  // Ensure a people.persons record exists before creating the membership
+  const meta = session.user.user_metadata ?? {}
+  const firstName: string =
+    meta.firstName || meta.first_name ||
+    (meta.full_name ?? meta.name ?? '').split(' ')[0] || 'Member'
+  const lastName: string =
+    meta.lastName || meta.last_name ||
+    (meta.full_name ?? meta.name ?? '').split(' ').slice(1).join(' ') || '-'
+  await fetch(`${CUSTOMER_URL}/people`, {
+    method: 'POST',
+    headers: hdrs,
+    body: JSON.stringify({ id: customerId, firstName, lastName, email: session.user.email }),
+  }).catch(() => { /* non-fatal — record may already exist */ })
+
+  const res = await fetch(`${MEMBERSHIP_URL}/memberships`, {
+    method: 'POST',
+    headers: hdrs,
+    body: JSON.stringify({
+      planId,
+      customerId,
+      startDate: new Date().toISOString().split('T')[0],
+      status: 'active',
+      paymentStatus: 'paid',
+      source: 'mobile',
+    }),
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(json?.message ?? 'Failed to join membership')
+  return json.data
+}
+
+// ─── Coaching ─────────────────────────────────────────────────────────────────
+
+export type LessonType = {
+  id: string
+  name: string
+  durationMinutes: number
+  pricePerSession: string
+  currency: string
+  maxParticipants: number
+  sport: string | null
+}
+
+export type Coach = {
+  id: string
+  displayName: string
+  bio: string | null
+  avatarUrl: string | null
+  specialties: string[]
+  lessonTypes: { lessonType: LessonType }[]
+}
+
+export type CoachSlot = {
+  startsAt: string
+  endsAt: string
+  durationMinutes: number
+  unitId: string | null
+  unitName: string | null
+  resourceId: string | null
+  venueId: string | null
+}
+
+export async function fetchCoaches(tenantId: string): Promise<Coach[]> {
+  const headers = await authHeaders(tenantId)
+  const res = await fetch(`${COACHING_URL}/coaches?activeOnly=true&limit=100`, { headers })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data ?? []
+}
+
+export async function fetchCoachSlots(
+  tenantId: string,
+  coachId: string,
+  date: string,
+  durationMinutes: number,
+  sport: string | null,
+): Promise<CoachSlot[]> {
+  const headers = await authHeaders(tenantId)
+
+  // 1. Raw slots from coaching service
+  const slotsRes = await fetch(
+    `${COACHING_URL}/coaches/${coachId}/availability/slots?date=${date}&durationMinutes=${durationMinutes}`,
+    { headers },
+  )
+  if (!slotsRes.ok) return []
+  const { data: rawSlots } = await slotsRes.json() as { data: { startsAt: string; endsAt: string; durationMinutes: number }[] }
+  if (!rawSlots?.length) return []
+
+  // 2. Get suitable bookable units for this sport
+  let suitableUnits: { id: string; name: string; venueId: string; resourceId: string }[] = []
+  if (sport) {
+    const unitsRes = await fetch(
+      `${VENUE_URL}/bookable-units?sport=${encodeURIComponent(sport)}`,
+      { headers },
+    )
+    if (unitsRes.ok) {
+      const { data } = await unitsRes.json()
+      suitableUnits = data ?? []
+    }
+  }
+
+  if (suitableUnits.length === 0) {
+    return rawSlots.map((s) => ({ ...s, unitId: null, unitName: null, resourceId: null, venueId: null }))
+  }
+
+  // 3. Get busy times for those units
+  const unitIds = suitableUnits.map((u) => u.id).join(',')
+  const busyRes = await fetch(
+    `${BOOKING_URL}/bookings/unit-busy-times?unitIds=${unitIds}&date=${date}`,
+    { headers },
+  )
+  const busyTimes: { unitId: string; startsAt: string; endsAt: string }[] =
+    busyRes.ok ? ((await busyRes.json()).data ?? []) : []
+
+  // 4. Match each slot to a free unit
+  const enriched: CoachSlot[] = []
+  for (const slot of rawSlots) {
+    const slotStart = new Date(slot.startsAt).getTime()
+    const slotEnd = new Date(slot.endsAt).getTime()
+    const freeUnit = suitableUnits.find((unit) =>
+      !busyTimes.some(
+        (b) => b.unitId === unit.id &&
+          new Date(b.startsAt).getTime() < slotEnd &&
+          new Date(b.endsAt).getTime() > slotStart,
+      ),
+    )
+    if (freeUnit) {
+      enriched.push({ ...slot, unitId: freeUnit.id, unitName: freeUnit.name, resourceId: freeUnit.resourceId, venueId: freeUnit.venueId })
+    }
+  }
+  return enriched
+}
+
+export async function createCoachingBooking(
+  tenantId: string,
+  data: {
+    bookableUnitId: string | null
+    venueId: string | null
+    resourceId: string | null
+    startsAt: string
+    endsAt: string
+    customerId: string
+    coachId: string
+    lessonTypeId: string
+    price: number
+    currency: string
+  },
+): Promise<void> {
+  const headers = await authHeaders(tenantId)
+  const res = await fetch(`${BOOKING_URL}/bookings`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ ...data, bookingSource: 'mobile', status: 'pending' }),
+  })
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}))
+    throw new Error(json?.message ?? 'Failed to create booking')
+  }
 }

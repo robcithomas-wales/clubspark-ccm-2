@@ -62,7 +62,7 @@ export default async function UtilisationReportPage({
   const DOW_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
   const dowSummary: number[] = [0, 0, 0, 0, 0, 0, 0]
   for (const row of byDow) {
-    dowSummary[row.dow % 7] = (dowSummary[row.dow % 7] ?? 0) + row.bookingCount
+    dowSummary[row.dow % 7] = (dowSummary[row.dow % 7] ?? 0) + row.count
   }
   const dowRows = DOW_LABELS.map((label, i) => ({ label, value: dowSummary[i] ?? 0 }))
 

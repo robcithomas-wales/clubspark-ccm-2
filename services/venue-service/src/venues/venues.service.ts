@@ -29,9 +29,11 @@ export class VenuesService {
     const org = await this.repo.findByClubCode(clubCode)
     if (!org) return null
     return {
+      organisationId: org.id,
       tenantId: org.tenantId,
       venueName: org.name,
       appName: org.appName ?? org.name,
+      about: org.about ?? null,
       primaryColour: org.primaryColour,
       secondaryColour: org.secondaryColour,
       logoUrl: org.logoUrl,

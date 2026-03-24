@@ -1,0 +1,116 @@
+// ClubSpark — Coaching Service Prisma Schema
+// Owns the coaching schema: coaches, lesson_types, coach_lesson_types, coach_availability, coach_blocks
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+  output          = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["coaching"]
+}
+
+// A coach profile. Linked to a person in people-service via customerId (UUID cross-reference).
+model Coach {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  customerId   String?  @map("customer_id") @db.Uuid  // optional link to people.persons (cross-service ref, no hard constraint)
+  displayName  String   @map("display_name")
+  bio          String?
+  avatarUrl    String?  @map("avatar_url")
+  specialties  String[] // e.g. ["tennis", "padel", "junior coaching"]
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
+
+  lessonTypes  CoachLessonType[]
+  availability CoachAvailability[]
+  blocks       CoachBlock[]
+
+  @@map("coaches")
+  @@schema("coaching")
+  @@index([tenantId])
+  @@index([tenantId, isActive])
+  @@index([customerId])
+}
+
+// A type of lesson/session that a venue offers (e.g. "Junior Tennis", "Adult Padel Clinic")
+model LessonType {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String   @map("tenant_id") @db.Uuid
+  name             String
+  description      String?
+  sport            String?  // e.g. "tennis", "padel", "squash"
+  durationMinutes  Int      @map("duration_minutes")
+  maxParticipants  Int      @default(1) @map("max_participants")
+  pricePerSession  Decimal  @default(0) @map("price_per_session") @db.Decimal(10, 2)
+  currency         String   @default("GBP")
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at")
+
+  coaches CoachLessonType[]
+
+  @@map("lesson_types")
+  @@schema("coaching")
+  @@index([tenantId])
+  @@index([tenantId, isActive])
+  @@index([tenantId, sport])
+}
+
+// Join table: which lesson types a coach delivers
+model CoachLessonType {
+  coachId       String @map("coach_id") @db.Uuid
+  lessonTypeId  String @map("lesson_type_id") @db.Uuid
+
+  coach      Coach      @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  lessonType LessonType @relation(fields: [lessonTypeId], references: [id], onDelete: Cascade)
+
+  @@id([coachId, lessonTypeId])
+  @@map("coach_lesson_types")
+  @@schema("coaching")
+  @@index([coachId])
+  @@index([lessonTypeId])
+}
+
+// Recurring weekly availability windows for a coach.
+// dayOfWeek: 0 = Sunday … 6 = Saturday (matches JS Date.getDay())
+model CoachAvailability {
+  id           String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId     String  @map("tenant_id") @db.Uuid
+  coachId      String  @map("coach_id") @db.Uuid
+  dayOfWeek    Int     @map("day_of_week")   // 0–6
+  startTime    String  @map("start_time")    // "HH:MM" 24-hour
+  endTime      String  @map("end_time")      // "HH:MM" 24-hour
+  lessonTypeId String? @map("lesson_type_id") @db.Uuid // null = available for any type
+
+  coach Coach @relation(fields: [coachId], references: [id], onDelete: Cascade)
+
+  @@map("coach_availability")
+  @@schema("coaching")
+  @@index([coachId])
+  @@index([tenantId])
+  @@index([coachId, dayOfWeek])
+}
+
+// One-off time blocks where a coach is NOT available (holiday, illness, etc.)
+model CoachBlock {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  coachId   String   @map("coach_id") @db.Uuid
+  startsAt  DateTime @map("starts_at")
+  endsAt    DateTime @map("ends_at")
+  reason    String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  coach Coach @relation(fields: [coachId], references: [id], onDelete: Cascade)
+
+  @@map("coach_blocks")
+  @@schema("coaching")
+  @@index([coachId])
+  @@index([tenantId])
+  @@index([coachId, startsAt, endsAt])
+}

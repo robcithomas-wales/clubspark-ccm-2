@@ -1,5 +1,5 @@
-import { Controller, Get, Post, Param, Body, HttpCode, HttpStatus } from '@nestjs/common'
-import { ApiTags, ApiSecurity } from '@nestjs/swagger'
+import { Controller, Get, Post, Param, Body, Query, HttpCode, HttpStatus } from '@nestjs/common'
+import { ApiTags, ApiSecurity, ApiQuery } from '@nestjs/swagger'
 import { BookableUnitsService } from './bookable-units.service.js'
 import { CreateBookableUnitDto } from './dto/create-bookable-unit.dto.js'
 import { TenantCtx, type TenantContext } from '../common/decorators/tenant-context.decorator.js'
@@ -11,8 +11,11 @@ export class BookableUnitsController {
   constructor(private readonly service: BookableUnitsService) {}
 
   @Get('bookable-units')
-  async listAll(@TenantCtx() ctx: TenantContext) {
-    const units = await this.service.listAll(ctx.tenantId)
+  @ApiQuery({ name: 'sport', required: false, type: String })
+  async listAll(@TenantCtx() ctx: TenantContext, @Query('sport') sport?: string) {
+    const units = sport
+      ? await this.service.listBySport(ctx.tenantId, sport)
+      : await this.service.listAll(ctx.tenantId)
     return { data: units }
   }
 

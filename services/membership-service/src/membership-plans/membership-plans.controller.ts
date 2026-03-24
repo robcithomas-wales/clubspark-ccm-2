@@ -26,9 +26,11 @@ export class MembershipPlansController {
     @Query('search') search?: string,
     @Query('limit') limit?: number,
     @Query('offset') offset?: number,
+    @Query('orgId') orgId?: string,
   ) {
     const { tenantId, organisationId } = req.tenantContext
-    return this.service.list(tenantId, organisationId, { schemeId, status, search, limit, offset })
+    const resolvedOrgId = organisationId ?? orgId ?? null
+    return this.service.list(tenantId, resolvedOrgId, { schemeId, status, search, limit, offset })
   }
 
   @Get(':id')

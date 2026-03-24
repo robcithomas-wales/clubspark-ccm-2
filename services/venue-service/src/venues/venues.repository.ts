@@ -49,9 +49,11 @@ export class VenuesRepository {
     return this.prisma.read.organisation.findUnique({
       where: { clubCode },
       select: {
+        id: true,
         tenantId: true,
         name: true,
         appName: true,
+        about: true,
         primaryColour: true,
         secondaryColour: true,
         logoUrl: true,

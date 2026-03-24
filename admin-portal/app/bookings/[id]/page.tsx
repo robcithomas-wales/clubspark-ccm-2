@@ -95,12 +95,12 @@ function getDurationLabel(start?: string | null, end?: string | null) {
 
 function getSourceLabel(source?: string | null) {
   if (!source) return "Manual"
-
-  switch ((source || "").toLowerCase()) {
-    case "walk_in":
-      return "Walk in"
-    default:
-      return source.charAt(0).toUpperCase() + source.slice(1)
+  switch (source.toLowerCase()) {
+    case "walk_in": return "Walk in"
+    case "customer-portal":
+    case "online":
+    case "app": return "Online"
+    default: return source.charAt(0).toUpperCase() + source.slice(1)
   }
 }
 

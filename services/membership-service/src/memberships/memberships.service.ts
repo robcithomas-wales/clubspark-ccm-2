@@ -108,6 +108,9 @@ export class MembershipsService {
     const plan = await this.plansRepo.findById(tenantId, organisationId, dto.planId)
     if (!plan) throw new NotFoundException('Membership plan not found')
 
+    // Customer portal tokens have organisationId = null; use the plan's own org
+    const resolvedOrgId: string = organisationId ?? (plan as any).organisationId
+
     let ownerType: string | null = null
     let ownerId: string | null = null
 
@@ -142,7 +145,7 @@ export class MembershipsService {
 
     const m = await this.repo.create({
       tenantId,
-      organisationId,
+      organisationId: resolvedOrgId,
       planId: dto.planId,
       customerId: dto.customerId ?? null,
       ownerType,

@@ -75,9 +75,9 @@ export class MembershipPlansRepository {
     return { rows: rows.map((p) => this.format(p)), total }
   }
 
-  async findById(tenantId: string, organisationId: string, id: string) {
+  async findById(tenantId: string, organisationId: string | null, id: string) {
     const plan = await this.prisma.membershipPlan.findFirst({
-      where: { id, tenantId, organisationId },
+      where: { id, tenantId, ...(organisationId ? { organisationId } : {}) },
       include: { scheme: { select: { name: true } } },
     })
     return plan ? this.format(plan) : null

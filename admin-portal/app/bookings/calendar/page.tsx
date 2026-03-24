@@ -73,11 +73,23 @@ export default async function BookingCalendarPage({
     return h * 60 + m
   }
 
+  function toLocalMinutes(d: Date): number {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/London",
+      hour: "numeric",
+      minute: "numeric",
+      hour12: false,
+    }).formatToParts(d)
+    const h = Number(parts.find((p) => p.type === "hour")?.value ?? 0)
+    const m = Number(parts.find((p) => p.type === "minute")?.value ?? 0)
+    return h * 60 + m
+  }
+
   function bookingCoversSlot(booking: any, slotMinutes: number): boolean {
     const start = new Date(booking.startsAt)
     const end = new Date(booking.endsAt)
-    const startMin = start.getUTCHours() * 60 + start.getUTCMinutes()
-    const endMin = end.getUTCHours() * 60 + end.getUTCMinutes()
+    const startMin = toLocalMinutes(start)
+    const endMin = toLocalMinutes(end)
     return slotMinutes >= startMin && slotMinutes < endMin
   }
 

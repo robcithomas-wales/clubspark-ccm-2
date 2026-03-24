@@ -57,4 +57,12 @@ export class CreateBookingDto {
   @IsOptional()
   @IsString()
   currency?: string
+
+  @IsOptional()
+  @IsString()
+  coachId?: string
+
+  @IsOptional()
+  @IsString()
+  lessonTypeId?: string
 }

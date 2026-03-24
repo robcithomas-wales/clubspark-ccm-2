@@ -69,4 +69,13 @@ export class BookableUnitsRepository {
     `
     return rows.map((r) => r.conflicting_unit_id)
   }
+
+  findBySport(tenantId: string, sport: string) {
+    return this.prisma.read.bookableUnit.findMany({
+      where: { tenantId, isActive: true, resource: { sport } },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      include: { resource: { select: { id: true, name: true, sport: true, venueId: true } } },
+    })
+  }
+
 }

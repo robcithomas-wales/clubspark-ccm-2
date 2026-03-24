@@ -12,6 +12,7 @@ COPY services/booking-service/package.json ./services/booking-service/
 COPY services/admin-service/package.json ./services/admin-service/
 COPY services/membership-service/package.json ./services/membership-service/
 COPY services/template-service/package.json ./services/template-service/
+COPY services/coaching-service/package.json ./services/coaching-service/
 
 COPY services/template-service/prisma ./services/template-service/prisma/
 
@@ -38,6 +39,7 @@ COPY services/booking-service/package.json ./services/booking-service/
 COPY services/admin-service/package.json ./services/admin-service/
 COPY services/membership-service/package.json ./services/membership-service/
 COPY services/template-service/package.json ./services/template-service/
+COPY services/coaching-service/package.json ./services/coaching-service/
 COPY services/template-service/prisma ./services/template-service/prisma/
 
 RUN npm ci --omit=dev && cd services/template-service && npx prisma generate

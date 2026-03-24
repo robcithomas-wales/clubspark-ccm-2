@@ -574,7 +574,7 @@ export async function getCustomers(page = 1, limit = 25, opts?: { search?: strin
     headers: await getAuthHeaders(),
     cache: "no-store",
   })
-  if (!res.ok) throw new Error("Failed to load customers")
+  if (!res.ok) { const body = await res.text().catch(() => ""); throw new Error(`Failed to load customers: ${res.status} ${body}`) }
   return res.json() as Promise<{ data: any[]; pagination: PaginationMeta }>
 }
 
@@ -1492,4 +1492,148 @@ export async function deleteAdminUser(id: string): Promise<void> {
     const err = await res.json().catch(() => ({}))
     throw Object.assign(new Error(err.message ?? "Failed to delete admin user"), { status: res.status })
   }
+}
+
+// ─── Coaching service ─────────────────────────────────────────────────────────
+
+const COACHING_SERVICE =
+  process.env.NEXT_PUBLIC_COACHING_SERVICE_URL || "http://127.0.0.1:4007"
+
+export type Coach = {
+  id: string
+  tenantId: string
+  customerId: string
+  displayName: string
+  bio?: string | null
+  avatarUrl?: string | null
+  specialties: string[]
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+  lessonTypes?: { lessonType: LessonType }[]
+}
+
+export type LessonType = {
+  id: string
+  tenantId: string
+  name: string
+  description?: string | null
+  sport?: string | null
+  durationMinutes: number
+  maxParticipants: number
+  pricePerSession: string
+  currency: string
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export async function getCoaches(page = 1, limit = 25, activeOnly = false) {
+  const qs = new URLSearchParams({ page: String(page), limit: String(limit) })
+  if (activeOnly) qs.set("activeOnly", "true")
+  const res = await fetch(`${COACHING_SERVICE}/coaches?${qs}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to load coaches")
+  return res.json() as Promise<{ data: Coach[]; pagination: PaginationMeta }>
+}
+
+export async function getCoach(id: string) {
+  const res = await fetch(`${COACHING_SERVICE}/coaches/${id}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to load coach")
+  const json = await res.json()
+  return json.data as Coach
+}
+
+export async function createCoach(input: {
+  customerId: string
+  displayName: string
+  bio?: string
+  specialties?: string[]
+  lessonTypeIds?: string[]
+}) {
+  const res = await fetch(`${COACHING_SERVICE}/coaches`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(input),
+  })
+  if (!res.ok) throw new Error("Failed to create coach")
+  return res.json()
+}
+
+export async function updateCoach(id: string, input: {
+  displayName?: string
+  bio?: string
+  specialties?: string[]
+  isActive?: boolean
+  lessonTypeIds?: string[]
+}) {
+  const res = await fetch(`${COACHING_SERVICE}/coaches/${id}`, {
+    method: "PATCH",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(input),
+  })
+  if (!res.ok) throw new Error("Failed to update coach")
+  return res.json()
+}
+
+export async function getLessonTypes(page = 1, limit = 100, activeOnly = false) {
+  const qs = new URLSearchParams({ page: String(page), limit: String(limit) })
+  if (activeOnly) qs.set("activeOnly", "true")
+  const res = await fetch(`${COACHING_SERVICE}/lesson-types?${qs}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to load lesson types")
+  return res.json() as Promise<{ data: LessonType[]; pagination: PaginationMeta }>
+}
+
+export async function getLessonType(id: string) {
+  const res = await fetch(`${COACHING_SERVICE}/lesson-types/${id}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to load lesson type")
+  const json = await res.json()
+  return json.data as LessonType
+}
+
+export async function createLessonType(input: {
+  name: string
+  description?: string
+  sport?: string
+  durationMinutes: number
+  maxParticipants?: number
+  pricePerSession?: number
+  currency?: string
+}) {
+  const res = await fetch(`${COACHING_SERVICE}/lesson-types`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(input),
+  })
+  if (!res.ok) throw new Error("Failed to create lesson type")
+  return res.json()
+}
+
+export async function updateLessonType(id: string, input: {
+  name?: string
+  description?: string
+  sport?: string
+  durationMinutes?: number
+  maxParticipants?: number
+  pricePerSession?: number
+  isActive?: boolean
+}) {
+  const res = await fetch(`${COACHING_SERVICE}/lesson-types/${id}`, {
+    method: "PATCH",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(input),
+  })
+  if (!res.ok) throw new Error("Failed to update lesson type")
+  return res.json()
 }

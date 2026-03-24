@@ -31,6 +31,7 @@ import {
   ChevronRight,
   X,
 } from 'lucide-react-native'
+import { PoweredBy } from '../../components/PoweredBy'
 
 export default function AccountScreen() {
   const { user, appMeta, signOut } = useAuth()
@@ -268,6 +269,7 @@ export default function AccountScreen() {
             </TouchableOpacity>
           </>
         )}
+        <PoweredBy />
       </ScrollView>
     </View>
   )

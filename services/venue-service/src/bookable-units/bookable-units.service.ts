@@ -10,6 +10,10 @@ export class BookableUnitsService {
     return this.repo.findAll(tenantId)
   }
 
+  listBySport(tenantId: string, sport: string) {
+    return this.repo.findBySport(tenantId, sport)
+  }
+
   listByVenue(tenantId: string, venueId: string) {
     return this.repo.findByVenue(tenantId, venueId)
   }

@@ -8,14 +8,15 @@
     "services/*"
   ],
   "scripts": {
-    "build:services": "npm run build --workspace=services/venue-service && npm run build --workspace=services/booking-service && npm run build --workspace=services/people-service && npm run build --workspace=services/membership-service",
-    "start:services": "concurrently --names \"venue,booking,people,membership\" --prefix-colors \"blue,green,yellow,magenta\" \"node services/venue-service/dist/main.js\" \"node services/booking-service/dist/main.js\" \"node services/people-service/dist/main.js\" \"node services/membership-service/dist/main.js\"",
-    "start:all": "concurrently --names \"venue,booking,people,membership,portal\" --prefix-colors \"blue,green,yellow,magenta,cyan\" \"node services/venue-service/dist/main.js\" \"node services/booking-service/dist/main.js\" \"node services/people-service/dist/main.js\" \"node services/membership-service/dist/main.js\" \"npm run dev --workspace=admin-portal\"",
+    "build:services": "npm run build --workspace=services/venue-service && npm run build --workspace=services/booking-service && npm run build --workspace=services/people-service && npm run build --workspace=services/membership-service && npm run build --workspace=services/coaching-service",
+    "start:services": "concurrently --names \"venue,booking,people,membership,coaching\" --prefix-colors \"blue,green,yellow,magenta,cyan\" \"node services/venue-service/dist/main.js\" \"node services/booking-service/dist/main.js\" \"node services/people-service/dist/main.js\" \"node services/membership-service/dist/main.js\" \"node services/coaching-service/dist/main.js\"",
+    "start:all": "concurrently --names \"venue,booking,people,membership,coaching,portal\" --prefix-colors \"blue,green,yellow,magenta,cyan,white\" \"node services/venue-service/dist/main.js\" \"node services/booking-service/dist/main.js\" \"node services/people-service/dist/main.js\" \"node services/membership-service/dist/main.js\" \"node services/coaching-service/dist/main.js\" \"npm run dev --workspace=admin-portal\"",
     "dev:portal": "npm run dev --workspace=admin-portal",
     "dev:booking": "npm run dev --workspace=services/booking-service",
     "dev:venue": "npm run dev --workspace=services/venue-service",
     "dev:people": "npm run dev --workspace=services/people-service",
     "dev:membership": "npm run dev --workspace=services/membership-service",
+    "dev:coaching": "npm run dev --workspace=services/coaching-service",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",

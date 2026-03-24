@@ -101,9 +101,19 @@ export class BookingsRepository {
           b.currency,
           b.created_at         AS "createdAt",
           b.updated_at         AS "updatedAt",
-          c.first_name         AS "customerFirstName",
-          c.last_name          AS "customerLastName",
-          c.email              AS "customerEmail",
+          COALESCE(
+            c.first_name,
+            au.raw_user_meta_data->>'firstName',
+            au.raw_user_meta_data->>'first_name',
+            SPLIT_PART(NULLIF(COALESCE(au.raw_user_meta_data->>'full_name', au.raw_user_meta_data->>'name'), ''), ' ', 1)
+          ) AS "customerFirstName",
+          COALESCE(
+            c.last_name,
+            au.raw_user_meta_data->>'lastName',
+            au.raw_user_meta_data->>'last_name',
+            NULLIF(SUBSTRING(COALESCE(au.raw_user_meta_data->>'full_name', au.raw_user_meta_data->>'name', '') FROM POSITION(' ' IN COALESCE(au.raw_user_meta_data->>'full_name', au.raw_user_meta_data->>'name', '')) + 1), '')
+          ) AS "customerLastName",
+          COALESCE(c.email, au.email) AS "customerEmail",
           c.phone              AS "customerPhone",
           v.name               AS "venueName",
           r.name               AS "resourceName",
@@ -111,6 +121,7 @@ export class BookingsRepository {
           COUNT(*) OVER()::int AS "totalCount"
         FROM booking.bookings b
         LEFT JOIN people.persons c ON c.id = b.customer_id
+        LEFT JOIN auth.users au ON au.id = b.customer_id
         LEFT JOIN venue.venues v ON v.id = b.venue_id
         LEFT JOIN venue.resources r ON r.id = b.resource_id
         LEFT JOIN venue.bookable_units u ON u.id = b.bookable_unit_id
@@ -119,7 +130,7 @@ export class BookingsRepository {
         ${fromFilter}
         ${toFilter}
         ${customerFilter}
-        ORDER BY b.starts_at DESC
+        ORDER BY b.created_at DESC
         LIMIT ${limit} OFFSET ${offset}
       `,
     )
@@ -157,15 +168,26 @@ export class BookingsRepository {
           b.currency,
           b.created_at         AS "createdAt",
           b.updated_at         AS "updatedAt",
-          c.first_name         AS "customerFirstName",
-          c.last_name          AS "customerLastName",
-          c.email              AS "customerEmail",
+          COALESCE(
+            c.first_name,
+            au.raw_user_meta_data->>'firstName',
+            au.raw_user_meta_data->>'first_name',
+            SPLIT_PART(NULLIF(COALESCE(au.raw_user_meta_data->>'full_name', au.raw_user_meta_data->>'name'), ''), ' ', 1)
+          ) AS "customerFirstName",
+          COALESCE(
+            c.last_name,
+            au.raw_user_meta_data->>'lastName',
+            au.raw_user_meta_data->>'last_name',
+            NULLIF(SUBSTRING(COALESCE(au.raw_user_meta_data->>'full_name', au.raw_user_meta_data->>'name', '') FROM POSITION(' ' IN COALESCE(au.raw_user_meta_data->>'full_name', au.raw_user_meta_data->>'name', '')) + 1), '')
+          ) AS "customerLastName",
+          COALESCE(c.email, au.email) AS "customerEmail",
           c.phone              AS "customerPhone",
           v.name               AS "venueName",
           r.name               AS "resourceName",
           u.name               AS "unitName"
         FROM booking.bookings b
         LEFT JOIN people.persons c ON c.id = b.customer_id
+        LEFT JOIN auth.users au ON au.id = b.customer_id
         LEFT JOIN venue.venues v ON v.id = b.venue_id
         LEFT JOIN venue.resources r ON r.id = b.resource_id
         LEFT JOIN venue.bookable_units u ON u.id = b.bookable_unit_id
@@ -262,7 +284,8 @@ export class BookingsRepository {
               tenant_id, organisation_id, venue_id, resource_id,
               bookable_unit_id, customer_id, booking_source,
               starts_at, ends_at, status, payment_status, booking_reference, notes,
-              optional_unit_ids, admin_override, price, currency
+              optional_unit_ids, admin_override, price, currency,
+              coach_id, lesson_type_id
             ) VALUES (
               ${tenantId}::uuid,
               ${organisationId}::uuid,
@@ -280,7 +303,9 @@ export class BookingsRepository {
               ${optionalUnitIds}::uuid[],
               ${dto.adminOverride ?? false},
               ${dto.price ?? null},
-              ${dto.currency ?? 'GBP'}
+              ${dto.currency ?? 'GBP'},
+              ${dto.coachId ?? null}::uuid,
+              ${dto.lessonTypeId ?? null}::uuid
             )
             RETURNING
               id,
@@ -814,4 +839,27 @@ export class BookingsRepository {
       },
     })
   }
+
+  async getUnitBusyTimes(
+    tenantId: string,
+    unitIds: string[],
+    date: string,
+  ): Promise<{ unitId: string; startsAt: Date; endsAt: Date }[]> {
+    if (unitIds.length === 0) return []
+    const dayStart = new Date(`${date}T00:00:00.000Z`)
+    const dayEnd = new Date(`${date}T23:59:59.999Z`)
+    return this.prisma.read.$queryRaw<{ unitId: string; startsAt: Date; endsAt: Date }[]>`
+      SELECT
+        bookable_unit_id AS "unitId",
+        starts_at        AS "startsAt",
+        ends_at          AS "endsAt"
+      FROM booking.bookings
+      WHERE tenant_id = ${tenantId}::uuid
+        AND status    = 'active'
+        AND bookable_unit_id = ANY(${unitIds}::uuid[])
+        AND starts_at < ${dayEnd}::timestamptz
+        AND ends_at   > ${dayStart}::timestamptz
+    `
+  }
+
 }

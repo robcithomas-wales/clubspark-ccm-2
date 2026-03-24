@@ -234,4 +234,9 @@ export class BookingsService {
     )
     return booking
   }
+
+  async getUnitBusyTimes(tenantId: string, unitIds: string[], date: string) {
+    return this.repo.getUnitBusyTimes(tenantId, unitIds, date)
+  }
+
 }

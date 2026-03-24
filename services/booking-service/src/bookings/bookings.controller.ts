@@ -83,6 +83,19 @@ export class BookingsController {
     return { data: stats }
   }
 
+    @Get('unit-busy-times')
+  @ApiQuery({ name: 'unitIds', required: true, type: String })
+  @ApiQuery({ name: 'date', required: true, type: String })
+  async getUnitBusyTimes(
+    @TenantCtx() ctx: TenantContext,
+    @Query('unitIds') unitIdsRaw: string,
+    @Query('date') date: string,
+  ) {
+    const unitIds = unitIdsRaw ? unitIdsRaw.split(',') : []
+    const data = await this.service.getUnitBusyTimes(ctx.tenantId, unitIds, date)
+    return { data }
+  }
+
   @Get('stats/customers')
   @ApiQuery({ name: 'limit', required: false, type: Number })
   async getTopCustomers(@TenantCtx() ctx: TenantContext, @Query('limit') limit = 20) {

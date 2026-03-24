@@ -26,6 +26,7 @@ import {
   Building2,
   Globe,
   Repeat2,
+  GraduationCap,
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
@@ -68,6 +69,19 @@ const navSections = [
       },
       { label: "Availability", href: "/availability", icon: CalendarClock },
       { label: "People", href: "/people", icon: Users },
+    ],
+  },
+  {
+    label: "Coaching",
+    items: [
+      {
+        label: "Coaching",
+        icon: GraduationCap,
+        children: [
+          { label: "Coaches", href: "/coaching/coaches" },
+          { label: "Lesson Types", href: "/coaching/lesson-types" },
+        ],
+      },
     ],
   },
   {
