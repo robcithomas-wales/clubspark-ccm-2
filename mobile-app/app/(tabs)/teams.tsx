@@ -113,9 +113,9 @@ export default function TeamsScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={brandColour} />}
     >
       {/* Header */}
-      <View style={{ paddingTop: 60, paddingHorizontal: 20, paddingBottom: 20 }}>
-        <Text style={{ fontSize: 28, fontWeight: '800', color: '#0f172a' }}>Teams</Text>
-        <Text style={{ fontSize: 14, color: '#64748b', marginTop: 4 }}>
+      <View style={{ paddingTop: 60, paddingHorizontal: 20, paddingBottom: 20, backgroundColor: brandColour }}>
+        <Text style={{ fontSize: 28, fontWeight: '800', color: '#ffffff' }}>Teams</Text>
+        <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.75)', marginTop: 4 }}>
           Upcoming fixtures and availability
         </Text>
       </View>
