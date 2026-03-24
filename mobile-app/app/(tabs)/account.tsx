@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import {
   View,
   Text,
+  Image,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
@@ -126,6 +127,12 @@ export default function AccountScreen() {
         className="px-6 pt-16 pb-8"
         style={{ backgroundColor: brandColour }}
       >
+        <View className="flex-row items-center justify-between mb-4">
+          <View />
+          {branding?.logoUrl && (
+            <Image source={{ uri: branding.logoUrl }} style={{ width: 44, height: 44, borderRadius: 8 }} resizeMode="contain" />
+          )}
+        </View>
         <View className="flex-row items-center justify-between">
           <View>
             <Text className="text-white/70 text-sm">My account</Text>

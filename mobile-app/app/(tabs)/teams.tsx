@@ -9,6 +9,7 @@ import {
   Alert,
 } from 'react-native'
 import { Shield, CalendarDays, CheckCircle2, XCircle, HelpCircle, Clock } from 'lucide-react-native'
+import { Image } from 'react-native'
 import { PoweredBy } from '../../components/PoweredBy'
 import { useAuth } from '../../contexts/AuthContext'
 import { useBranding } from '../../contexts/BrandingContext'
@@ -113,11 +114,16 @@ export default function TeamsScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={brandColour} />}
     >
       {/* Header */}
-      <View style={{ paddingTop: 60, paddingHorizontal: 20, paddingBottom: 20, backgroundColor: brandColour }}>
-        <Text style={{ fontSize: 28, fontWeight: '800', color: '#ffffff' }}>Teams</Text>
-        <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.75)', marginTop: 4 }}>
-          Upcoming fixtures and availability
-        </Text>
+      <View style={{ paddingTop: 60, paddingHorizontal: 20, paddingBottom: 20, backgroundColor: brandColour, flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <View>
+          <Text style={{ fontSize: 28, fontWeight: '800', color: '#ffffff' }}>Teams</Text>
+          <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.75)', marginTop: 4 }}>
+            Upcoming fixtures and availability
+          </Text>
+        </View>
+        {branding?.logoUrl && (
+          <Image source={{ uri: branding.logoUrl }} style={{ width: 44, height: 44, borderRadius: 8 }} resizeMode="contain" />
+        )}
       </View>
 
       {teams.length === 0 ? (
