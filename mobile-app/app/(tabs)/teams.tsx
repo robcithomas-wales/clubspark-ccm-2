@@ -183,7 +183,7 @@ export default function TeamsScreen() {
                 width: 44,
                 height: 44,
                 borderRadius: 12,
-                backgroundColor: '#eff6ff',
+                backgroundColor: brandColour + '18',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}>
@@ -261,7 +261,7 @@ export default function TeamsScreen() {
                             paddingHorizontal: 10,
                             paddingVertical: 4,
                             borderRadius: 20,
-                            backgroundColor: '#eff6ff',
+                            backgroundColor: brandColour + '18',
                           }}>
                             <Text style={{ fontSize: 11, fontWeight: '600', color: brandColour }}>
                               {STATUS_LABELS[fixture.status] ?? fixture.status}
