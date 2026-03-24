@@ -21,6 +21,11 @@ export default async function UtilisationReportPage({
   const days = daysBetween(from, to)
   const rangeLabel = formatDateRange(from, to)
 
+  const hoursPerDay = Math.min(
+    24,
+    Math.max(1, parseInt(typeof sp.hoursPerDay === "string" ? sp.hoursPerDay : "12", 10) || 12)
+  )
+
   const [statsRes, dailyRes, byUnitRes, byDowRes, unitsRes] = await Promise.allSettled([
     getBookingStats(),
     getBookingDailyStats(days),
@@ -40,13 +45,13 @@ export default async function UtilisationReportPage({
   const unitNameMap = new Map<string, string>(units.map((u: any) => [u.id, u.name]))
 
   const activeUnitCount = units.filter((u: any) => u.isActive !== false).length
-  const availableHours = activeUnitCount * 12 * days
+  const availableHours = activeUnitCount * hoursPerDay * days
   const totalBookedHours = daily.reduce((s, d) => s + d.bookedHours, 0)
   const utilisationPct = availableHours > 0
     ? Math.min(100, Math.round((totalBookedHours / availableHours) * 100))
     : 0
 
-  const perUnitAvailableHours = 12 * days
+  const perUnitAvailableHours = hoursPerDay * days
   const unitRows = byUnit.map((u) => ({
     unitId: u.bookableUnitId,
     unitName: unitNameMap.get(u.bookableUnitId) ?? u.bookableUnitId.slice(0, 8),
@@ -77,12 +82,24 @@ export default async function UtilisationReportPage({
     <PortalLayout title="Utilisation Report" description="Facility utilisation by unit, time of day and trend over the selected period.">
       <div className="space-y-6">
 
-        <ReportFilters rangeLabel={rangeLabel} />
+        <ReportFilters
+          rangeLabel={rangeLabel}
+          extraFilters={[
+            {
+              key: "hoursPerDay",
+              label: "Open hours/day",
+              options: [6, 8, 10, 12, 14, 16, 18].map((h) => ({
+                value: String(h),
+                label: `${h}h`,
+              })),
+            },
+          ]}
+        />
 
         {/* KPI row */}
         <div className="grid gap-4 sm:grid-cols-3">
           {[
-            { label: `Overall utilisation (${days} days)`, value: `${utilisationPct}%` },
+            { label: `Overall utilisation (${days} days · ${hoursPerDay}h/day)`, value: `${utilisationPct}%` },
             { label: "Total booked hours", value: `${Math.round(totalBookedHours)}h` },
             { label: "Active bookable units", value: activeUnitCount },
           ].map((k) => (

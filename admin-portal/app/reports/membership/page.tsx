@@ -1,7 +1,7 @@
 import { PortalLayout } from "@/components/portal-layout"
 import { ExportButton } from "@/components/reports/export-button"
 import { ReportFilters } from "@/components/reports/report-filters"
-import { DonutChart, HBarChart, VBarChart } from "@/components/reports/charts"
+import { DonutChart, HBarChart, VBarChart, DualVBarChart } from "@/components/reports/charts"
 import {
   getMembershipStats,
   getMembershipDailyStats,
@@ -87,6 +87,29 @@ export default async function MembershipReportPage({
   }
   const byPlanRows = Object.entries(byPlanMap).map(([label, v]) => ({ label, value: v.count })).sort((a, b) => b.value - a.value)
   const byPlanRevenueRows = Object.entries(byPlanMap).filter(([, v]) => v.revenue > 0).map(([label, v]) => ({ label, value: parseFloat(v.revenue.toFixed(2)) })).sort((a, b) => b.value - a.value)
+
+  // ── Retention / churn trend ───────────────────────────────────────────────
+  // Derived from monthly snapshots: lapsed ≈ prev_active + new_this_month - this_active
+  const retentionRows = daily.map((d, i) => {
+    const prev = i > 0 ? daily[i - 1] : null
+    const lapsed = prev
+      ? Math.max(0, prev.activeCount + d.newCount - d.activeCount)
+      : 0
+    return {
+      label: d.month.slice(0, 7), // "YYYY-MM"
+      primary: d.newCount,
+      secondary: lapsed,
+      primaryFormatted: `${d.newCount} new`,
+      secondaryFormatted: `${lapsed} lapsed`,
+    }
+  })
+
+  const totalNew    = daily.reduce((s, d) => s + d.newCount, 0)
+  const totalLapsed = retentionRows.reduce((s, r) => s + r.secondary, 0)
+  const churnRate =
+    totalNew + totalLapsed > 0
+      ? Math.round((totalLapsed / (totalNew + totalLapsed)) * 100)
+      : 0
 
   const exportColumns = [
     { key: "id", header: "ID" },
@@ -235,6 +258,57 @@ export default async function MembershipReportPage({
               colour="#1857E0"
             />
           </div>
+        )}
+
+        {/* Retention / churn section */}
+        {retentionRows.length > 1 && (
+          <>
+            {/* Retention KPIs */}
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-5 shadow-sm">
+                <div className="text-sm font-medium text-emerald-700">New members (period)</div>
+                <div className="mt-2 text-3xl font-bold text-slate-950">{totalNew}</div>
+                <div className="mt-1 text-xs text-slate-400">{months} months</div>
+              </div>
+              <div className="rounded-2xl border border-red-200 bg-red-50/50 p-5 shadow-sm">
+                <div className="text-sm font-medium text-red-600">Lapsed / churned (period)</div>
+                <div className="mt-2 text-3xl font-bold text-slate-950">{totalLapsed}</div>
+                <div className="mt-1 text-xs text-slate-400">Estimated from active-count delta</div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="text-sm font-medium text-slate-500">Net churn rate</div>
+                <div className={`mt-2 text-3xl font-bold ${churnRate > 25 ? "text-red-600" : churnRate > 10 ? "text-amber-600" : "text-emerald-600"}`}>
+                  {churnRate}%
+                </div>
+                <div className="mt-1 text-xs text-slate-400">Lapsed ÷ (new + lapsed)</div>
+              </div>
+            </div>
+
+            {/* New vs Lapsed dual chart */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h3 className="mb-1 text-base font-semibold text-slate-900">New vs lapsed memberships by month</h3>
+              <p className="mb-4 text-xs text-slate-400">
+                Lapsed is estimated from the month-on-month change in active count. Use as a trend indicator, not an exact count.
+              </p>
+              <DualVBarChart
+                rows={retentionRows}
+                primaryColour="#10b981"
+                secondaryColour="#ef4444"
+                primaryLabel="New"
+                secondaryLabel="Lapsed (est.)"
+              />
+            </div>
+
+            {/* Active members trend */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h3 className="mb-1 text-base font-semibold text-slate-900">Active membership count by month</h3>
+              <p className="mb-4 text-xs text-slate-400">Snapshot at end of each month</p>
+              <VBarChart
+                rows={daily.map((d) => ({ label: d.month.slice(0, 7), value: d.activeCount }))}
+                colour="#1857E0"
+              />
+            </div>
+          </>
         )}
 
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">

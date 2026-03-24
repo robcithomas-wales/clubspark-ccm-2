@@ -116,6 +116,7 @@ const navSections = [
           { label: "Series", href: "/reports/series" },
           { label: "Renewals Forecast", href: "/reports/renewals" },
           { label: "Add-ons", href: "/reports/addons" },
+          { label: "Coaching", href: "/reports/coaching" },
           { label: "Pending Approvals", href: "/reports/pending-approvals" },
           { label: "Payment Health", href: "/reports/payment-health" },
         ],

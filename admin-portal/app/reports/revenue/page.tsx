@@ -8,6 +8,7 @@ import {
   getBookingStatsSummary,
   getBookings,
   getAddOnServices,
+  getLessonTypes,
 } from "@/lib/api"
 import { resolveReportRange, daysBetween, inRange, formatDateRange } from "@/lib/report-utils"
 
@@ -25,12 +26,13 @@ export default async function RevenueReportPage({
   const days = daysBetween(from, to)
   const rangeLabel = formatDateRange(from, to)
 
-  const [statsRes, dailyRes, summaryRes, bookingsRes, addOnsRes] = await Promise.allSettled([
+  const [statsRes, dailyRes, summaryRes, bookingsRes, addOnsRes, lessonTypesRes] = await Promise.allSettled([
     getBookingStats(),
     getBookingDailyStats(days),
     getBookingStatsSummary(),
     getBookings(1, 1000),
     getAddOnServices(),
+    getLessonTypes(1, 200, true),
   ])
 
   const stats = statsRes.status === "fulfilled" ? statsRes.value : null
@@ -42,6 +44,9 @@ export default async function RevenueReportPage({
     : (bookingsData as any)?.data ?? []
   const addOns: any[] = addOnsRes.status === "fulfilled"
     ? (Array.isArray(addOnsRes.value) ? addOnsRes.value : (addOnsRes.value as any)?.data ?? [])
+    : []
+  const lessonTypes: any[] = lessonTypesRes.status === "fulfilled"
+    ? (lessonTypesRes.value?.data ?? [])
     : []
 
   // Filter bookings to range
@@ -58,6 +63,14 @@ export default async function RevenueReportPage({
   }, 0)
   const revPBH = totalBookedHours > 0 ? totalBookingRevenue / totalBookedHours : 0
   const avgBookingValue = paidBookings.length > 0 ? totalBookingRevenue / paidBookings.length : 0
+
+  // Coaching catalogue value (active lesson types only — no transaction data yet)
+  const coachingCatalogueValue = lessonTypes.reduce(
+    (s, lt) => s + parseFloat(lt.pricePerSession ?? "0"),
+    0
+  )
+  const coachingActiveLessonTypes = lessonTypes.length
+  const combinedKnownRevenue = totalBookingRevenue + addOnRevenue
 
   // Revenue by source
   const revenueBySource: Record<string, number> = {}
@@ -124,6 +137,42 @@ export default async function RevenueReportPage({
             <div className="text-sm font-medium text-violet-700">Avg booking value</div>
             <div className="mt-2 text-3xl font-bold text-slate-950">{formatCurrency(avgBookingValue)}</div>
             <div className="mt-1 text-xs text-slate-400">{paidBookings.length} paid in range</div>
+          </div>
+        </div>
+
+        {/* Coaching + combined income row */}
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-5 shadow-sm">
+            <div className="text-sm font-medium text-indigo-700">Coaching catalogue value</div>
+            <div className="mt-2 text-3xl font-bold text-slate-950">{formatCurrency(coachingCatalogueValue)}</div>
+            <div className="mt-1 text-xs text-slate-400">
+              Sum of session prices · {coachingActiveLessonTypes} active lesson {coachingActiveLessonTypes === 1 ? "type" : "types"}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-slate-300 bg-slate-50 p-5 shadow-sm">
+            <div className="text-sm font-medium text-slate-600">Total known revenue</div>
+            <div className="mt-2 text-3xl font-bold text-slate-950">{formatCurrency(combinedKnownRevenue)}</div>
+            <div className="mt-1 text-xs text-slate-400">Booking (filtered) + add-ons (all time)</div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="text-sm font-medium text-slate-500">Revenue streams</div>
+            <div className="mt-3 space-y-2">
+              {[
+                { label: "Facility bookings", value: totalBookingRevenue, colour: "#10b981" },
+                { label: "Add-ons", value: addOnRevenue, colour: "#8b5cf6" },
+                { label: "Coaching (catalogue)", value: coachingCatalogueValue, colour: "#6366f1" },
+              ].map((s) => {
+                const total = totalBookingRevenue + addOnRevenue + coachingCatalogueValue
+                const pct = total > 0 ? Math.round((s.value / total) * 100) : 0
+                return (
+                  <div key={s.label} className="flex items-center gap-3">
+                    <div className="h-2 w-2 rounded-full flex-shrink-0" style={{ background: s.colour }} />
+                    <span className="flex-1 text-xs text-slate-600">{s.label}</span>
+                    <span className="text-xs font-semibold text-slate-700">{pct}%</span>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
 
