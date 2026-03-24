@@ -62,7 +62,7 @@ export default function AccountScreen() {
         setBookings(
           bookingsRes.value
             .filter((b) => b.status === 'active')
-            .sort((a, b) => parseISO(b.startTime).getTime() - parseISO(a.startTime).getTime()),
+            .sort((a, b) => parseISO(b.startsAt).getTime() - parseISO(a.startsAt).getTime()),
         )
       }
     } finally {
@@ -309,10 +309,10 @@ function MyBookingCard({
       <View className="flex-row items-start justify-between">
         <View className="flex-1">
           <Text className="font-semibold text-slate-900">
-            {booking.resource?.name ?? 'Court'}
+            {booking.resourceName ?? booking.venueName ?? 'Court'}
           </Text>
-          {booking.unit?.name && (
-            <Text className="text-xs text-slate-400 mt-0.5">{booking.unit.name}</Text>
+          {booking.unitName && (
+            <Text className="text-xs text-slate-400 mt-0.5">{booking.unitName}</Text>
           )}
         </View>
         {canCancel && (

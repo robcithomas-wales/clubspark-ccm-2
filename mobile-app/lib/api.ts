@@ -2,7 +2,7 @@ import { supabase } from './supabase'
 
 const VENUE_URL = process.env.EXPO_PUBLIC_VENUE_SERVICE_URL!
 const BOOKING_URL = process.env.EXPO_PUBLIC_BOOKING_SERVICE_URL!
-const CUSTOMER_URL = process.env.EXPO_PUBLIC_PEOPLE_SERVICE_URL!
+const CUSTOMER_URL = process.env.EXPO_PUBLIC_CUSTOMER_SERVICE_URL!
 const MEMBERSHIP_URL = process.env.EXPO_PUBLIC_MEMBERSHIP_SERVICE_URL!
 const COACHING_URL = process.env.EXPO_PUBLIC_COACHING_SERVICE_URL!
 const TEAM_URL = process.env.EXPO_PUBLIC_TEAM_SERVICE_URL!
@@ -188,8 +188,9 @@ export type Booking = {
   totalAmount: string
   currency: string
   bookingSource: string
-  resource?: { name: string }
-  unit?: { name: string }
+  venueName: string | null
+  resourceName: string | null
+  unitName: string | null
 }
 
 export async function fetchMyBookings(tenantId: string, customerId: string): Promise<Booking[]> {
