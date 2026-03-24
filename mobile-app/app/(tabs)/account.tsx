@@ -140,7 +140,7 @@ export default function AccountScreen() {
             style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
           >
             <Text className="text-2xl font-bold text-white">
-              {(profile?.firstName ?? user?.user_metadata?.firstName ?? 'U')[0].toUpperCase()}
+              {(profile?.firstName ?? user?.user_metadata?.firstName ?? user?.email ?? 'U')[0].toUpperCase()}
             </Text>
           </View>
         </View>
@@ -168,13 +168,13 @@ export default function AccountScreen() {
               <Text className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">
                 Personal details
               </Text>
-              {profile?.email && (
-                <DetailRow icon={<Mail size={15} color="#64748b" />} value={profile.email} />
+              {(profile?.email || user?.email) && (
+                <DetailRow icon={<Mail size={15} color="#64748b" />} value={profile?.email ?? user?.email ?? ''} />
               )}
               {profile?.phone && (
                 <DetailRow icon={<Phone size={15} color="#64748b" />} value={profile.phone} />
               )}
-              {!profile?.email && !profile?.phone && (
+              {!profile?.email && !user?.email && !profile?.phone && (
                 <Text className="text-sm text-slate-400">Profile details unavailable</Text>
               )}
             </View>
