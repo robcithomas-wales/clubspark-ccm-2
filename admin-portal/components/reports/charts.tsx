@@ -24,7 +24,7 @@ export function HBarChart({
 
   return (
     <div className="overflow-x-auto">
-      <svg viewBox={`0 0 ${CHART_W} ${h}`} className="w-full">
+      <svg viewBox={`0 0 ${CHART_W} ${h}`} className="w-full" suppressHydrationWarning>
         {rows.map((row, i) => {
           const barW = Math.max(4, Math.round((row.value / max) * barAreaW))
           const y = i * rowH
@@ -59,7 +59,7 @@ export function VBarChart({
 
   return (
     <div className="overflow-x-auto">
-      <svg viewBox={`0 0 ${CHART_W} ${CHART_H + LABEL_H}`} className="w-full">
+      <svg viewBox={`0 0 ${CHART_W} ${CHART_H + LABEL_H}`} className="w-full" suppressHydrationWarning>
         {rows.map((row, i) => {
           const barH = Math.max(4, Math.round((row.value / max) * CHART_H))
           const x = i * (barW + 2)
@@ -127,7 +127,7 @@ export function DonutChart({
 
   return (
     <div className="overflow-x-auto">
-      <svg viewBox={`0 0 ${CHART_W} 165`} className="w-full max-w-lg">
+      <svg viewBox={`0 0 ${CHART_W} 165`} className="w-full max-w-lg" suppressHydrationWarning>
         {paths.map((p) => (
           <path key={p.label} d={p.d} fill={p.colour} opacity={0.9}>
             <title>{p.label}: {p.value} ({p.pct}%)</title>
@@ -176,7 +176,7 @@ export function DualVBarChart({
 
   return (
     <div className="overflow-x-auto">
-      <svg viewBox={`0 0 ${CHART_W} ${legendY + 16}`} className="w-full">
+      <svg viewBox={`0 0 ${CHART_W} ${legendY + 16}`} className="w-full" suppressHydrationWarning>
         {rows.map((row, i) => {
           const x = i * pairW
           const h1 = Math.max(3, Math.round((row.primary / maxPrimary) * CHART_H))
@@ -236,7 +236,7 @@ export function DowHeatmap({ rows }: { rows: { dow: number; hour: number; count:
 
   return (
     <div className="overflow-x-auto">
-      <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full">
+      <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full" suppressHydrationWarning>
         {HOURS.map((h, hi) => (
           <text key={h} x={labelW + hi * cellW + cellW / 2} y={14} textAnchor="middle" fontSize={8} fill="#94a3b8">
             {String(h).padStart(2, "0")}
