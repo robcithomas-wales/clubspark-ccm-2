@@ -127,12 +127,6 @@ export default function AccountScreen() {
         className="px-6 pt-16 pb-8"
         style={{ backgroundColor: brandColour }}
       >
-        <View className="flex-row items-center justify-between mb-4">
-          <View />
-          {branding?.logoUrl && (
-            <Image source={{ uri: branding.logoUrl }} style={{ width: 44, height: 44, borderRadius: 8 }} resizeMode="contain" />
-          )}
-        </View>
         <View className="flex-row items-center justify-between">
           <View>
             <Text className="text-white/70 text-sm">My account</Text>
@@ -142,14 +136,18 @@ export default function AccountScreen() {
                 : (user?.user_metadata?.firstName ?? 'Account')}
             </Text>
           </View>
-          <View
-            className="w-14 h-14 rounded-full items-center justify-center"
-            style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
-          >
-            <Text className="text-2xl font-bold text-white">
-              {(profile?.firstName ?? user?.user_metadata?.firstName ?? user?.email ?? 'U')[0].toUpperCase()}
-            </Text>
-          </View>
+          {branding?.logoUrl ? (
+            <Image source={{ uri: branding.logoUrl }} style={{ width: 52, height: 52, borderRadius: 10 }} resizeMode="contain" />
+          ) : (
+            <View
+              className="w-14 h-14 rounded-full items-center justify-center"
+              style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
+            >
+              <Text className="text-2xl font-bold text-white">
+                {(profile?.firstName ?? user?.user_metadata?.firstName ?? user?.email ?? 'U')[0].toUpperCase()}
+              </Text>
+            </View>
+          )}
         </View>
       </View>
 
