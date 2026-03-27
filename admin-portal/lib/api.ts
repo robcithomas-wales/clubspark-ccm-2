@@ -2079,3 +2079,205 @@ export async function deleteProviderConfig(id: string): Promise<void> {
     throw new Error(err.message ?? "Failed to delete provider config")
   }
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Competition Service
+// ─────────────────────────────────────────────────────────────────
+const COMPETITION_SERVICE =
+  process.env.NEXT_PUBLIC_COMPETITION_SERVICE_URL || "http://127.0.0.1:4009"
+
+export async function getCompetitions(
+  page = 1,
+  limit = 25,
+  filters: { status?: string; sport?: string } = {},
+) {
+  const qs = new URLSearchParams({ page: String(page), limit: String(limit) })
+  if (filters.status) qs.set("status", filters.status)
+  if (filters.sport) qs.set("sport", filters.sport)
+  const res = await fetch(`${COMPETITION_SERVICE}/competitions?${qs}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to load competitions")
+  return res.json() as Promise<{ data: any[]; pagination: PaginationMeta }>
+}
+
+export async function getCompetitionById(id: string) {
+  const res = await fetch(`${COMPETITION_SERVICE}/competitions/${id}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return null
+  const json = await res.json()
+  return json.data ?? null
+}
+
+export async function createCompetition(data: Record<string, unknown>) {
+  const res = await fetch(`${COMPETITION_SERVICE}/competitions`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.message ?? "Failed to create competition")
+  }
+  return res.json()
+}
+
+export async function updateCompetition(id: string, data: Record<string, unknown>) {
+  const res = await fetch(`${COMPETITION_SERVICE}/competitions/${id}`, {
+    method: "PATCH",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.message ?? "Failed to update competition")
+  }
+  return res.json()
+}
+
+export async function getCompetitionEntries(competitionId: string, divisionId?: string) {
+  const qs = divisionId ? `?divisionId=${divisionId}` : ""
+  const res = await fetch(`${COMPETITION_SERVICE}/competitions/${competitionId}/entries${qs}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data ?? []
+}
+
+export async function createCompetitionEntry(competitionId: string, data: Record<string, unknown>) {
+  const res = await fetch(`${COMPETITION_SERVICE}/competitions/${competitionId}/entries`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.message ?? "Failed to create entry")
+  }
+  return res.json()
+}
+
+export async function updateCompetitionEntry(competitionId: string, entryId: string, data: Record<string, unknown>) {
+  const res = await fetch(`${COMPETITION_SERVICE}/competitions/${competitionId}/entries/${entryId}`, {
+    method: "PATCH",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.message ?? "Failed to update entry")
+  }
+  return res.json()
+}
+
+export async function bulkConfirmEntries(competitionId: string, divisionId: string) {
+  const res = await fetch(
+    `${COMPETITION_SERVICE}/competitions/${competitionId}/entries/bulk-confirm?divisionId=${divisionId}`,
+    { method: "POST", headers: await getAuthHeaders() }
+  )
+  if (!res.ok) throw new Error("Failed to confirm entries")
+  return res.json()
+}
+
+export async function generateDraw(competitionId: string, divisionId: string) {
+  const res = await fetch(
+    `${COMPETITION_SERVICE}/competitions/${competitionId}/divisions/${divisionId}/draw`,
+    { method: "POST", headers: await getAuthHeaders() }
+  )
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.message ?? "Failed to generate draw")
+  }
+  return res.json()
+}
+
+export async function resetDraw(competitionId: string, divisionId: string) {
+  const res = await fetch(
+    `${COMPETITION_SERVICE}/competitions/${competitionId}/divisions/${divisionId}/draw`,
+    { method: "DELETE", headers: await getAuthHeaders() }
+  )
+  if (!res.ok) throw new Error("Failed to reset draw")
+}
+
+export async function getCompetitionMatches(competitionId: string, divisionId?: string, round?: number) {
+  const qs = new URLSearchParams()
+  if (divisionId) qs.set("divisionId", divisionId)
+  if (round) qs.set("round", String(round))
+  const res = await fetch(`${COMPETITION_SERVICE}/competitions/${competitionId}/matches?${qs}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data ?? []
+}
+
+export async function updateCompetitionMatch(competitionId: string, matchId: string, data: Record<string, unknown>) {
+  const res = await fetch(`${COMPETITION_SERVICE}/competitions/${competitionId}/matches/${matchId}`, {
+    method: "PATCH",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) throw new Error("Failed to update match")
+  return res.json()
+}
+
+export async function submitMatchResult(
+  competitionId: string,
+  matchId: string,
+  data: { winnerId?: string; score: Record<string, unknown>; homePoints?: number; awayPoints?: number; notes?: string; adminVerify?: boolean }
+) {
+  const res = await fetch(`${COMPETITION_SERVICE}/competitions/${competitionId}/matches/${matchId}/result`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.message ?? "Failed to submit result")
+  }
+  return res.json()
+}
+
+export async function verifyMatchResult(competitionId: string, matchId: string) {
+  const res = await fetch(
+    `${COMPETITION_SERVICE}/competitions/${competitionId}/matches/${matchId}/result/verify`,
+    { method: "POST", headers: await getAuthHeaders() }
+  )
+  if (!res.ok) throw new Error("Failed to verify result")
+  return res.json()
+}
+
+export async function disputeMatchResult(competitionId: string, matchId: string) {
+  const res = await fetch(
+    `${COMPETITION_SERVICE}/competitions/${competitionId}/matches/${matchId}/result/dispute`,
+    { method: "POST", headers: await getAuthHeaders() }
+  )
+  if (!res.ok) throw new Error("Failed to dispute result")
+  return res.json()
+}
+
+export async function getStandings(competitionId: string, divisionId: string) {
+  const res = await fetch(
+    `${COMPETITION_SERVICE}/competitions/${competitionId}/divisions/${divisionId}/standings`,
+    { headers: await getAuthHeaders(), cache: "no-store" }
+  )
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data ?? []
+}
+
+export async function getDivisions(competitionId: string) {
+  const res = await fetch(
+    `${COMPETITION_SERVICE}/competitions/${competitionId}/divisions`,
+    { headers: await getAuthHeaders(), cache: "no-store" }
+  )
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data ?? []
+}

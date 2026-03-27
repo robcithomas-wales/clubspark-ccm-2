@@ -28,6 +28,7 @@ import {
   Repeat2,
   GraduationCap,
   Shield,
+  Trophy,
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
@@ -90,6 +91,19 @@ const navSections = [
     label: "Teams",
     items: [
       { label: "Teams", href: "/teams", icon: Shield },
+    ],
+  },
+  {
+    label: "Competitions",
+    items: [
+      {
+        label: "Competitions",
+        icon: Trophy,
+        children: [
+          { label: "All Competitions", href: "/competitions" },
+          { label: "New Competition", href: "/competitions/new" },
+        ],
+      },
     ],
   },
   {

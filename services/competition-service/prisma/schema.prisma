@@ -1,0 +1,218 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+  output          = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["competitions"]
+}
+
+enum CompetitionFormat {
+  LEAGUE
+  KNOCKOUT
+  ROUND_ROBIN
+  GROUP_KNOCKOUT
+  SWISS
+  LADDER
+  @@schema("competitions")
+}
+
+enum EntryType {
+  INDIVIDUAL
+  TEAM
+  DOUBLES
+  MIXED_DOUBLES
+  @@schema("competitions")
+}
+
+enum CompetitionStatus {
+  DRAFT
+  REGISTRATION_OPEN
+  IN_PROGRESS
+  COMPLETED
+  ARCHIVED
+  @@schema("competitions")
+}
+
+enum EntryStatus {
+  PENDING
+  CONFIRMED
+  WITHDRAWN
+  DISQUALIFIED
+  @@schema("competitions")
+}
+
+enum MatchStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  WALKOVER
+  BYE
+  POSTPONED
+  CANCELLED
+  @@schema("competitions")
+}
+
+enum ResultStatus {
+  SUBMITTED
+  VERIFIED
+  DISPUTED
+  @@schema("competitions")
+}
+
+model Competition {
+  id                   String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId             String            @map("tenant_id") @db.Uuid
+  organisationId       String?           @map("organisation_id") @db.Uuid
+  name                 String
+  description          String?
+  sport                String            // tennis | football | squash | padel | badminton | hockey | cricket | netball | basketball | other
+  season               String?           // e.g. "2026 Spring"
+  format               CompetitionFormat
+  entryType            EntryType         @default(INDIVIDUAL) @map("entry_type")
+  status               CompetitionStatus @default(DRAFT)
+  registrationOpensAt  DateTime?         @map("registration_opens_at")
+  registrationClosesAt DateTime?         @map("registration_closes_at")
+  startDate            DateTime?         @map("start_date")
+  endDate              DateTime?         @map("end_date")
+  maxEntries           Int?              @map("max_entries")
+  entryFee             Decimal?          @map("entry_fee") @db.Decimal(10, 2)
+  currency             String            @default("GBP")
+  eligibilityRules     Json?             @map("eligibility_rules")
+  tiebreakRules        Json?             @map("tiebreak_rules")
+  isPublic             Boolean           @default(true) @map("is_public")
+  createdAt            DateTime          @default(now()) @map("created_at")
+  updatedAt            DateTime          @default(now()) @updatedAt @map("updated_at")
+
+  divisions Division[]
+  entries   Entry[]
+  matches   Match[]
+
+  @@map("competitions")
+  @@schema("competitions")
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, sport])
+}
+
+model Division {
+  id            String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  competitionId String             @map("competition_id") @db.Uuid
+  name          String
+  format        CompetitionFormat? // overrides parent if set
+  maxEntries    Int?               @map("max_entries")
+  sortOrder     Int                @default(0) @map("sort_order")
+  createdAt     DateTime           @default(now()) @map("created_at")
+
+  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  entries     Entry[]
+  matches     Match[]
+  standings   Standing[]
+
+  @@map("divisions")
+  @@schema("competitions")
+  @@index([competitionId])
+}
+
+model Entry {
+  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  competitionId   String      @map("competition_id") @db.Uuid
+  divisionId      String?     @map("division_id") @db.Uuid
+  personId        String?     @map("person_id") @db.Uuid   // cross-ref to people-service
+  teamId          String?     @map("team_id") @db.Uuid     // cross-ref to team-service
+  displayName     String      @map("display_name")          // denormalised
+  seed            Int?
+  status          EntryStatus @default(PENDING)
+  paymentStatus   String      @default("unpaid") @map("payment_status")
+  notes           String?
+  withdrawnAt     DateTime?   @map("withdrawn_at")
+  withdrawnReason String?     @map("withdrawn_reason")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @default(now()) @updatedAt @map("updated_at")
+
+  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  division    Division?   @relation(fields: [divisionId], references: [id])
+  homeMatches Match[]     @relation("HomeEntry")
+  awayMatches Match[]     @relation("AwayEntry")
+  standings   Standing[]
+
+  @@map("entries")
+  @@schema("competitions")
+  @@index([competitionId])
+  @@index([divisionId])
+  @@index([personId])
+  @@index([teamId])
+}
+
+model Match {
+  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  competitionId  String      @map("competition_id") @db.Uuid
+  divisionId     String?     @map("division_id") @db.Uuid
+  round          Int         @default(1)
+  matchNumber    Int         @default(1) @map("match_number")
+  homeEntryId    String?     @map("home_entry_id") @db.Uuid
+  awayEntryId    String?     @map("away_entry_id") @db.Uuid
+  scheduledAt    DateTime?   @map("scheduled_at")
+  venueId        String?     @map("venue_id") @db.Uuid
+  resourceId     String?     @map("resource_id") @db.Uuid
+  bookableUnitId String?     @map("bookable_unit_id") @db.Uuid
+  bookingId      String?     @map("booking_id") @db.Uuid
+  status         MatchStatus @default(SCHEDULED)
+  // Result
+  winnerId       String?     @map("winner_id") @db.Uuid
+  score          Json?       // { home: 2, away: 1 } or { sets: [{home:6,away:3}] }
+  homePoints     Decimal?    @map("home_points") @db.Decimal(6, 2)
+  awayPoints     Decimal?    @map("away_points") @db.Decimal(6, 2)
+  // Submission tracking
+  submittedBy    String?     @map("submitted_by") @db.Uuid
+  submittedAt    DateTime?   @map("submitted_at")
+  verifiedBy     String?     @map("verified_by") @db.Uuid
+  verifiedAt     DateTime?   @map("verified_at")
+  resultStatus   ResultStatus? @map("result_status")
+  notes          String?
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @default(now()) @updatedAt @map("updated_at")
+
+  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  division    Division?   @relation(fields: [divisionId], references: [id])
+  homeEntry   Entry?      @relation("HomeEntry", fields: [homeEntryId], references: [id])
+  awayEntry   Entry?      @relation("AwayEntry", fields: [awayEntryId], references: [id])
+
+  @@map("matches")
+  @@schema("competitions")
+  @@index([competitionId])
+  @@index([divisionId])
+  @@index([homeEntryId])
+  @@index([awayEntryId])
+  @@index([status])
+}
+
+model Standing {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  competitionId    String   @map("competition_id") @db.Uuid
+  divisionId       String   @map("division_id") @db.Uuid
+  entryId          String   @map("entry_id") @db.Uuid
+  played           Int      @default(0)
+  won              Int      @default(0)
+  drawn            Int      @default(0)
+  lost             Int      @default(0)
+  pointsFor        Decimal  @default(0) @map("points_for") @db.Decimal(10, 2)
+  pointsAgainst    Decimal  @default(0) @map("points_against") @db.Decimal(10, 2)
+  pointsDifference Decimal  @default(0) @map("points_difference") @db.Decimal(10, 2)
+  points           Decimal  @default(0) @db.Decimal(10, 2)
+  position         Int      @default(0)
+  previousPosition Int?     @map("previous_position")
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at")
+
+  division Division @relation(fields: [divisionId], references: [id], onDelete: Cascade)
+  entry    Entry    @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  @@unique([divisionId, entryId])
+  @@map("standings")
+  @@schema("competitions")
+  @@index([competitionId])
+  @@index([divisionId])
+}
