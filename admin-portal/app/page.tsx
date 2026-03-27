@@ -17,6 +17,7 @@ import {
   Shield,
   ShieldCheck,
   Smartphone,
+  Trophy,
   TrendingUp,
   Users,
 } from "lucide-react"
@@ -42,6 +43,7 @@ import {
   getResources,
   getTeams,
   getVenues,
+  getAllCompetitionsForReport,
 } from "@/lib/api"
 
 function StatCard({
@@ -135,6 +137,7 @@ export default async function DashboardPage() {
     seriesResult,
     coachesResult,
     availabilityConfigsResult,
+    competitionsResult,
   ] = await Promise.allSettled([
     getVenues(),
     getResources(),
@@ -155,6 +158,7 @@ export default async function DashboardPage() {
     getBookingSeries(),
     getCoaches(1, 100),
     getAvailabilityConfigs({ scopeType: "venue" }),
+    getAllCompetitionsForReport(),
   ])
 
   const venuesResponse = venuesResult.status === "fulfilled" ? venuesResult.value : null
@@ -178,6 +182,7 @@ export default async function DashboardPage() {
   const availabilityConfigs: any[] = availabilityConfigsResult.status === "fulfilled"
     ? (availabilityConfigsResult.value ?? [])
     : []
+  const rawCompetitions: any[] = competitionsResult.status === "fulfilled" ? competitionsResult.value : []
 
   function extractData(r: any): any[] {
     if (!r) return []
@@ -205,6 +210,9 @@ export default async function DashboardPage() {
   const activeAddOns = addOns.filter((a: any) => a.status === "active")
   const activeSeries = series.filter((s: any) => s.status === "active")
   const activeTeams = teams.filter((t: any) => t.isActive !== false)
+
+  const activeCompetitions = rawCompetitions.filter((c: any) => c.status === "IN_PROGRESS" || c.status === "REGISTRATION_OPEN")
+  const openForEntry = rawCompetitions.filter((c: any) => c.status === "REGISTRATION_OPEN")
 
   const recentBookings = [...bookings]
     .sort((a: any, b: any) => new Date(b.startsAt || 0).getTime() - new Date(a.startsAt || 0).getTime())
@@ -284,6 +292,12 @@ export default async function DashboardPage() {
       summary: `${activeTeams.length} active teams with rosters, fixtures, availability and fee collection`,
     },
     {
+      title: "Competitions",
+      href: "/reports/competition-overview",
+      icon: Trophy,
+      summary: `${rawCompetitions.length} competitions · ${activeCompetitions.length} active · draws, entries, results and standings`,
+    },
+    {
       title: "Coaching",
       href: "/coaching/coaches",
       icon: GraduationCap,
@@ -305,7 +319,7 @@ export default async function DashboardPage() {
       title: "Reports",
       href: "/reports/bookings",
       icon: BarChart3,
-      summary: `Booking, revenue, utilisation, membership, coaching and teams reporting`,
+      summary: `Booking, revenue, utilisation, membership, coaching, teams and competition reporting`,
     },
     {
       title: "Customer Portal",
@@ -336,14 +350,15 @@ export default async function DashboardPage() {
     "People platform with household, role, tag and lifecycle tracking",
     "Membership schemes, plans, entitlement policies and live member records with renewal tracking",
     "Team management — rosters, fixtures, player availability, squad selection and fee charge runs",
+    "Competition management — competitions, divisions, entries, automated draw generation, match results, standings and reporting",
     "Coaching service — coach profiles, lesson types and session scheduling",
     "Add-ons for equipment hire, ancillary facilities, access services and products",
     "Gateway-agnostic payment service — Stripe implemented, GoCardless ready, idempotent by design",
     "Multi-tenant admin portal, white-label customer portal and branded Expo mobile app",
-    "Reporting suite — bookings, revenue, utilisation, membership, coaching and team analytics",
+    "Reporting suite — bookings, revenue, utilisation, membership, coaching, teams and competition analytics with PDF export",
     "Role-based admin access control across all portal functions",
     "Microservice architecture ready to scale to production on Azure",
-    "379-test automated regression suite — 331 service integration tests across 8 microservices and 48 Playwright e2e tests covering end-to-end user journeys, all running against a real database",
+    "398-test automated regression suite — 336 service integration tests across 9 microservices and 62 Playwright e2e tests covering end-to-end user journeys, all running against a real database",
   ]
 
   return (
@@ -399,6 +414,13 @@ export default async function DashboardPage() {
             description="Coach profiles with lesson types and session scheduling."
             icon={GraduationCap}
             accent="#0891b2"
+          />
+          <StatCard
+            title="Competitions"
+            value={rawCompetitions.length}
+            description={`${activeCompetitions.length} active · ${openForEntry.length} open for entry.`}
+            icon={Trophy}
+            accent="#f97316"
           />
           <StatCard
             title="Participants"
@@ -677,12 +699,13 @@ export default async function DashboardPage() {
             </div>
           </SectionCard>
 
-          <SectionCard title="Teams &amp; Coaching" description="Team sports management and coaching operations." actionHref="/teams" actionLabel="View Teams">
+          <SectionCard title="Teams, Coaching &amp; Competitions" description="Team sports management, coaching operations and competition lifecycle." actionHref="/teams" actionLabel="View Teams">
             <div className="space-y-4">
               {[
                 { label: "Active Teams", sub: "With rosters and fixture schedules", value: activeTeams.length },
                 { label: "Recurring Series", sub: "iCal RRULE recurring bookings", value: activeSeries.length },
                 { label: "Coaches", sub: "With lesson types and sessions", value: coaches.length },
+                { label: "Competitions", sub: `${activeCompetitions.length} active · ${openForEntry.length} open for entry`, value: rawCompetitions.length },
               ].map(({ label, sub, value }) => (
                 <div key={label} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm transition hover:shadow-md">
                   <div>
@@ -716,7 +739,7 @@ export default async function DashboardPage() {
               {
                 icon: Shield,
                 title: "Teams & Competition",
-                body: "Full team management with rosters, fixtures, player availability responses, squad selection and automated fee charge runs.",
+                body: "Full team management with rosters, fixtures, player availability, squad selection and charge runs — plus a dedicated competition lifecycle: entries, automated draw generation, results, standings and reporting.",
               },
               {
                 icon: GraduationCap,
@@ -741,7 +764,7 @@ export default async function DashboardPage() {
               {
                 icon: Layers,
                 title: "Production Architecture",
-                body: "Eight independent NestJS microservices with Prisma migrations, integration test suites, Swagger docs and a clear Azure deployment path.",
+                body: "Nine independent NestJS microservices with Prisma migrations, 336 integration tests, 62 Playwright e2e tests, Swagger docs and a clear Azure deployment path.",
               },
             ].map(({ icon: Icon, title, body }) => (
               <div key={title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
