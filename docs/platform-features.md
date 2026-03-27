@@ -1,6 +1,6 @@
 # Club & Coach Platform — Feature Overview
 
-> **Version:** Phase 0 complete (March 2026)
+> **Version:** Phase 0 complete (March 2026) — Competitions module added
 > **Audience:** Internal — product, engineering, commercial teams
 
 ---
@@ -18,7 +18,7 @@ Club & Coach is a multi-sport SaaS platform for sports clubs and leisure venues.
 | Admin Portal | Next.js 15 (App Router) | Staff-facing management interface |
 | Customer Portal | Next.js 15 (App Router) | White-label public booking & account portal |
 | Mobile App | React Native / Expo | Branded member app |
-| Backend Services | NestJS + Fastify | 8 independent microservices |
+| Backend Services | NestJS + Fastify | 9 independent microservices |
 | Database | PostgreSQL (Supabase → Azure) | Isolated schema per domain |
 | Auth | Supabase | JWT-based, multi-tenant |
 | Infrastructure target | Azure | Cloud deployment |
@@ -120,7 +120,20 @@ Platform and tenant management.
 
 ---
 
-### 8. Payment Service
+### 8. Competition Service (port 4009)
+Full competition and league management across all sports.
+
+- **Competitions** — create and manage competitions with sport, format (League / Knockout / Round Robin / Group+Knockout / Swiss / Ladder), entry type (Individual / Team / Doubles / Mixed Doubles), status lifecycle (Draft → Registration Open → In Progress → Completed / Archived), entry fee, eligibility rules, and date windows
+- **Divisions** — competitions can have multiple divisions (e.g. Mens A, Womens B); each division can override the parent format
+- **Entries** — register competitors into a competition with PENDING → CONFIRMED / WITHDRAWN / DISQUALIFIED lifecycle; supports individual (personId) and team (teamId) entries; bulk-confirm all pending entries in a division
+- **Draw Generation** — automated draw creation per division: round-robin schedule for LEAGUE/ROUND_ROBIN formats, seeded knockout bracket for KNOCKOUT format; conflict-aware with 409 guard against re-generation
+- **Matches** — fixture records per draw: home/away entries, scheduled time, venue, round, match number
+- **Results** — score submission, verification, and dispute workflow: `SUBMITTED → VERIFIED / DISPUTED`; auto-triggers standings recalculation on verify
+- **Standings** — automatic standings recalculation on result verification: wins, losses, draws, points, goal difference with configurable points-per-win rule
+
+---
+
+### 9. Payment Service
 Gateway-agnostic payment processing.
 
 - **Provider Configs** — per-tenant payment gateway configuration (Stripe implemented; GoCardless ready)
@@ -216,7 +229,7 @@ The admin portal is the primary management interface for club/venue staff. It us
 | Report | Key Metrics |
 |---|---|
 | Bookings | Total bookings, by source, by resource, daily trend |
-| Revenue | Booking revenue (filtered by date), add-on revenue, revenue per booked hour, daily revenue trend |
+| Revenue | Booking revenue (filtered by date), add-on revenue, competition entry fee revenue, revenue per booked hour, combined known revenue, revenue streams breakdown |
 | Utilisation | Overall utilisation %, by resource, peak vs off-peak |
 | Customers | Customers registered in range, top customers by spend/hours, never-booked tracking |
 | Membership | Memberships in range, active count, renewals due, retention rate |
@@ -228,12 +241,15 @@ The admin portal is the primary management interface for club/venue staff. It us
 | Coaching | Coaching-specific activity report |
 | Teams Overview | Team count by sport/status, fixture volume, fee collection summary |
 | Match Results | Fixture results with scores by team and sport |
-| Fee Collection | Charge run status, paid vs outstanding per team and fixture |
+| Fee Collection | Charge run status (team fixtures); competition entry charge status, paid vs outstanding per competition |
 | Player Availability | Availability response rates and player-level breakdown per fixture |
 | Player Participation | Participation frequency per player across fixtures |
 | Fixtures Summary | Upcoming and past fixtures across all teams with status breakdown |
+| Competition Overview | Total competitions, open for entry, in progress, entry count, entry fee revenue, status and sport breakdown, entries per competition, competitions timeline |
+| Competition Entries | Total entries, confirmed, pending, fees collected vs outstanding; filter by competition and status; entries by status and per competition |
+| Competition Results | Total matches, completed, pending, disputed, completion rate; filter by competition and status; match status and per-round breakdown |
 
-All reports include date-range filtering and CSV export.
+All reports include date-range filtering and CSV export. All reports include a **Save PDF** button (browser print, captures SVG charts).
 
 ### Settings
 - **Organisation** — name, logo, branding colour, website slug, public-facing description
@@ -255,7 +271,7 @@ The customer portal is a white-label Next.js web app served under the organisati
 - **Home** — organisation landing page with branding, description, and navigation to key sections
 - **News** — news feed with individual article pages
 - **Events** — upcoming events listing
-- **Competitions** — competition information page
+- **Competitions** — live competition list with sport/format badges, status, entry count, and entry fee; competition detail page with divisions, confirmed entry count, and entry fee; entry form to register for a competition
 
 ### Self-Service Account
 - **Login / Register** — email and password authentication via Supabase
@@ -295,6 +311,10 @@ A React Native (Expo) mobile app fully themed to the organisation's brand colour
 - Lists coaches with bio, specialties, and lesson types
 - Real-time slot availability with bookable unit enrichment
 - "Book another lesson" on success
+
+#### Competitions
+- Live list of all competitions for the organisation with sport, format, status, and entry count
+- Tapping a competition navigates to the detail page (via customer portal web view)
 
 #### Teams
 - List of teams the signed-in member belongs to
@@ -336,19 +356,19 @@ The platform is fully multi-tenant from day one:
 | Suite | Count | Status |
 |---|---|---|
 | venue-service integration | 61 | Passing |
-| booking-service integration | 57 | Passing |
+| booking-service integration | 61 | Passing |
 | people-service integration | 35 | Passing |
 | membership-service integration | 50 | Passing |
 | coaching-service integration | 45 | Passing |
 | team-service integration | 38 | Passing |
 | admin-service integration | 18 | Passing |
-| payment-service integration | 27 | Passing |
-| **Total integration** | **331** | **All passing** |
-| Playwright e2e (admin portal) | 48 | All passing |
-| **Grand total** | **379** | |
+| competition-service integration | 28 | Passing |
+| **Total integration** | **336** | **All passing** |
+| Playwright e2e (admin portal) | 62 | All passing |
+| **Grand total** | **398** | |
 
 All integration tests run against a real PostgreSQL database and use `describe.runIf(DB_AVAILABLE)` to gracefully skip when the database is unreachable.
 
 ---
 
-*Document updated March 2026. Reflects Phase 0 complete feature set.*
+*Document updated March 2026. Reflects Phase 0 complete feature set plus Competitions module.*

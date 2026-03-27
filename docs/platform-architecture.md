@@ -3,7 +3,7 @@
 > **Document purpose:** Records all architectural decisions, the target platform design, and the phased implementation plan. Used as the reference for all development work.
 >
 > **Last updated:** March 2026
-> **Status:** Active — Phase 0 complete. Teams (Phase 1) and Coaching (Phase 6) live.
+> **Status:** Active — Phase 0 complete. Teams (Phase 1), Coaching (Phase 6), and Competitions live.
 
 ---
 
@@ -66,6 +66,7 @@ The existing platform runs on ASP.NET + SQL Server. Core issues:
 | admin-service | 4006 | NestJS / TypeScript / Fastify | ✅ Live — admin users, RBAC |
 | coaching-service | 4007 | NestJS / TypeScript / Fastify | ✅ Live — coaches, lesson types, lesson sessions |
 | team-service | 4008 | NestJS / TypeScript / Fastify | ✅ Live — teams, rosters, fixtures, availability, charges |
+| competition-service | 4009 | NestJS / TypeScript / Fastify | ✅ Live — competitions, divisions, entries, draws, matches, results, standings |
 | membership-service | 4010 | NestJS / TypeScript / Fastify | ✅ Live — schemes, plans, memberships, entitlements, renewals |
 | payment-service | — | NestJS / TypeScript / Fastify | ✅ Live — gateway-agnostic (Stripe live, GoCardless ready) |
 | admin-portal | 3000 | Next.js / React | ✅ Live |
@@ -90,7 +91,11 @@ The existing platform runs on ASP.NET + SQL Server. Core issues:
 - [x] Admin portal extended — coaching sessions, team reports, people activity timeline, dashboard KPIs + charts
 - [x] Customer portal extended — coaching multi-step booking wizard
 - [x] Mobile app extended — coaching booking wizard, teams tab with fixtures and availability responses
-- [x] 331 integration tests passing across 8 services; 48 Playwright e2e tests passing
+- [x] competition-service built — competitions, divisions, entries, draws, matches, results, standings (port 4009)
+- [x] Admin portal extended — three competition report pages (overview, entries, results), revenue report enhanced with competition entry fee revenue stream, fee collection report enhanced, Save PDF button on all reports
+- [x] Customer portal extended — competition list, detail, and entry flow
+- [x] Mobile app extended — Competitions tab with live competition list
+- [x] 336 integration tests passing across 9 services; 62 Playwright e2e tests passing
 
 ### Current database schemas
 
@@ -145,6 +150,14 @@ team.player_availability    — per-fixture availability responses
 team.squad_selections       — published squad (starters + substitutes) per fixture
 team.charge_runs            — fee collection runs per fixture
 team.charges                — individual charges per squad member per run
+
+-- competitions schema
+competitions.competitions   — competitions with sport, format, entry type, status, entry fee, date windows
+competitions.divisions      — one or more divisions per competition (can override parent format)
+competitions.entries        — competitor registrations: personId or teamId, displayName, status, payment status
+competitions.matches        — drawn fixtures: home/away entry, round, scheduled time, venue
+competitions.match_results  — score records with result status (SUBMITTED → VERIFIED / DISPUTED)
+competitions.standings      — auto-recalculated: wins, losses, draws, points, goal difference
 
 -- admin schema
 admin.admin_users
@@ -287,6 +300,7 @@ Azure DevOps              — CI/CD pipelines (familiar from .NET)
 | **membership-service** | Membership schemes, plans, memberships, entitlement policies, renewal automation | ✅ Built |
 | **coaching-service** | Coaches, lesson types, coach availability, lesson sessions | ✅ Built |
 | **team-service** | Teams, rosters, fixtures, player availability, squad selection, charge runs | ✅ Built |
+| **competition-service** | Competitions, divisions, entries, draw generation, matches, results, standings | ✅ Built |
 | **payment-service** | Gateway-agnostic payment processing — Stripe live, GoCardless ready | ✅ Built |
 | **pricing-service** | Price calculation at booking time — applies pricing rules, surcharges, discounts | Phase 2 — not started |
 | **access-rules-service** | Who can book what, when, advance windows, booking limits — independent of membership | Phase 4 — not started |
