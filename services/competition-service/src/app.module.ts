@@ -13,6 +13,7 @@ import { EntriesModule } from './entries/entries.module.js'
 import { DrawModule } from './draw/draw.module.js'
 import { MatchesModule } from './matches/matches.module.js'
 import { StandingsModule } from './standings/standings.module.js'
+import { RankingsModule } from './rankings/rankings.module.js'
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { StandingsModule } from './standings/standings.module.js'
     DrawModule,
     MatchesModule,
     StandingsModule,
+    RankingsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: TenantContextGuard },

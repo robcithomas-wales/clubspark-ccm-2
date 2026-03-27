@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common'
 import { MatchesRepository } from './matches.repository.js'
 import { StandingsService } from '../standings/standings.service.js'
+import { RankingsService } from '../rankings/rankings.service.js'
 import type { SubmitResultDto } from './dto/submit-result.dto.js'
 import type { UpdateMatchDto } from './dto/update-match.dto.js'
 
@@ -9,6 +10,7 @@ export class MatchesService {
   constructor(
     private readonly repo: MatchesRepository,
     private readonly standingsService: StandingsService,
+    private readonly rankingsService: RankingsService,
   ) {}
 
   async list(competitionId: string, divisionId?: string, round?: number) {
@@ -66,9 +68,12 @@ export class MatchesService {
 
     const updated = await this.repo.update(id, data)
 
-    // Trigger standing recalculation when verified
+    // Trigger standing + ranking recalculation when verified
     if (verified && match.divisionId) {
       await this.standingsService.recalculate(competitionId, match.divisionId)
+    }
+    if (verified) {
+      await this.rankingsService.processMatchResult({ ...match, ...updated }).catch(() => {})
     }
 
     return { data: updated }
@@ -94,6 +99,7 @@ export class MatchesService {
     if (match.divisionId) {
       await this.standingsService.recalculate(competitionId, match.divisionId)
     }
+    await this.rankingsService.processMatchResult({ ...match, ...updated }).catch(() => {})
 
     return { data: updated }
   }

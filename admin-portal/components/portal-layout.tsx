@@ -103,6 +103,7 @@ const navSections = [
         children: [
           { label: "All Competitions", href: "/competitions" },
           { label: "New Competition", href: "/competitions/new" },
+          { label: "Rankings", href: "/rankings" },
         ],
       },
     ],

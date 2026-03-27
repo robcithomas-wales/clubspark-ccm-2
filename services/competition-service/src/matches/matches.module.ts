@@ -3,9 +3,10 @@ import { MatchesController } from './matches.controller.js'
 import { MatchesService } from './matches.service.js'
 import { MatchesRepository } from './matches.repository.js'
 import { StandingsModule } from '../standings/standings.module.js'
+import { RankingsModule } from '../rankings/rankings.module.js'
 
 @Module({
-  imports: [StandingsModule],
+  imports: [StandingsModule, RankingsModule],
   controllers: [MatchesController],
   providers: [MatchesService, MatchesRepository],
   exports: [MatchesService],

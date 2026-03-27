@@ -45,6 +45,19 @@ enum EntryStatus {
   @@schema("competitions")
 }
 
+enum RankingAlgorithm {
+  POINTS_TABLE
+  ELO
+  @@schema("competitions")
+}
+
+enum RankingScope {
+  COMPETITION
+  SEASON
+  ALL_TIME
+  @@schema("competitions")
+}
+
 enum MatchStatus {
   SCHEDULED
   IN_PROGRESS
@@ -215,4 +228,81 @@ model Standing {
   @@schema("competitions")
   @@index([competitionId])
   @@index([divisionId])
+}
+
+model RankingConfig {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId     String           @map("tenant_id") @db.Uuid
+  sport        String
+  scope        RankingScope
+  algorithm    RankingAlgorithm
+  season       String?
+  pointsPerWin Int              @default(3) @map("points_per_win")
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @default(now()) @updatedAt @map("updated_at")
+
+  entries     RankingEntry[]
+  matchEvents RankingMatchEvent[]
+
+  @@map("ranking_configs")
+  @@schema("competitions")
+  @@index([tenantId, sport, scope])
+}
+
+model RankingEntry {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  configId       String    @map("config_id") @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  personId       String?   @map("person_id") @db.Uuid
+  teamId         String?   @map("team_id") @db.Uuid
+  displayName    String    @map("display_name")
+  sport          String
+  eloRating      Int       @default(1000) @map("elo_rating")
+  eloProvisional Boolean   @default(true) @map("elo_provisional")
+  matchesPlayed  Int       @default(0) @map("matches_played")
+  wins           Int       @default(0)
+  draws          Int       @default(0)
+  losses         Int       @default(0)
+  points         Int       @default(0)
+  goalsFor       Int       @default(0) @map("goals_for")
+  goalsAgainst   Int       @default(0) @map("goals_against")
+  goalDifference Int       @default(0) @map("goal_difference")
+  rank           Int?
+  previousRank   Int?      @map("previous_rank")
+  rankChange     Int?      @map("rank_change")
+  lastMatchAt    DateTime? @map("last_match_at")
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  config      RankingConfig      @relation(fields: [configId], references: [id], onDelete: Cascade)
+  matchEvents RankingMatchEvent[]
+
+  @@unique([configId, personId])
+  @@unique([configId, teamId])
+  @@map("ranking_entries")
+  @@schema("competitions")
+  @@index([configId, rank])
+  @@index([tenantId, sport])
+}
+
+model RankingMatchEvent {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  configId        String   @map("config_id") @db.Uuid
+  matchId         String   @map("match_id") @db.Uuid
+  entryId         String   @map("entry_id") @db.Uuid
+  opponentEntryId String?  @map("opponent_entry_id") @db.Uuid
+  ratingBefore    Int?     @map("rating_before")
+  ratingAfter     Int?     @map("rating_after")
+  ratingChange    Int?     @map("rating_change")
+  pointsAwarded   Int?     @map("points_awarded")
+  outcome         String
+  processedAt     DateTime @default(now()) @map("processed_at")
+
+  config RankingConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  entry  RankingEntry  @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  @@map("ranking_match_events")
+  @@schema("competitions")
+  @@index([configId])
+  @@index([matchId])
+  @@index([entryId])
 }

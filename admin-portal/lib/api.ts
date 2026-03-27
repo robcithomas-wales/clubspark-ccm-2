@@ -2316,3 +2316,42 @@ export async function getCompetitionMatchesForReport(competitionId: string) {
   const json = await res.json()
   return (json.data ?? []) as any[]
 }
+
+export async function getRankingConfigs(sport?: string) {
+  const url = sport
+    ? `${COMPETITION_SERVICE}/rankings/configs?sport=${sport}`
+    : `${COMPETITION_SERVICE}/rankings/configs`
+  const res = await fetch(url, { headers: await getAuthHeaders(), cache: "no-store" })
+  if (!res.ok) return [] as any[]
+  const json = await res.json()
+  return (json.data ?? []) as any[]
+}
+
+export async function getRankingLeaderboard(configId: string, limit = 100) {
+  const res = await fetch(
+    `${COMPETITION_SERVICE}/rankings/${configId}?limit=${limit}`,
+    { headers: await getAuthHeaders(), cache: "no-store" }
+  )
+  if (!res.ok) return { config: null, data: [] as any[], total: 0 }
+  return res.json()
+}
+
+export async function createRankingConfig(payload: {
+  sport: string; scope: string; algorithm: string; season?: string; pointsPerWin?: number
+}) {
+  const res = await fetch(`${COMPETITION_SERVICE}/rankings/configs`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) throw new Error("Failed to create ranking config")
+  return res.json()
+}
+
+export async function deleteRankingConfig(configId: string) {
+  const res = await fetch(`${COMPETITION_SERVICE}/rankings/configs/${configId}`, {
+    method: "DELETE",
+    headers: await getAuthHeaders(),
+  })
+  return res.ok
+}
