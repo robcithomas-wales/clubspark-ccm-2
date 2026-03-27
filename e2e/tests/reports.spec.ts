@@ -28,6 +28,12 @@ test.describe('Reports — core pages', () => {
     await expect(page.getByText(/revenue per booked hour/i).first()).toBeVisible()
   })
 
+  test('revenue report includes competition entry fees stream', async ({ page }) => {
+    await page.goto('/reports/revenue')
+
+    await expect(page.getByText(/competition entry fees/i).first()).toBeVisible()
+  })
+
   test('utilisation report loads with utilisation KPI', async ({ page }) => {
     await page.goto('/reports/utilisation')
 
@@ -103,7 +109,6 @@ test.describe('Reports — new pages', () => {
   test('all report pages are reachable from the nav', async ({ page }) => {
     await page.goto('/reports/bookings')
 
-    // Nav should contain links to all 10 report pages
     const navLinks = [
       '/reports/bookings',
       '/reports/revenue',
@@ -115,11 +120,93 @@ test.describe('Reports — new pages', () => {
       '/reports/addons',
       '/reports/pending-approvals',
       '/reports/payment-health',
+      '/reports/competition-overview',
+      '/reports/competition-entries',
+      '/reports/competition-results',
     ]
 
     for (const href of navLinks) {
       await expect(page.locator(`a[href="${href}"]`).first()).toBeVisible()
     }
+  })
+})
+
+test.describe('Reports — competition reports', () => {
+  test('competition overview report loads with KPI cards', async ({ page }) => {
+    await page.goto('/reports/competition-overview')
+
+    await expect(page.getByRole('heading', { name: /competition overview/i })).toBeVisible()
+    await expect(page.getByText(/total competitions/i).first()).toBeVisible()
+    await expect(page.getByText(/entry fee revenue/i).first()).toBeVisible()
+  })
+
+  test('competition overview shows the competitions table', async ({ page }) => {
+    await page.goto('/reports/competition-overview')
+
+    await expect(page.getByRole('heading', { name: /competition overview/i })).toBeVisible()
+    // Table header columns
+    await expect(page.getByRole('columnheader', { name: /competition/i }).first()).toBeVisible()
+    await expect(page.getByRole('columnheader', { name: /entries/i }).first()).toBeVisible()
+  })
+
+  test('competition entries report loads with KPI cards', async ({ page }) => {
+    await page.goto('/reports/competition-entries')
+
+    await expect(page.getByRole('heading', { name: /competition entries/i })).toBeVisible()
+    await expect(page.getByText(/total entries/i).first()).toBeVisible()
+    await expect(page.getByText(/fees collected/i).first()).toBeVisible()
+    await expect(page.getByText(/fees outstanding/i).first()).toBeVisible()
+  })
+
+  test('competition entries report has competition and status filters', async ({ page }) => {
+    await page.goto('/reports/competition-entries')
+
+    await expect(page.getByRole('combobox').nth(0)).toBeVisible() // competition filter
+    await expect(page.getByRole('combobox').nth(1)).toBeVisible() // status filter
+  })
+
+  test('competition results report loads with KPI cards', async ({ page }) => {
+    await page.goto('/reports/competition-results')
+
+    await expect(page.getByRole('heading', { name: /competition results/i })).toBeVisible()
+    await expect(page.getByText(/total matches/i).first()).toBeVisible()
+    await expect(page.getByText(/completion rate/i).first()).toBeVisible()
+    await expect(page.getByText(/disputed/i).first()).toBeVisible()
+  })
+
+  test('competition results report has competition and status filters', async ({ page }) => {
+    await page.goto('/reports/competition-results')
+
+    await expect(page.getByRole('combobox').nth(0)).toBeVisible()
+    await expect(page.getByRole('combobox').nth(1)).toBeVisible()
+  })
+
+  test('fee collection report loads with match fee KPIs', async ({ page }) => {
+    await page.goto('/reports/fee-collection')
+
+    await expect(page.getByRole('heading', { name: /fee collection/i })).toBeVisible()
+    await expect(page.getByText(/total charged/i).first()).toBeVisible()
+    await expect(page.getByText(/collection rate/i).first()).toBeVisible()
+  })
+})
+
+test.describe('Reports — print / PDF', () => {
+  test('bookings report has a Save PDF button', async ({ page }) => {
+    await page.goto('/reports/bookings')
+
+    await expect(page.getByRole('button', { name: /save pdf/i }).first()).toBeVisible()
+  })
+
+  test('competition overview report has a Save PDF button', async ({ page }) => {
+    await page.goto('/reports/competition-overview')
+
+    await expect(page.getByRole('button', { name: /save pdf/i }).first()).toBeVisible()
+  })
+
+  test('revenue report has a Save PDF button', async ({ page }) => {
+    await page.goto('/reports/revenue')
+
+    await expect(page.getByRole('button', { name: /save pdf/i }).first()).toBeVisible()
   })
 })
 
@@ -147,5 +234,23 @@ test.describe('Reports — export buttons', () => {
 
     const exportButtons = page.getByRole('button', { name: /export csv/i })
     await expect(exportButtons.first()).toBeVisible()
+  })
+
+  test('competition overview has an Export CSV button', async ({ page }) => {
+    await page.goto('/reports/competition-overview')
+
+    await expect(page.getByRole('button', { name: /export csv/i }).first()).toBeVisible()
+  })
+
+  test('competition entries has an Export CSV button', async ({ page }) => {
+    await page.goto('/reports/competition-entries')
+
+    await expect(page.getByRole('button', { name: /export csv/i }).first()).toBeVisible()
+  })
+
+  test('competition results has an Export CSV button', async ({ page }) => {
+    await page.goto('/reports/competition-results')
+
+    await expect(page.getByRole('button', { name: /export csv/i }).first()).toBeVisible()
   })
 })

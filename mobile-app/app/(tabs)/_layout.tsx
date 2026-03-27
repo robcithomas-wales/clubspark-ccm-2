@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router'
 import { useBranding } from '../../contexts/BrandingContext'
-import { House, CalendarDays, Star, GraduationCap, User, Shield } from 'lucide-react-native'
+import { House, CalendarDays, Star, GraduationCap, User, Shield, Trophy } from 'lucide-react-native'
 
 export default function TabLayout() {
   const { branding } = useBranding()
@@ -58,6 +58,13 @@ export default function TabLayout() {
         options={{
           title: 'Teams',
           tabBarIcon: ({ color, size }) => <Shield size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="competitions"
+        options={{
+          title: 'Competitions',
+          tabBarIcon: ({ color, size }) => <Trophy size={size} color={color} />,
         }}
       />
       <Tabs.Screen

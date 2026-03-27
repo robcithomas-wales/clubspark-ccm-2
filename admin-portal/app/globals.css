@@ -155,3 +155,51 @@ textarea {
   background: #edf2f7;
   color: #526277;
 }
+
+/* ── Print / Save as PDF ──────────────────────────────────────────────────── */
+@media print {
+  /* Hide chrome */
+  .page-shell > aside,
+  .page-shell > main > header,
+  .no-print {
+    display: none !important;
+  }
+
+  /* Full-width content */
+  .page-shell,
+  .page-shell > main {
+    display: block !important;
+    width: 100% !important;
+    min-height: unset !important;
+  }
+
+  .page-shell > main > div {
+    padding: 0 !important;
+  }
+
+  /* White background throughout */
+  body,
+  .page-shell {
+    background: white !important;
+  }
+
+  /* Keep cards readable */
+  .rounded-2xl,
+  .rounded-3xl {
+    border-radius: 8px !important;
+    box-shadow: none !important;
+    border: 1px solid #e2e8f0 !important;
+  }
+
+  /* Avoid breaking charts/cards across pages */
+  .rounded-2xl,
+  table {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Ensure SVG charts print */
+  svg {
+    overflow: visible !important;
+  }
+}

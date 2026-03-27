@@ -29,7 +29,7 @@ export default async function NewsPostPage({
   const primary = org.primaryColour
 
   return (
-    <div className="min-h-screen bg-white pt-20">
+    <div className="min-h-screen bg-slate-50 pt-20">
       {post.coverImageUrl && (
         <div className="h-72 w-full overflow-hidden md:h-96">
           <img src={post.coverImageUrl} alt={post.title} className="h-full w-full object-cover" />

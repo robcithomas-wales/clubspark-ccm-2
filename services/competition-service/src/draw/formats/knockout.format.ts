@@ -82,7 +82,7 @@ export class KnockoutFormat implements ICompetitionFormat {
     // Interleave: seed 1 top, seed 2 bottom, then alternate
     const result: number[] = []
     for (let i = 0; i < top.length; i++) {
-      result.push(top[i], bottom[i])
+      result.push(top[i]!, bottom[i]!)
     }
     return result
   }

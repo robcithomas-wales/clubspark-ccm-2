@@ -49,8 +49,8 @@ export class CompetitionsRepository {
         maxEntries: dto.maxEntries ?? null,
         entryFee: dto.entryFee ?? null,
         isPublic: dto.isPublic ?? true,
-        eligibilityRules: dto.eligibilityRules ?? null,
-        tiebreakRules: dto.tiebreakRules ?? null,
+        eligibilityRules: dto.eligibilityRules as any ?? undefined,
+        tiebreakRules: dto.tiebreakRules as any ?? undefined,
         // Auto-create a Main division
         divisions: {
           create: [{ name: 'Main', sortOrder: 0 }],

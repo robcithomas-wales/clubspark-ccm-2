@@ -89,7 +89,7 @@ export class StandingsService {
 
     // Upsert standings
     for (let i = 0; i < sorted.length; i++) {
-      const entryId = sorted[i].id
+      const entryId = sorted[i]!.id
       const s = stats.get(entryId)!
       await this.prisma.standing.upsert({
         where: { divisionId_entryId: { divisionId, entryId } },

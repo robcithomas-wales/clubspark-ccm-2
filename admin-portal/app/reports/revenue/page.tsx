@@ -9,6 +9,8 @@ import {
   getBookings,
   getAddOnServices,
   getLessonTypes,
+  getAllCompetitionsForReport,
+  getCompetitionEntriesForReport,
 } from "@/lib/api"
 import { resolveReportRange, daysBetween, inRange, formatDateRange } from "@/lib/report-utils"
 
@@ -26,13 +28,14 @@ export default async function RevenueReportPage({
   const days = daysBetween(from, to)
   const rangeLabel = formatDateRange(from, to)
 
-  const [statsRes, dailyRes, summaryRes, bookingsRes, addOnsRes, lessonTypesRes] = await Promise.allSettled([
+  const [statsRes, dailyRes, summaryRes, bookingsRes, addOnsRes, lessonTypesRes, competitionsRes] = await Promise.allSettled([
     getBookingStats(),
     getBookingDailyStats(days),
     getBookingStatsSummary(),
     getBookings(1, 1000),
     getAddOnServices(),
     getLessonTypes(1, 200, true),
+    getAllCompetitionsForReport(),
   ])
 
   const stats = statsRes.status === "fulfilled" ? statsRes.value : null
@@ -48,6 +51,17 @@ export default async function RevenueReportPage({
   const lessonTypes: any[] = lessonTypesRes.status === "fulfilled"
     ? (lessonTypesRes.value?.data ?? [])
     : []
+  const rawCompetitions: any[] = competitionsRes.status === "fulfilled" ? competitionsRes.value : []
+
+  // Fetch entries for all competitions to calculate confirmed entry fee revenue
+  const entriesPerComp = await Promise.allSettled(
+    rawCompetitions.map((c: any) => getCompetitionEntriesForReport(c.id))
+  )
+  const entryFeeRevenue = rawCompetitions.reduce((sum, comp, i) => {
+    const entries = entriesPerComp[i].status === "fulfilled" ? entriesPerComp[i].value : []
+    const confirmed = entries.filter((e: any) => e.status === "confirmed").length
+    return sum + confirmed * parseFloat(comp.entryFee ?? "0")
+  }, 0)
 
   // Filter bookings to range
   const allBookings = rawBookings.filter((b: any) => inRange(b.startsAt ?? b.createdAt, from, to))
@@ -70,7 +84,7 @@ export default async function RevenueReportPage({
     0
   )
   const coachingActiveLessonTypes = lessonTypes.length
-  const combinedKnownRevenue = totalBookingRevenue + addOnRevenue
+  const combinedKnownRevenue = totalBookingRevenue + addOnRevenue + entryFeeRevenue
 
   // Revenue by source
   const revenueBySource: Record<string, number> = {}
@@ -149,10 +163,15 @@ export default async function RevenueReportPage({
               Sum of session prices · {coachingActiveLessonTypes} active lesson {coachingActiveLessonTypes === 1 ? "type" : "types"}
             </div>
           </div>
+          <div className="rounded-2xl border border-orange-200 bg-orange-50/50 p-5 shadow-sm">
+            <div className="text-sm font-medium text-orange-700">Competition entry fees</div>
+            <div className="mt-2 text-3xl font-bold text-slate-950">{formatCurrency(entryFeeRevenue)}</div>
+            <div className="mt-1 text-xs text-slate-400">Confirmed entries across all competitions</div>
+          </div>
           <div className="rounded-2xl border border-slate-300 bg-slate-50 p-5 shadow-sm">
             <div className="text-sm font-medium text-slate-600">Total known revenue</div>
             <div className="mt-2 text-3xl font-bold text-slate-950">{formatCurrency(combinedKnownRevenue)}</div>
-            <div className="mt-1 text-xs text-slate-400">Booking (filtered) + add-ons (all time)</div>
+            <div className="mt-1 text-xs text-slate-400">Bookings + add-ons + competition entry fees</div>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="text-sm font-medium text-slate-500">Revenue streams</div>
@@ -161,8 +180,9 @@ export default async function RevenueReportPage({
                 { label: "Facility bookings", value: totalBookingRevenue, colour: "#10b981" },
                 { label: "Add-ons", value: addOnRevenue, colour: "#8b5cf6" },
                 { label: "Coaching (catalogue)", value: coachingCatalogueValue, colour: "#6366f1" },
+                { label: "Competition entry fees", value: entryFeeRevenue, colour: "#f97316" },
               ].map((s) => {
-                const total = totalBookingRevenue + addOnRevenue + coachingCatalogueValue
+                const total = totalBookingRevenue + addOnRevenue + coachingCatalogueValue + entryFeeRevenue
                 const pct = total > 0 ? Math.round((s.value / total) * 100) : 0
                 return (
                   <div key={s.label} className="flex items-center gap-3">

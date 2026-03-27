@@ -147,11 +147,11 @@ export default function CoachingPage() {
   const btnStyle = { backgroundColor: primary }
 
   return (
-    <div className="min-h-screen bg-white pt-20">
-      <div className="border-b border-slate-100 py-12" style={{ backgroundColor: primary + "08" }}>
+    <div className="min-h-screen bg-slate-50">
+      <div className="pt-20 pb-12" style={{ background: `linear-gradient(135deg, ${primary} 0%, ${primary}cc 100%)` }}>
         <div className="mx-auto max-w-4xl px-4 md:px-8">
-          <h1 className="text-4xl font-extrabold tracking-tight text-slate-900">Coaching</h1>
-          <p className="mt-2 text-slate-500">Book a lesson with one of our coaches at {org.name}</p>
+          <h1 className="text-4xl font-extrabold tracking-tight text-white">Coaching</h1>
+          <p className="mt-2 text-white/70">Book a lesson with one of our coaches at {org.name}</p>
         </div>
       </div>
 

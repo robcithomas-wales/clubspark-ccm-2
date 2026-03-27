@@ -16,7 +16,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params
   const divisionId = req.nextUrl.searchParams.get("divisionId")
   if (!divisionId) return NextResponse.json({ error: "divisionId required" }, { status: 400 })
-  const res = await fetch(`${COMPETITION_SERVICE}/competitions/${id}/divisions/${divisionId}/draw`, { method: "POST", headers: h })
+  const { "Content-Type": _ct, ...noBody } = h
+  const res = await fetch(`${COMPETITION_SERVICE}/competitions/${id}/divisions/${divisionId}/draw`, { method: "POST", headers: noBody })
   const json = await res.json()
   return NextResponse.json(json, { status: res.status })
 }
@@ -27,6 +28,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const { id } = await params
   const divisionId = req.nextUrl.searchParams.get("divisionId")
   if (!divisionId) return NextResponse.json({ error: "divisionId required" }, { status: 400 })
-  const res = await fetch(`${COMPETITION_SERVICE}/competitions/${id}/divisions/${divisionId}/draw`, { method: "DELETE", headers: h })
+  const { "Content-Type": _ct, ...noBody } = h
+  const res = await fetch(`${COMPETITION_SERVICE}/competitions/${id}/divisions/${divisionId}/draw`, { method: "DELETE", headers: noBody })
   return new NextResponse(null, { status: res.status })
 }

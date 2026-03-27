@@ -6,6 +6,7 @@ const CUSTOMER_URL = process.env.EXPO_PUBLIC_CUSTOMER_SERVICE_URL!
 const MEMBERSHIP_URL = process.env.EXPO_PUBLIC_MEMBERSHIP_SERVICE_URL!
 const COACHING_URL = process.env.EXPO_PUBLIC_COACHING_SERVICE_URL!
 const TEAM_URL = process.env.EXPO_PUBLIC_TEAM_SERVICE_URL!
+const COMPETITION_URL = process.env.EXPO_PUBLIC_COMPETITION_SERVICE_URL ?? 'http://localhost:4009'
 
 // ─── Public (no auth) ────────────────────────────────────────────────────────
 
@@ -532,4 +533,106 @@ export async function respondAvailability(
     headers,
     body: JSON.stringify({ response, notes }),
   })
+}
+
+// ─── Competitions ─────────────────────────────────────────────────────────────
+
+function competitionHeaders(tenantId: string): Record<string, string> {
+  return { 'x-tenant-id': tenantId }
+}
+
+export type CompetitionSummary = {
+  id: string
+  name: string
+  sport: string
+  format: string
+  entryType: string
+  status: string
+  season: string | null
+  maxEntries: number | null
+  entryFee: string | null
+  registrationOpensAt: string | null
+  registrationClosesAt: string | null
+  startDate: string | null
+  endDate: string | null
+  isPublic: boolean
+  divisions: { id: string; name: string; format: string | null }[]
+}
+
+export type CompStanding = {
+  position: number
+  entryId: string
+  entry: { displayName: string }
+  played: number
+  won: number
+  drawn: number
+  lost: number
+  pointsDifference: number
+  points: string | number
+}
+
+export type CompMatch = {
+  id: string
+  round: number
+  matchNumber: number
+  status: string
+  resultStatus: string | null
+  homeEntry: { id: string; displayName: string } | null
+  awayEntry: { id: string; displayName: string } | null
+  score: { home: number; away: number } | null
+  winnerId: string | null
+}
+
+export async function fetchCompetitions(tenantId: string): Promise<CompetitionSummary[]> {
+  try {
+    const res = await fetch(`${COMPETITION_URL}/competitions?limit=50`, {
+      headers: competitionHeaders(tenantId),
+    })
+    if (!res.ok) return []
+    const json = await res.json()
+    return (json.data ?? []).filter((c: CompetitionSummary) => c.isPublic)
+  } catch { return [] }
+}
+
+export async function fetchCompStandings(tenantId: string, competitionId: string, divisionId: string): Promise<CompStanding[]> {
+  try {
+    const res = await fetch(
+      `${COMPETITION_URL}/competitions/${competitionId}/divisions/${divisionId}/standings`,
+      { headers: competitionHeaders(tenantId) },
+    )
+    if (!res.ok) return []
+    const json = await res.json()
+    return json.data ?? []
+  } catch { return [] }
+}
+
+export async function fetchCompMatches(tenantId: string, competitionId: string, divisionId: string): Promise<CompMatch[]> {
+  try {
+    const res = await fetch(
+      `${COMPETITION_URL}/competitions/${competitionId}/matches?divisionId=${divisionId}`,
+      { headers: competitionHeaders(tenantId) },
+    )
+    if (!res.ok) return []
+    const json = await res.json()
+    return json.data ?? []
+  } catch { return [] }
+}
+
+export async function enterCompetition(
+  tenantId: string,
+  competitionId: string,
+  displayName: string,
+  personId: string,
+  divisionId?: string,
+): Promise<void> {
+  const headers = await authHeaders(tenantId)
+  const res = await fetch(`${COMPETITION_URL}/competitions/${competitionId}/entries`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ displayName, personId, ...(divisionId ? { divisionId } : {}) }),
+  })
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}))
+    throw new Error(j.message ?? 'Failed to submit entry')
+  }
 }

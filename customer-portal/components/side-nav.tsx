@@ -41,8 +41,9 @@ export function SideNav() {
     { label: "Book",        href: `/${slug}/book`,        icon: Calendar },
     { label: "Memberships", href: `/${slug}/memberships`, icon: CreditCard },
     { label: "News",        href: `/${slug}/news`,        icon: Newspaper },
-    { label: "Events",      href: `/${slug}/events`,      icon: Trophy },
-    { label: "Coaching",    href: `/${slug}/coaching`,    icon: GraduationCap },
+    { label: "Events",        href: `/${slug}/events`,        icon: Trophy },
+    { label: "Competitions", href: `/${slug}/competitions`, icon: Trophy },
+    { label: "Coaching",     href: `/${slug}/coaching`,     icon: GraduationCap },
   ]
 
   const isActive = (href: string) => pathname === href

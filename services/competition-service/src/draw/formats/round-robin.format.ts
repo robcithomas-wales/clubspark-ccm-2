@@ -14,8 +14,8 @@ export class RoundRobinFormat implements ICompetitionFormat {
         matches.push({
           round: 1,
           matchNumber: matchCounter++,
-          homeEntryId: entries[i].id,
-          awayEntryId: entries[j].id,
+          homeEntryId: entries[i]?.id ?? null,
+          awayEntryId: entries[j]?.id ?? null,
           status: 'SCHEDULED',
         })
       }

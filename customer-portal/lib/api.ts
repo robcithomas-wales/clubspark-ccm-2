@@ -370,3 +370,124 @@ export async function fetchCoachSlots(
   const json = await res.json()
   return json.data ?? []
 }
+
+// ─── Competitions (public + auth) ─────────────────────────────────────────────
+
+const COMPETITION_URL = process.env.NEXT_PUBLIC_COMPETITION_SERVICE_URL || "http://127.0.0.1:4009"
+
+function tenantHeaders(tenantId: string): Record<string, string> {
+  return { "x-tenant-id": tenantId, "Content-Type": "application/json" }
+}
+
+export type Competition = {
+  id: string
+  name: string
+  description: string | null
+  sport: string
+  format: string
+  entryType: string
+  status: string
+  season: string | null
+  maxEntries: number | null
+  entryFee: string | null
+  registrationOpensAt: string | null
+  registrationClosesAt: string | null
+  startDate: string | null
+  endDate: string | null
+  isPublic: boolean
+  divisions: { id: string; name: string; format: string | null }[]
+  sportConfig?: { displayName: string; icon: string }
+}
+
+export type CompetitionEntry = {
+  id: string
+  displayName: string
+  seed: number | null
+  status: string
+  personId: string | null
+  teamId: string | null
+}
+
+export type Standing = {
+  position: number
+  entryId: string
+  entry: { displayName: string }
+  played: number
+  won: number
+  drawn: number
+  lost: number
+  pointsFor: number
+  pointsAgainst: number
+  pointsDifference: number
+  points: string | number
+  form: string[]
+}
+
+export type CompetitionMatch = {
+  id: string
+  round: number
+  matchNumber: number
+  status: string
+  resultStatus: string | null
+  homeEntryId: string | null
+  awayEntryId: string | null
+  homeEntry: { id: string; displayName: string } | null
+  awayEntry: { id: string; displayName: string } | null
+  score: { home: number; away: number } | null
+  winnerId: string | null
+  scheduledAt: string | null
+}
+
+export async function fetchPublicCompetitions(tenantId: string): Promise<Competition[]> {
+  try {
+    const res = await fetch(`${COMPETITION_URL}/competitions?limit=50`, { headers: tenantHeaders(tenantId), cache: "no-store" })
+    if (!res.ok) return []
+    const json = await res.json()
+    return (json.data ?? []).filter((c: Competition) => c.isPublic)
+  } catch { return [] }
+}
+
+export async function fetchPublicCompetition(tenantId: string, id: string): Promise<Competition | null> {
+  try {
+    const res = await fetch(`${COMPETITION_URL}/competitions/${id}`, { headers: tenantHeaders(tenantId), cache: "no-store" })
+    if (!res.ok) return null
+    const json = await res.json()
+    return json.data ?? null
+  } catch { return null }
+}
+
+export async function fetchPublicStandings(tenantId: string, competitionId: string, divisionId: string): Promise<Standing[]> {
+  try {
+    const res = await fetch(`${COMPETITION_URL}/competitions/${competitionId}/divisions/${divisionId}/standings`, { headers: tenantHeaders(tenantId), cache: "no-store" })
+    if (!res.ok) return []
+    const json = await res.json()
+    return json.data ?? []
+  } catch { return [] }
+}
+
+export async function fetchPublicMatches(tenantId: string, competitionId: string, divisionId?: string): Promise<CompetitionMatch[]> {
+  try {
+    const qs = divisionId ? `?divisionId=${divisionId}` : ""
+    const res = await fetch(`${COMPETITION_URL}/competitions/${competitionId}/matches${qs}`, { headers: tenantHeaders(tenantId), cache: "no-store" })
+    if (!res.ok) return []
+    const json = await res.json()
+    return json.data ?? []
+  } catch { return [] }
+}
+
+export async function submitCompetitionEntry(
+  tenantId: string,
+  competitionId: string,
+  body: { displayName: string; personId?: string; teamId?: string; divisionId?: string }
+): Promise<{ id: string } | null> {
+  const headers = await authHeaders(tenantId)
+  const res = await fetch(`${COMPETITION_URL}/competitions/${competitionId}/entries`, {
+    method: "POST", headers, body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}))
+    throw new Error(j.message ?? "Failed to submit entry")
+  }
+  const json = await res.json()
+  return json.data ?? null
+}

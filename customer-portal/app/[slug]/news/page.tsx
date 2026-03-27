@@ -20,12 +20,12 @@ export default async function NewsPage({ params }: { params: Promise<{ slug: str
   const primary = org.primaryColour
 
   return (
-    <div className="min-h-screen bg-white pt-20">
+    <div className="min-h-screen bg-slate-50">
       {/* Header */}
-      <div className="border-b border-slate-100 py-12" style={{ backgroundColor: primary + "08" }}>
+      <div className="pt-20 pb-12" style={{ background: `linear-gradient(135deg, ${primary} 0%, ${primary}cc 100%)` }}>
         <div className="mx-auto max-w-4xl px-4 md:px-8">
-          <h1 className="text-4xl font-extrabold tracking-tight text-slate-900">News</h1>
-          <p className="mt-2 text-slate-500">Latest updates from {org.name}</p>
+          <h1 className="text-4xl font-extrabold tracking-tight text-white">News</h1>
+          <p className="mt-2 text-white/70">Latest updates from {org.name}</p>
         </div>
       </div>
 

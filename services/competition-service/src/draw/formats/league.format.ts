@@ -28,8 +28,8 @@ export class LeagueFormat implements ICompetitionFormat {
         matches.push({
           round: r + 1,
           matchNumber: matchCounter++,
-          homeEntryId: home,
-          awayEntryId: away,
+          homeEntryId: home ?? null,
+          awayEntryId: away ?? null,
           status: 'SCHEDULED',
         })
       }

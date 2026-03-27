@@ -14,7 +14,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const h = await authHeaders()
   if (!h) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   const { id, matchId } = await params
-  const res = await fetch(`${COMPETITION_SERVICE}/competitions/${id}/matches/${matchId}/result/dispute`, { method: "POST", headers: h })
+  const { "Content-Type": _ct, ...noBody } = h
+  const res = await fetch(`${COMPETITION_SERVICE}/competitions/${id}/matches/${matchId}/result/dispute`, { method: "POST", headers: noBody })
   const json = await res.json()
   return NextResponse.json(json, { status: res.status })
 }

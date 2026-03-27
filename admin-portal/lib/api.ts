@@ -2281,3 +2281,38 @@ export async function getDivisions(competitionId: string) {
   const json = await res.json()
   return json.data ?? []
 }
+
+// ── Competition reporting helpers ─────────────────────────────────────────────
+
+/** Fetch all competitions (up to 100) for reporting. */
+export async function getAllCompetitionsForReport() {
+  const res = await fetch(`${COMPETITION_SERVICE}/competitions?limit=100`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return [] as any[]
+  const json = await res.json()
+  return (json.data ?? []) as any[]
+}
+
+/** Fetch all entries for a single competition. */
+export async function getCompetitionEntriesForReport(competitionId: string) {
+  const res = await fetch(
+    `${COMPETITION_SERVICE}/competitions/${competitionId}/entries`,
+    { headers: await getAuthHeaders(), cache: "no-store" }
+  )
+  if (!res.ok) return [] as any[]
+  const json = await res.json()
+  return (json.data ?? []) as any[]
+}
+
+/** Fetch all matches for a single competition. */
+export async function getCompetitionMatchesForReport(competitionId: string) {
+  const res = await fetch(
+    `${COMPETITION_SERVICE}/competitions/${competitionId}/matches?limit=500`,
+    { headers: await getAuthHeaders(), cache: "no-store" }
+  )
+  if (!res.ok) return [] as any[]
+  const json = await res.json()
+  return (json.data ?? []) as any[]
+}

@@ -31,6 +31,7 @@ import {
   Trophy,
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { PrintButton } from "@/components/reports/print-button"
 
 const navSections = [
   {
@@ -147,6 +148,9 @@ const navSections = [
           { label: "Player Availability", href: "/reports/player-availability" },
           { label: "Player Participation", href: "/reports/player-participation" },
           { label: "Fixtures Summary", href: "/reports/fixtures-summary" },
+          { label: "Competition Overview", href: "/reports/competition-overview" },
+          { label: "Competition Entries", href: "/reports/competition-entries" },
+          { label: "Competition Results", href: "/reports/competition-results" },
         ],
       },
     ],
@@ -450,7 +454,8 @@ export function PortalLayout({
                     ) : null}
                   </div>
 
-                  <div className="shrink-0">
+                  <div className="shrink-0 flex items-center gap-2">
+                    <PrintButton />
                     <span className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-white/90">
                       Pilot portal
                     </span>

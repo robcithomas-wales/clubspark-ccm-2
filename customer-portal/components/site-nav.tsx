@@ -43,6 +43,7 @@ export function SiteNav() {
     { label: "Memberships", href: `/${slug}/memberships` },
     { label: "News", href: `/${slug}/news` },
     { label: "Events", href: `/${slug}/events` },
+    { label: "Competitions", href: `/${slug}/competitions` },
     { label: "Coaching", href: `/${slug}/coaching` },
   ]
 

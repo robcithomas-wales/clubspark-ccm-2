@@ -23,7 +23,11 @@ export async function POST(req: NextRequest) {
   const h = await headers()
   if (!h) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   const body = await req.json()
-  const res = await fetch(`${COMPETITION_SERVICE}/competitions`, { method: "POST", headers: h, body: JSON.stringify(body) })
-  const json = await res.json()
-  return NextResponse.json(json, { status: res.status })
+  try {
+    const res = await fetch(`${COMPETITION_SERVICE}/competitions`, { method: "POST", headers: h, body: JSON.stringify(body) })
+    const json = await res.json()
+    return NextResponse.json(json, { status: res.status })
+  } catch {
+    return NextResponse.json({ error: "competition-service unavailable" }, { status: 503 })
+  }
 }
