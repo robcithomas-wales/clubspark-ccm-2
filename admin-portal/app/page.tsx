@@ -44,6 +44,7 @@ import {
   getTeams,
   getVenues,
   getAllCompetitionsForReport,
+  getRankingConfigs,
 } from "@/lib/api"
 
 function StatCard({
@@ -138,6 +139,7 @@ export default async function DashboardPage() {
     coachesResult,
     availabilityConfigsResult,
     competitionsResult,
+    rankingConfigsResult,
   ] = await Promise.allSettled([
     getVenues(),
     getResources(),
@@ -159,6 +161,7 @@ export default async function DashboardPage() {
     getCoaches(1, 100),
     getAvailabilityConfigs({ scopeType: "venue" }),
     getAllCompetitionsForReport(),
+    getRankingConfigs(),
   ])
 
   const venuesResponse = venuesResult.status === "fulfilled" ? venuesResult.value : null
@@ -183,6 +186,7 @@ export default async function DashboardPage() {
     ? (availabilityConfigsResult.value ?? [])
     : []
   const rawCompetitions: any[] = competitionsResult.status === "fulfilled" ? competitionsResult.value : []
+  const rankingConfigs: any[] = rankingConfigsResult.status === "fulfilled" ? (rankingConfigsResult.value as any[] ?? []) : []
 
   function extractData(r: any): any[] {
     if (!r) return []
@@ -292,10 +296,10 @@ export default async function DashboardPage() {
       summary: `${activeTeams.length} active teams with rosters, fixtures, availability and fee collection`,
     },
     {
-      title: "Competitions",
+      title: "Competitions & Rankings",
       href: "/reports/competition-overview",
       icon: Trophy,
-      summary: `${rawCompetitions.length} competitions · ${activeCompetitions.length} active · draws, entries, results and standings`,
+      summary: `${rawCompetitions.length} competitions · ${activeCompetitions.length} active · ${rankingConfigs.length} ranking configs · ELO and Points Table`,
     },
     {
       title: "Coaching",
@@ -351,6 +355,7 @@ export default async function DashboardPage() {
     "Membership schemes, plans, entitlement policies and live member records with renewal tracking",
     "Team management — rosters, fixtures, player availability, squad selection and fee charge runs",
     "Competition management — competitions, divisions, entries, automated draw generation, match results, standings and reporting",
+    "Rankings engine — ELO rating system for individual sports and Points Table for team sports, updating automatically from verified match results",
     "Coaching service — coach profiles, lesson types and session scheduling",
     "Add-ons for equipment hire, ancillary facilities, access services and products",
     "Gateway-agnostic payment service — Stripe implemented, GoCardless ready, idempotent by design",
@@ -358,7 +363,7 @@ export default async function DashboardPage() {
     "Reporting suite — bookings, revenue, utilisation, membership, coaching, teams and competition analytics with PDF export",
     "Role-based admin access control across all portal functions",
     "Microservice architecture ready to scale to production on Azure",
-    "398-test automated regression suite — 336 service integration tests across 9 microservices and 62 Playwright e2e tests covering end-to-end user journeys, all running against a real database",
+    "411-test automated regression suite — 349 service integration tests across 8 microservices and 62 Playwright e2e tests covering end-to-end user journeys, all running against a real database",
   ]
 
   return (
@@ -418,7 +423,7 @@ export default async function DashboardPage() {
           <StatCard
             title="Competitions"
             value={rawCompetitions.length}
-            description={`${activeCompetitions.length} active · ${openForEntry.length} open for entry.`}
+            description={`${activeCompetitions.length} active · ${openForEntry.length} open for entry · ${rankingConfigs.length} ranking config${rankingConfigs.length !== 1 ? "s" : ""}.`}
             icon={Trophy}
             accent="#f97316"
           />
@@ -699,13 +704,14 @@ export default async function DashboardPage() {
             </div>
           </SectionCard>
 
-          <SectionCard title="Teams, Coaching &amp; Competitions" description="Team sports management, coaching operations and competition lifecycle." actionHref="/teams" actionLabel="View Teams">
+          <SectionCard title="Teams, Coaching &amp; Competitions" description="Team sports management, coaching operations, competition lifecycle and rankings." actionHref="/teams" actionLabel="View Teams">
             <div className="space-y-4">
               {[
                 { label: "Active Teams", sub: "With rosters and fixture schedules", value: activeTeams.length },
                 { label: "Recurring Series", sub: "iCal RRULE recurring bookings", value: activeSeries.length },
                 { label: "Coaches", sub: "With lesson types and sessions", value: coaches.length },
                 { label: "Competitions", sub: `${activeCompetitions.length} active · ${openForEntry.length} open for entry`, value: rawCompetitions.length },
+                { label: "Ranking Configs", sub: "ELO and Points Table across sports", value: rankingConfigs.length },
               ].map(({ label, sub, value }) => (
                 <div key={label} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm transition hover:shadow-md">
                   <div>
@@ -738,8 +744,8 @@ export default async function DashboardPage() {
               },
               {
                 icon: Shield,
-                title: "Teams & Competition",
-                body: "Full team management with rosters, fixtures, player availability, squad selection and charge runs — plus a dedicated competition lifecycle: entries, automated draw generation, results, standings and reporting.",
+                title: "Teams, Competition & Rankings",
+                body: "Full team management with rosters, fixtures, player availability, squad selection and charge runs — plus a full competition lifecycle (entries, draws, results, standings) and an automatic rankings engine: ELO for individual sports and Points Table for team sports.",
               },
               {
                 icon: GraduationCap,
@@ -764,7 +770,7 @@ export default async function DashboardPage() {
               {
                 icon: Layers,
                 title: "Production Architecture",
-                body: "Nine independent NestJS microservices with Prisma migrations, 336 integration tests, 62 Playwright e2e tests, Swagger docs and a clear Azure deployment path.",
+                body: "Nine independent NestJS microservices with Prisma migrations, 349 integration tests, 62 Playwright e2e tests, Swagger docs and a clear Azure deployment path.",
               },
             ].map(({ icon: Icon, title, body }) => (
               <div key={title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">

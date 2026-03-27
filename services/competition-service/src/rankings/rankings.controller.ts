@@ -5,8 +5,8 @@ import { RankingsService } from './rankings.service.js'
 import { CreateRankingConfigDto } from './dto/create-ranking-config.dto.js'
 import { UpdateRankingConfigDto } from './dto/update-ranking-config.dto.js'
 
-function tenantId(req: FastifyRequest): string {
-  return (req.headers as any)['x-tenant-id'] as string
+function tenantId(req: FastifyRequest & { tenantContext?: { tenantId: string } }): string {
+  return req.tenantContext?.tenantId ?? (req.headers as any)['x-tenant-id'] as string
 }
 
 @ApiTags('rankings')

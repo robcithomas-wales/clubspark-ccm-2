@@ -152,6 +152,7 @@ const navSections = [
           { label: "Competition Overview", href: "/reports/competition-overview" },
           { label: "Competition Entries", href: "/reports/competition-entries" },
           { label: "Competition Results", href: "/reports/competition-results" },
+          { label: "Rankings Leaderboard", href: "/reports/rankings-leaderboard" },
         ],
       },
     ],
