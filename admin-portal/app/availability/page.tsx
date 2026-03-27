@@ -59,29 +59,34 @@ export default async function AvailabilityPage({
   })
 
   const units = availability.units || []
+  const config = availability.config as any
 
   const totalSlots = units.reduce((count: number, unit: any) => {
     return count + (unit.slots?.length || 0)
   }, 0)
 
   const bookedSlots = units.reduce((count: number, unit: any) => {
-    const unitBookedSlots =
-      unit.slots?.filter((slot: any) => !slot.isAvailable).length || 0
-
-    return count + unitBookedSlots
+    return count + (unit.slots?.filter((s: any) => !s.isAvailable && !s.releasesAt).length || 0)
   }, 0)
 
-  const availableSlots = totalSlots - bookedSlots
+  const unreleasedSlots = units.reduce((count: number, unit: any) => {
+    return count + (unit.slots?.filter((s: any) => s.releasesAt).length || 0)
+  }, 0)
+
+  const availableSlots = totalSlots - bookedSlots - unreleasedSlots
 
   const bookedUnitIds = new Set(
     units
       .filter((unit: any) =>
-        (unit.slots || []).some((slot: any) => !slot.isAvailable)
+        (unit.slots || []).some((slot: any) => !slot.isAvailable && !slot.releasesAt)
       )
       .map((unit: any) => unit.id)
   )
 
-  const visibleHourlySlots = units[0]?.slots?.length || 0
+  const slotDuration = config?.slotDurationMinutes ?? 60
+  const opensAt = config?.opensAt ?? "06:00"
+  const closesAt = config?.closesAt ?? "22:00"
+  const newDayReleaseTime = config?.newDayReleaseTime ?? null
 
   return (
     <PortalLayout
@@ -129,17 +134,17 @@ export default async function AvailabilityPage({
           <StatCard
             label="Bookable units"
             value={units.length}
-            helper={`${bookedUnitIds.size} units with bookings`}
+            helper={`${bookedUnitIds.size} units with bookings today`}
           />
           <StatCard
             label="Available slots"
             value={availableSlots}
-            helper={`${visibleHourlySlots} hourly slots per unit`}
+            helper={`${opensAt}–${closesAt} · ${slotDuration} min slots${newDayReleaseTime ? ` · opens ${newDayReleaseTime}` : ""}`}
           />
           <StatCard
             label="Booked slots"
             value={bookedSlots}
-            helper={`${totalSlots} total visible slots`}
+            helper={`${unreleasedSlots > 0 ? `${unreleasedSlots} not yet released · ` : ""}${totalSlots} total slots`}
           />
         </section>
 

@@ -1638,6 +1638,35 @@ export async function updateLessonType(id: string, input: {
   return res.json()
 }
 
+export async function getSessions(
+  page = 1,
+  limit = 25,
+  filters: { coachId?: string; lessonTypeId?: string; customerId?: string; status?: string; fromDate?: string; toDate?: string } = {},
+) {
+  const qs = new URLSearchParams({ page: String(page), limit: String(limit) })
+  if (filters.coachId) qs.set("coachId", filters.coachId)
+  if (filters.lessonTypeId) qs.set("lessonTypeId", filters.lessonTypeId)
+  if (filters.customerId) qs.set("customerId", filters.customerId)
+  if (filters.status) qs.set("status", filters.status)
+  if (filters.fromDate) qs.set("fromDate", filters.fromDate)
+  if (filters.toDate) qs.set("toDate", filters.toDate)
+  const res = await fetch(`${COACHING_SERVICE}/sessions?${qs}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to load sessions")
+  return res.json() as Promise<{ data: any[]; pagination: PaginationMeta }>
+}
+
+export async function getSessionById(id: string) {
+  const res = await fetch(`${COACHING_SERVICE}/sessions/${id}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to load session")
+  return res.json()
+}
+
 // ── Team Service ──────────────────────────────────────────────────────────────
 
 const TEAM_SERVICE =
@@ -1756,4 +1785,297 @@ export async function getFixture(teamId: string, fixtureId: string): Promise<Fix
   if (!res.ok) throw new Error("Failed to load fixture")
   const json = await res.json()
   return json.data
+}
+
+// ─── Team Reporting ───────────────────────────────────────────────────────────
+
+export type TeamOverviewRow = {
+  id: string
+  name: string
+  sport: string
+  season?: string
+  ageGroup?: string
+  activePlayers: number
+  totalFixtures: number
+  upcomingFixtures: number
+  outstandingFees: number
+}
+
+export type TeamFixtureRow = {
+  id: string
+  teamId: string
+  teamName: string
+  sport: string
+  season?: string
+  ageGroup?: string
+  opponent: string
+  homeAway: string
+  venue?: string
+  kickoffAt: string
+  matchType?: string
+  status: string
+  homeScore?: number | null
+  awayScore?: number | null
+  result: 'win' | 'draw' | 'loss' | null
+  availabilityResponses: number
+  selectionCount: number
+}
+
+export type TeamChargeRow = {
+  id: string
+  teamId: string
+  teamName: string
+  season?: string
+  playerId: string
+  playerName: string
+  isJunior: boolean
+  fixtureId: string
+  opponent: string
+  kickoffAt: string
+  matchType?: string
+  chargeRunId: string
+  chargeRunDate: string
+  amount: number
+  status: string
+  paidAt?: string | null
+  notes?: string | null
+}
+
+export type PlayerStatsTeam = {
+  teamId: string
+  teamName: string
+  sport: string
+  season?: string
+  players: {
+    id: string
+    displayName: string
+    position?: string
+    shirtNumber?: number
+    isJunior: boolean
+    isGuest: boolean
+    availability: {
+      totalRequested: number
+      responded: number
+      available: number
+      maybe: number
+      unavailable: number
+      noResponse: number
+      responseRate: number | null
+      availabilityRate: number | null
+    }
+    selection: {
+      starts: number
+      subs: number
+      reserves: number
+      totalSelected: number
+      completedFixtures: number
+      selectionRate: number | null
+    }
+  }[]
+}
+
+export async function getTeamReportOverview(): Promise<TeamOverviewRow[]> {
+  const res = await fetch(`${TEAM_SERVICE}/reporting/overview`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data ?? []
+}
+
+export async function getTeamReportFixtures(season?: string): Promise<TeamFixtureRow[]> {
+  const qs = season ? `?season=${encodeURIComponent(season)}` : ""
+  const res = await fetch(`${TEAM_SERVICE}/reporting/fixtures${qs}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data ?? []
+}
+
+export async function getTeamReportCharges(season?: string): Promise<TeamChargeRow[]> {
+  const qs = season ? `?season=${encodeURIComponent(season)}` : ""
+  const res = await fetch(`${TEAM_SERVICE}/reporting/charges${qs}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data ?? []
+}
+
+export async function getTeamReportPlayerStats(teamId?: string): Promise<PlayerStatsTeam[]> {
+  const qs = teamId ? `?teamId=${encodeURIComponent(teamId)}` : ""
+  const res = await fetch(`${TEAM_SERVICE}/reporting/player-stats${qs}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data ?? []
+}
+
+// ── Payment Service ───────────────────────────────────────────────────────────
+
+const PAYMENT_SERVICE =
+  process.env.NEXT_PUBLIC_PAYMENT_SERVICE_URL || "http://127.0.0.1:4011"
+
+export type PaymentStatus =
+  | "pending"
+  | "requires_action"
+  | "processing"
+  | "succeeded"
+  | "failed"
+  | "cancelled"
+
+export type Payment = {
+  id: string
+  tenantId: string
+  idempotencyKey: string
+  subjectType: string
+  subjectId: string
+  customerId?: string
+  providerConfigId: string
+  amount: number
+  currency: string
+  gatewayRef?: string
+  status: PaymentStatus
+  failureReason?: string
+  metadata?: Record<string, string>
+  clientSecret?: string
+  redirectUrl?: string
+  createdAt: string
+  updatedAt: string
+  refunds?: PaymentRefund[]
+}
+
+export type PaymentRefund = {
+  id: string
+  paymentId: string
+  amount?: number
+  currency: string
+  gatewayRef?: string
+  reason?: string
+  status: "pending" | "succeeded" | "failed"
+  createdAt: string
+}
+
+export type ProviderConfig = {
+  id: string
+  tenantId: string
+  provider: string
+  currency: string
+  isDefault: boolean
+  credentials: string
+  isActive: boolean
+  createdAt: string
+}
+
+export async function createPayment(data: {
+  subjectType: string
+  subjectId: string
+  customerId?: string
+  amount: number
+  currency?: string
+  idempotencyKey: string
+  metadata?: Record<string, string>
+}): Promise<Payment> {
+  const res = await fetch(`${PAYMENT_SERVICE}/payments`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.message ?? "Failed to create payment")
+  }
+  return res.json()
+}
+
+export async function getPayments(opts: {
+  page?: number
+  limit?: number
+  subjectType?: string
+  subjectId?: string
+} = {}): Promise<{ data: Payment[]; pagination: { total: number; page: number; limit: number; totalPages: number } }> {
+  const qs = new URLSearchParams()
+  if (opts.page) qs.set("page", String(opts.page))
+  if (opts.limit) qs.set("limit", String(opts.limit))
+  if (opts.subjectType) qs.set("subjectType", opts.subjectType)
+  if (opts.subjectId) qs.set("subjectId", opts.subjectId)
+  const res = await fetch(`${PAYMENT_SERVICE}/payments?${qs}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to load payments")
+  return res.json()
+}
+
+export async function getPayment(id: string): Promise<Payment> {
+  const res = await fetch(`${PAYMENT_SERVICE}/payments/${id}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to load payment")
+  const json = await res.json()
+  return json.data
+}
+
+export async function refundPayment(
+  id: string,
+  data: { amount?: number; reason?: string },
+): Promise<PaymentRefund> {
+  const res = await fetch(`${PAYMENT_SERVICE}/payments/${id}/refund`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.message ?? "Failed to refund payment")
+  }
+  const json = await res.json()
+  return json.data
+}
+
+export async function getProviderConfigs(): Promise<ProviderConfig[]> {
+  const res = await fetch(`${PAYMENT_SERVICE}/provider-configs`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to load provider configs")
+  const json = await res.json()
+  return json.data ?? []
+}
+
+export async function upsertProviderConfig(data: {
+  provider: string
+  currency?: string
+  isDefault?: boolean
+  credentials: Record<string, string>
+}): Promise<ProviderConfig> {
+  const res = await fetch(`${PAYMENT_SERVICE}/provider-configs`, {
+    method: "PUT",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.message ?? "Failed to save provider config")
+  }
+  const json = await res.json()
+  return json.data
+}
+
+export async function deleteProviderConfig(id: string): Promise<void> {
+  const res = await fetch(`${PAYMENT_SERVICE}/provider-configs/${id}`, {
+    method: "DELETE",
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.message ?? "Failed to delete provider config")
+  }
 }

@@ -51,8 +51,8 @@ export class ChargesController {
   @ApiOperation({ summary: 'Mark a charge as manually paid' })
   paid(
     @Param('chargeId') chargeId: string,
-    @Body() body: { stripePaymentIntentId?: string },
+    @Body() body: { paymentId?: string },
   ) {
-    return this.service.markChargePaid(chargeId, body.stripePaymentIntentId)
+    return this.service.markChargePaid(chargeId, body.paymentId)
   }
 }

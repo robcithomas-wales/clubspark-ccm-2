@@ -239,7 +239,7 @@ export async function createBooking(
 export async function cancelBooking(tenantId: string, bookingId: string): Promise<void> {
   const headers = await authHeaders(tenantId)
   const res = await fetch(`${BOOKING_URL}/bookings/${bookingId}/cancel`, {
-    method: 'PUT',
+    method: 'POST',
     headers,
   })
   if (!res.ok) throw new Error('Failed to cancel booking')

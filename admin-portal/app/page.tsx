@@ -1,14 +1,22 @@
 import Link from "next/link"
 import {
   ArrowRight,
+  BarChart3,
   Building2,
   CalendarDays,
   CheckCircle2,
+  CreditCard,
   Crown,
+  GraduationCap,
+  Globe,
+  Layers,
   LayoutGrid,
   Package,
   PoundSterling,
+  RefreshCw,
+  Shield,
   ShieldCheck,
+  Smartphone,
   TrendingUp,
   Users,
 } from "lucide-react"
@@ -16,10 +24,13 @@ import { PortalLayout } from "@/components/portal-layout"
 import { RecentBookingsTable } from "@/components/recent-bookings-table"
 import {
   getAddOnServices,
+  getAvailabilityConfigs,
   getBookableUnits,
   getBookingDailyStats,
   getBookingStats,
   getBookings,
+  getBookingSeries,
+  getCoaches,
   getCustomers,
   getEntitlementPolicies,
   getMembershipPlans,
@@ -29,6 +40,7 @@ import {
   getMembershipsWithFilter,
   getOrganisation,
   getResources,
+  getTeams,
   getVenues,
 } from "@/lib/api"
 
@@ -37,25 +49,28 @@ function StatCard({
   value,
   description,
   icon: Icon,
+  accent,
 }: {
   title: string
   value: string | number
   description: string
   icon: any
+  accent?: string
 }) {
+  const bg = accent ?? "#1857E0"
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-md transition-shadow hover:shadow-lg">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="text-sm font-medium text-slate-500">{title}</div>
-          <div className="mt-2 text-3xl font-bold tracking-tight text-slate-950">
-            {value}
-          </div>
+          <div className="mt-2 text-3xl font-bold tracking-tight text-slate-950">{value}</div>
           <div className="mt-2 text-sm leading-6 text-slate-500">{description}</div>
         </div>
-
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#1857E0]/10">
-          <Icon className="h-6 w-6 text-[#1857E0]" />
+        <div
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl"
+          style={{ backgroundColor: `${bg}1a` }}
+        >
+          <Icon className="h-6 w-6" style={{ color: bg }} />
         </div>
       </div>
     </div>
@@ -82,7 +97,6 @@ function SectionCard({
           <h2 className="text-lg font-semibold text-slate-950">{title}</h2>
           <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p>
         </div>
-
         {actionHref && actionLabel ? (
           <Link
             href={actionHref}
@@ -93,7 +107,6 @@ function SectionCard({
           </Link>
         ) : null}
       </div>
-
       <div className="p-6">{children}</div>
     </div>
   )
@@ -118,6 +131,10 @@ export default async function DashboardPage() {
     dailyStatsResult,
     renewalsDueResult,
     unpaidMembershipsResult,
+    teamsResult,
+    seriesResult,
+    coachesResult,
+    availabilityConfigsResult,
   ] = await Promise.allSettled([
     getVenues(),
     getResources(),
@@ -134,6 +151,10 @@ export default async function DashboardPage() {
     getBookingDailyStats(30),
     getMembershipsRenewalsDue(30),
     getMembershipsWithFilter({ status: "active", paymentStatus: "unpaid", limit: 100 }),
+    getTeams(),
+    getBookingSeries(),
+    getCoaches(1, 100),
+    getAvailabilityConfigs({ scopeType: "venue" }),
   ])
 
   const venuesResponse = venuesResult.status === "fulfilled" ? venuesResult.value : null
@@ -151,6 +172,12 @@ export default async function DashboardPage() {
   const dailyStats = dailyStatsResult.status === "fulfilled" ? dailyStatsResult.value : []
   const renewalsDue: any[] = renewalsDueResult.status === "fulfilled" ? ((renewalsDueResult.value as any)?.data ?? []) : []
   const unpaidMemberships: any[] = unpaidMembershipsResult.status === "fulfilled" ? ((unpaidMembershipsResult.value as any)?.data ?? []) : []
+  const teamsResponse = teamsResult.status === "fulfilled" ? teamsResult.value : null
+  const seriesResponse = seriesResult.status === "fulfilled" ? seriesResult.value : null
+  const coachesResponse = coachesResult.status === "fulfilled" ? coachesResult.value : null
+  const availabilityConfigs: any[] = availabilityConfigsResult.status === "fulfilled"
+    ? (availabilityConfigsResult.value ?? [])
+    : []
 
   function extractData(r: any): any[] {
     if (!r) return []
@@ -169,47 +196,52 @@ export default async function DashboardPage() {
   const policies = extractData(policiesResponse)
   const memberships = extractData(membershipsResponse)
   const addOns = extractData(addOnsResponse)
+  const teams = extractData(teamsResponse)
+  const series = extractData(seriesResponse)
+  const coaches = extractData(coachesResponse)
 
-  const activeBookings = bookings.filter((booking: any) => booking.status === "active")
-  const activeMemberships = memberships.filter(
-    (membership: any) => membership.status === "active"
-  )
-  const activeAddOns = addOns.filter((addOn: any) => addOn.status === "active")
+  const activeBookings = bookings.filter((b: any) => b.status === "active")
+  const activeMemberships = memberships.filter((m: any) => m.status === "active")
+  const activeAddOns = addOns.filter((a: any) => a.status === "active")
+  const activeSeries = series.filter((s: any) => s.status === "active")
+  const activeTeams = teams.filter((t: any) => t.isActive !== false)
 
   const recentBookings = [...bookings]
-    .sort(
-      (a: any, b: any) =>
-        new Date(b.startsAt || 0).getTime() -
-        new Date(a.startsAt || 0).getTime()
-    )
+    .sort((a: any, b: any) => new Date(b.startsAt || 0).getTime() - new Date(a.startsAt || 0).getTime())
     .slice(0, 6)
 
   const today = new Date().toISOString().slice(0, 10)
-  const bookingsToday = bookings.filter((booking: any) => {
-    const startsAt = booking.startsAt
-    if (!startsAt) return false
-    return new Date(startsAt).toISOString().slice(0, 10) === today
+  const bookingsToday = bookings.filter((b: any) => {
+    if (!b.startsAt) return false
+    return new Date(b.startsAt).toISOString().slice(0, 10) === today
   })
 
   const totalBookedHours = bookingStats?.totalBookedHours ?? 0
+  const totalRevenue = bookingStats?.totalRevenue ?? 0
   const addOnRevenue = bookingStats?.addOnRevenue ?? 0
   const uniqueCustomers = bookingStats?.uniqueCustomers ?? 0
   const activeUnitCount = units.filter((u: any) => u.isActive !== false).length
-  // 12 operating hours/day × 30 days
-  const availableHours = activeUnitCount * 12 * 30
+  const catchAllConfig = availabilityConfigs.find((c: any) => c.dayOfWeek == null && c.isActive !== false)
+  const opensAt = catchAllConfig?.opensAt ?? "06:00"
+  const closesAt = catchAllConfig?.closesAt ?? "22:00"
+  const hoursPerDay = (() => {
+    const [oh, om] = opensAt.split(":").map(Number)
+    const [ch, cm] = closesAt.split(":").map(Number)
+    return Math.max(1, Math.min(24, ((ch ?? 22) * 60 + (cm ?? 0) - (oh ?? 6) * 60 - (om ?? 0)) / 60))
+  })()
+  const availableHours = activeUnitCount * hoursPerDay * 30
   const utilisationPct = availableHours > 0
     ? Math.min(100, Math.round((totalBookedHours / availableHours) * 100))
     : 0
 
   const sportMix = Array.from(
-    resources.reduce((map: Map<string, number>, resource: any) => {
-      const key = resource.sport || resource.resourceType || "unknown"
+    resources.reduce((map: Map<string, number>, r: any) => {
+      const key = r.sport || r.resourceType || "other"
       map.set(key, (map.get(key) || 0) + 1)
       return map
     }, new Map<string, number>())
   )
 
-  // Bookings by date (last 14 days based on startsAt)
   const bookingsByDate = (() => {
     const counts = new Map<string, number>()
     bookings.forEach((b: any) => {
@@ -225,152 +257,209 @@ export default async function DashboardPage() {
       title: "Facilities",
       href: "/facilities",
       icon: Building2,
-      summary: `${venues.length} venues, ${resources.length} resources, ${units.length} bookable units`,
+      summary: `${venues.length} venues · ${resources.length} resources · ${units.length} bookable units`,
     },
     {
       title: "Bookings",
       href: "/bookings",
       icon: CalendarDays,
-      summary: `${activeBookings.length} active bookings with live availability controls`,
+      summary: `${activeBookings.length} active · ${activeSeries.length} recurring series · ${pendingBookingsTotal} pending approval`,
     },
     {
       title: "People",
       href: "/people",
       icon: Users,
-      summary: `${customers.length} contact records linked to bookings and memberships`,
+      summary: `${customers.length} contacts with household, role and lifecycle tracking`,
     },
     {
       title: "Membership",
       href: "/membership/plans",
       icon: Crown,
-      summary: `${schemes.length} schemes, ${plans.length} plans, ${policies.length} policies, ${memberships.length} memberships`,
+      summary: `${schemes.length} schemes · ${plans.length} plans · ${policies.length} policies · ${activeMemberships.length} active members`,
     },
     {
-      title: "Add Ons",
+      title: "Teams",
+      href: "/teams",
+      icon: Shield,
+      summary: `${activeTeams.length} active teams with rosters, fixtures, availability and fee collection`,
+    },
+    {
+      title: "Coaching",
+      href: "/coaching/coaches",
+      icon: GraduationCap,
+      summary: `${coaches.length} coaches and lesson types with session scheduling`,
+    },
+    {
+      title: "Add-ons",
       href: "/add-ons",
       icon: Package,
-      summary: `${addOns.length} add ons covering equipment, facilities, access and services`,
+      summary: `${activeAddOns.length} active add-ons covering equipment, facilities, access and services`,
     },
     {
-      title: "Availability",
-      href: "/availability",
-      icon: ShieldCheck,
-      summary: `Conflict aware scheduling across full and partial facility units`,
+      title: "Payments",
+      href: "/settings",
+      icon: CreditCard,
+      summary: `Gateway-agnostic payment service · Stripe live · GoCardless ready`,
     },
+    {
+      title: "Reports",
+      href: "/reports/bookings",
+      icon: BarChart3,
+      summary: `Booking, revenue, utilisation, membership, coaching and teams reporting`,
+    },
+    {
+      title: "Customer Portal",
+      href: "/website/design",
+      icon: Globe,
+      summary: `Multi-tenant white-label portal with booking, account and membership self-service`,
+    },
+    {
+      title: "Mobile App",
+      href: "/settings",
+      icon: Smartphone,
+      summary: `Expo React Native app with auth, booking flow and account management`,
+    },
+    {
+      title: "Booking Rules",
+      href: "/booking-rules",
+      icon: ShieldCheck,
+      summary: `Access and pricing rules by membership type, role, time window and day of week`,
+    },
+  ]
+
+  const pilotSummaryItems = [
+    "Flexible facility hierarchy — venues, resources and bookable units with conflict-aware availability",
+    "Real-time availability checking across full and partial facility configurations",
+    "Recurring (series) bookings with iCal RRULE support and per-occurrence management",
+    "Booking access and pricing rules by membership type, role, time window and day of week",
+    "Pending approval workflow with admin sign-off before booking confirmation",
+    "People platform with household, role, tag and lifecycle tracking",
+    "Membership schemes, plans, entitlement policies and live member records with renewal tracking",
+    "Team management — rosters, fixtures, player availability, squad selection and fee charge runs",
+    "Coaching service — coach profiles, lesson types and session scheduling",
+    "Add-ons for equipment hire, ancillary facilities, access services and products",
+    "Gateway-agnostic payment service — Stripe implemented, GoCardless ready, idempotent by design",
+    "Multi-tenant admin portal, white-label customer portal and branded Expo mobile app",
+    "Reporting suite — bookings, revenue, utilisation, membership, coaching and team analytics",
+    "Role-based admin access control across all portal functions",
+    "Microservice architecture ready to scale to production on Azure",
+    "379-test automated regression suite — 331 service integration tests across 8 microservices and 48 Playwright e2e tests covering end-to-end user journeys, all running against a real database",
   ]
 
   return (
     <PortalLayout
       title={org?.name ?? "Dashboard"}
-      description={org?.about ?? "Operational overview across facilities, bookings, customers, membership and add-ons."}
+      description={org?.about ?? "Operational overview across all platform domains."}
     >
       <div className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+
+        {/* ── KPI stat cards ── */}
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatCard
-            title="Facilities"
-            value={resources.length}
-            description={`${venues.length} venues and ${units.length} bookable units now modelled in the platform.`}
-            icon={Building2}
+            title="Total Revenue"
+            value={`£${totalRevenue.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+            description="Across all paid bookings in the platform."
+            icon={PoundSterling}
+            accent="#10b981"
           />
           <StatCard
-            title="Bookings"
+            title="Active Bookings"
             value={activeBookings.length}
-            description={`${bookingsToday.length} bookings on the current operating day across courts and pitches.`}
+            description={`${bookingsToday.length} bookings on today's operating day.`}
             icon={CalendarDays}
           />
           <StatCard
-            title="Customers"
-            value={customers.length}
-            description={`Customer records can now be linked directly to bookings and memberships.`}
-            icon={Users}
-          />
-          <StatCard
-            title="Pending approvals"
-            value={pendingBookingsTotal}
-            description={`Bookings awaiting admin approval. ${activeMemberships.length} active memberships.`}
+            title="Active Members"
+            value={activeMemberships.length}
+            description={`${pendingBookingsTotal} bookings pending approval.`}
             icon={Crown}
-          />
-          <StatCard
-            title="Add-on revenue"
-            value={`£${addOnRevenue.toFixed(2)}`}
-            description="Total revenue from active booking add-ons across all bookings."
-            icon={PoundSterling}
           />
           <StatCard
             title="Utilisation"
             value={`${utilisationPct}%`}
-            description={`${Math.round(totalBookedHours)} booked hours across ${activeUnitCount} active units (30-day window).`}
+            description={`${Math.round(totalBookedHours)} booked hours across ${activeUnitCount} units · ${opensAt}–${closesAt} (30 days).`}
             icon={TrendingUp}
+          />
+          <StatCard
+            title="People"
+            value={customers.length}
+            description="Contact records linked to bookings and memberships."
+            icon={Users}
+          />
+          <StatCard
+            title="Teams"
+            value={activeTeams.length}
+            description={`${series.length} recurring series across all sport types.`}
+            icon={Shield}
+            accent="#7c3aed"
+          />
+          <StatCard
+            title="Coaches"
+            value={coaches.length}
+            description="Coach profiles with lesson types and session scheduling."
+            icon={GraduationCap}
+            accent="#0891b2"
           />
           <StatCard
             title="Participants"
             value={uniqueCustomers}
-            description="Unique customers with at least one active booking."
-            icon={Users}
+            description={`Unique customers with at least one active booking. £${addOnRevenue.toFixed(2)} add-on revenue.`}
+            icon={BarChart3}
+            accent="#f59e0b"
           />
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
-          <SectionCard
-            title="Platform Coverage"
-            description="The pilot now covers the core operational domains required to run a multi sport venue platform."
-          >
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {domainCards.map((card) => {
-                const Icon = card.icon
-
-                return (
-                  <Link
-                    key={card.title}
-                    href={card.href}
-                    className="group rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-[#1857E0]/30 hover:shadow-md"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#1857E0] shadow-sm">
-                        <Icon className="h-5 w-5 text-white" />
-                      </div>
-
-                      <div className="min-w-0">
-                        <div className="font-semibold text-slate-900 transition group-hover:text-[#1857E0]">
-                          {card.title}
-                        </div>
-                        <div className="mt-1 text-sm leading-6 text-slate-500">
-                          {card.summary}
-                        </div>
-                      </div>
+        {/* ── Platform Coverage + Pilot Summary ── */}
+        <SectionCard
+          title="Platform Coverage"
+          description="All operational domains now live across the microservice platform."
+        >
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {domainCards.map((card) => {
+              const Icon = card.icon
+              return (
+                <Link
+                  key={card.title}
+                  href={card.href}
+                  className="group rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-[#1857E0]/30 hover:shadow-md"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#1857E0] shadow-sm">
+                      <Icon className="h-5 w-5 text-white" />
                     </div>
-                  </Link>
-                )
-              })}
-            </div>
-          </SectionCard>
+                    <div className="min-w-0">
+                      <div className="font-semibold text-slate-900 transition group-hover:text-[#1857E0]">
+                        {card.title}
+                      </div>
+                      <div className="mt-1 text-sm leading-5 text-slate-500">{card.summary}</div>
+                    </div>
+                  </div>
+                </Link>
+              )
+            })}
+          </div>
+        </SectionCard>
 
-          <SectionCard
-            title="Pilot Summary"
-            description="A simple view of what the platform now supports for the demo."
-          >
-            <div className="space-y-3">
-              {[
-                "Flexible facility hierarchy with venues, resources and bookable units",
-                "Conflict aware availability across full and partial courts and pitches",
-                "Customer management linked to operational bookings",
-                "Membership schemes, plans, policies and live memberships",
-                "Add ons for equipment, services, access and ancillary facilities",
-                "Service based architecture ready for continued scale out",
-              ].map((item) => (
-                <div key={item} className="flex items-start gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
-                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-[#1857E0]" />
-                  <div className="text-sm leading-6 text-slate-700">{item}</div>
-                </div>
-              ))}
-            </div>
-          </SectionCard>
-        </div>
+        {/* ── Pilot Summary ── */}
+        <SectionCard
+          title="Pilot Summary"
+          description="Everything the platform now supports across facilities, bookings, teams, coaching, membership, payments and channels."
+        >
+          <div className="grid gap-2 sm:grid-cols-2">
+            {pilotSummaryItems.map((item) => (
+              <div key={item} className="flex items-start gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-[#1857E0]" />
+                <div className="text-sm leading-6 text-slate-700">{item}</div>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
 
+        {/* ── Recent bookings + Membership snapshot ── */}
         <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
           <SectionCard
             title="Recent Bookings"
-            description="A live operational view of the most recent bookings currently in the system."
+            description="Live operational view of the most recent bookings in the system."
             actionHref="/bookings"
             actionLabel="View Bookings"
           >
@@ -379,55 +468,33 @@ export default async function DashboardPage() {
 
           <SectionCard
             title="Membership Snapshot"
-            description="Membership is now represented as commercial schemes, plans, policies and active member records."
+            description="Schemes, plans, policies and active member records."
             actionHref="/membership/plans"
             actionLabel="View Membership"
           >
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Schemes
+              {[
+                { label: "Schemes", value: schemes.length },
+                { label: "Plans", value: plans.length },
+                { label: "Policies", value: policies.length },
+                { label: "Active Members", value: activeMemberships.length },
+              ].map(({ label, value }) => (
+                <div key={label} className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</div>
+                  <div className="mt-2 text-2xl font-semibold text-slate-950">{value}</div>
                 </div>
-                <div className="mt-2 text-2xl font-semibold text-slate-950">{schemes.length}</div>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Plans
-                </div>
-                <div className="mt-2 text-2xl font-semibold text-slate-950">{plans.length}</div>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Policies
-                </div>
-                <div className="mt-2 text-2xl font-semibold text-slate-950">{policies.length}</div>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Memberships
-                </div>
-                <div className="mt-2 text-2xl font-semibold text-slate-950">
-                  {memberships.length}
-                </div>
-              </div>
+              ))}
             </div>
-
             <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
-              <div className="text-sm font-medium text-slate-900">
-                Entitlement driven model
-              </div>
+              <div className="text-sm font-medium text-slate-900">Entitlement-driven model</div>
               <div className="mt-2 text-sm leading-6 text-slate-500">
-                Plans can now carry policies and entitlement rules, creating the foundation for
-                membership aware bookings, access control and differentiated benefits.
+                Plans carry entitlement policies that govern booking access, advance windows and differentiated pricing — independent of the booking module.
               </div>
             </div>
           </SectionCard>
         </div>
 
-        {/* Operational alerts */}
+        {/* ── Operational alerts ── */}
         {(renewalsDue.length > 0 || unpaidMemberships.length > 0) && (
           <div className="grid gap-4 md:grid-cols-2">
             {renewalsDue.length > 0 && (
@@ -461,7 +528,7 @@ export default async function DashboardPage() {
           </div>
         )}
 
-        {/* Renewal detail widget */}
+        {/* ── Renewals detail ── */}
         {renewalsDue.length > 0 && (
           <SectionCard
             title={`Renewals Due (${renewalsDue.length})`}
@@ -484,18 +551,12 @@ export default async function DashboardPage() {
                     className="flex items-center justify-between gap-4 py-3 transition hover:text-[#1857E0]"
                   >
                     <div className="min-w-0">
-                      <div className="text-sm font-medium text-slate-900 truncate">
-                        {m.planName ?? "Unknown plan"}
-                      </div>
+                      <div className="truncate text-sm font-medium text-slate-900">{m.planName ?? "Unknown plan"}</div>
                       <div className="text-xs text-slate-500">Renews {renewalDate}</div>
                     </div>
                     {daysUntil != null && (
                       <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
-                        daysUntil <= 7
-                          ? "bg-rose-100 text-rose-700"
-                          : daysUntil <= 14
-                            ? "bg-amber-100 text-amber-700"
-                            : "bg-slate-100 text-slate-600"
+                        daysUntil <= 7 ? "bg-rose-100 text-rose-700" : daysUntil <= 14 ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600"
                       }`}>
                         {daysUntil <= 0 ? "Today" : `${daysUntil}d`}
                       </span>
@@ -507,37 +568,26 @@ export default async function DashboardPage() {
           </SectionCard>
         )}
 
-        {/* Revenue & utilisation trend charts (from daily stats API) */}
+        {/* ── Revenue + booked hours trend charts ── */}
         {dailyStats.length > 0 && (() => {
           const chartH = 80
           const n = dailyStats.length
           const barW = Math.floor(560 / n) - 2
-
           const maxRev = Math.max(...dailyStats.map((d) => d.addOnRevenue), 1)
           const maxHrs = Math.max(...dailyStats.map((d) => d.bookedHours), 1)
 
           return (
             <div className="grid gap-6 xl:grid-cols-2">
-              <SectionCard
-                title="Add-on revenue (30 days)"
-                description="Daily add-on revenue from active booking add-ons."
-                actionHref="/bookings"
-                actionLabel="View bookings"
-              >
+              <SectionCard title="Add-on revenue (30 days)" description="Daily add-on revenue from active booking add-ons." actionHref="/bookings" actionLabel="View bookings">
                 <div className="overflow-x-auto">
                   <svg viewBox={`0 0 560 ${chartH + 28}`} className="w-full" aria-label="Daily add-on revenue bar chart">
                     {dailyStats.map((d, i) => {
                       const barH = Math.max(4, Math.round((d.addOnRevenue / maxRev) * chartH))
                       const x = i * (barW + 2)
-                      const y = chartH - barH
                       return (
                         <g key={d.date}>
-                          <rect x={x} y={y} width={barW} height={barH} rx={3} fill="#10b981" opacity={0.8} />
-                          {barW >= 20 && (
-                            <text x={x + barW / 2} y={chartH + 16} textAnchor="middle" fontSize={9} fill="#94a3b8">
-                              {d.date.slice(5)}
-                            </text>
-                          )}
+                          <rect x={x} y={chartH - barH} width={barW} height={barH} rx={3} fill="#10b981" opacity={0.8} />
+                          {barW >= 20 && <text x={x + barW / 2} y={chartH + 16} textAnchor="middle" fontSize={9} fill="#94a3b8">{d.date.slice(5)}</text>}
                         </g>
                       )
                     })}
@@ -545,26 +595,16 @@ export default async function DashboardPage() {
                 </div>
               </SectionCard>
 
-              <SectionCard
-                title="Booked hours (30 days)"
-                description="Daily booked hours across all active bookings."
-                actionHref="/bookings"
-                actionLabel="View bookings"
-              >
+              <SectionCard title="Booked hours (30 days)" description="Daily booked hours across all active bookings." actionHref="/bookings" actionLabel="View bookings">
                 <div className="overflow-x-auto">
                   <svg viewBox={`0 0 560 ${chartH + 28}`} className="w-full" aria-label="Daily booked hours bar chart">
                     {dailyStats.map((d, i) => {
                       const barH = Math.max(4, Math.round((d.bookedHours / maxHrs) * chartH))
                       const x = i * (barW + 2)
-                      const y = chartH - barH
                       return (
                         <g key={d.date}>
-                          <rect x={x} y={y} width={barW} height={barH} rx={3} fill="#1857E0" opacity={0.7} />
-                          {barW >= 20 && (
-                            <text x={x + barW / 2} y={chartH + 16} textAnchor="middle" fontSize={9} fill="#94a3b8">
-                              {d.date.slice(5)}
-                            </text>
-                          )}
+                          <rect x={x} y={chartH - barH} width={barW} height={barH} rx={3} fill="#1857E0" opacity={0.7} />
+                          {barW >= 20 && <text x={x + barW / 2} y={chartH + 16} textAnchor="middle" fontSize={9} fill="#94a3b8">{d.date.slice(5)}</text>}
                         </g>
                       )
                     })}
@@ -575,43 +615,24 @@ export default async function DashboardPage() {
           )
         })()}
 
-        {/* Bookings trend chart */}
+        {/* ── Bookings over time ── */}
         {bookingsByDate.length > 0 && (() => {
           const maxCount = Math.max(...bookingsByDate.map(([, c]) => c), 1)
           const chartH = 80
           const barW = Math.floor(560 / bookingsByDate.length) - 2
-
           return (
-            <SectionCard
-              title="Bookings over time"
-              description="Booking volume by date from the current data set."
-              actionHref="/bookings"
-              actionLabel="View all"
-            >
+            <SectionCard title="Bookings over time" description="Booking volume by date from the current data set." actionHref="/bookings" actionLabel="View all">
               <div className="overflow-x-auto">
-                <svg
-                  viewBox={`0 0 560 ${chartH + 28}`}
-                  className="w-full"
-                  aria-label="Bookings per day bar chart"
-                >
+                <svg viewBox={`0 0 560 ${chartH + 28}`} className="w-full" aria-label="Bookings per day bar chart">
                   {bookingsByDate.map(([date, count], i) => {
                     const barH = Math.max(4, Math.round((count / maxCount) * chartH))
                     const x = i * (barW + 2)
                     const y = chartH - barH
-                    const label = date.slice(5) // MM-DD
                     return (
                       <g key={date}>
                         <rect x={x} y={y} width={barW} height={barH} rx={3} fill="#1857E0" opacity={0.8} />
-                        {barW >= 20 && (
-                          <text x={x + barW / 2} y={chartH + 16} textAnchor="middle" fontSize={9} fill="#94a3b8">
-                            {label}
-                          </text>
-                        )}
-                        {count > 0 && barH > 16 && (
-                          <text x={x + barW / 2} y={y + barH - 5} textAnchor="middle" fontSize={9} fill="white" fontWeight="600">
-                            {count}
-                          </text>
-                        )}
+                        {barW >= 20 && <text x={x + barW / 2} y={chartH + 16} textAnchor="middle" fontSize={9} fill="#94a3b8">{date.slice(5)}</text>}
+                        {count > 0 && barH > 16 && <text x={x + barW / 2} y={y + barH - 5} textAnchor="middle" fontSize={9} fill="white" fontWeight="600">{count}</text>}
                       </g>
                     )
                   })}
@@ -621,62 +642,34 @@ export default async function DashboardPage() {
           )
         })()}
 
+        {/* ── Facilities + Sport mix + Teams snapshot ── */}
         <div className="grid gap-6 xl:grid-cols-3">
-          <SectionCard
-            title="Facilities Overview"
-            description="The platform models venues, playable resources and segmented bookable units."
-            actionHref="/facilities"
-            actionLabel="View Facilities"
-          >
+          <SectionCard title="Facilities Overview" description="Venues, resources and bookable units." actionHref="/facilities" actionLabel="View Facilities">
             <div className="space-y-4">
-              <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm transition hover:shadow-md">
-                <div>
-                  <div className="text-sm font-medium text-slate-900">Venues</div>
-                  <div className="mt-1 text-xs text-slate-500">
-                    Top level operating locations
+              {[
+                { label: "Venues", sub: "Top level operating locations", value: venues.length },
+                { label: "Resources", sub: "Courts, pitches and playable assets", value: resources.length },
+                { label: "Bookable Units", sub: "Full, half and split booking options", value: units.length },
+              ].map(({ label, sub, value }) => (
+                <div key={label} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm transition hover:shadow-md">
+                  <div>
+                    <div className="text-sm font-medium text-slate-900">{label}</div>
+                    <div className="mt-1 text-xs text-slate-500">{sub}</div>
                   </div>
+                  <div className="text-2xl font-semibold text-slate-950">{value}</div>
                 </div>
-                <div className="text-2xl font-semibold text-slate-950">{venues.length}</div>
-              </div>
-
-              <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm transition hover:shadow-md">
-                <div>
-                  <div className="text-sm font-medium text-slate-900">Resources</div>
-                  <div className="mt-1 text-xs text-slate-500">
-                    Courts, pitches and playable assets
-                  </div>
-                </div>
-                <div className="text-2xl font-semibold text-slate-950">{resources.length}</div>
-              </div>
-
-              <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm transition hover:shadow-md">
-                <div>
-                  <div className="text-sm font-medium text-slate-900">Bookable Units</div>
-                  <div className="mt-1 text-xs text-slate-500">
-                    Full, half and quarter level booking options
-                  </div>
-                </div>
-                <div className="text-2xl font-semibold text-slate-950">{units.length}</div>
-              </div>
+              ))}
             </div>
           </SectionCard>
 
-          <SectionCard
-            title="Sport Mix"
-            description="Current resource coverage across the seeded pilot venue structure."
-          >
+          <SectionCard title="Sport Mix" description="Resource coverage across the pilot venue structure.">
             <div className="space-y-3">
               {sportMix.length === 0 ? (
                 <div className="text-sm text-slate-500">No sport data available.</div>
               ) : (
                 sportMix.map(([sport, count]) => (
-                  <div
-                    key={sport}
-                    className="flex items-center justify-between rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white px-4 py-3 shadow-sm"
-                  >
-                    <div className="text-sm font-medium capitalize text-slate-900">
-                      {sport}
-                    </div>
+                  <div key={sport} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white px-4 py-3 shadow-sm">
+                    <div className="text-sm font-medium capitalize text-slate-900">{sport}</div>
                     <div className="text-sm font-semibold text-slate-700">{count}</div>
                   </div>
                 ))
@@ -684,96 +677,84 @@ export default async function DashboardPage() {
             </div>
           </SectionCard>
 
-          <SectionCard
-            title="Add Ons Overview"
-            description="Optional services and ancillary items are now modelled as managed venue assets."
-            actionHref="/add-ons"
-            actionLabel="View Add Ons"
-          >
+          <SectionCard title="Teams &amp; Coaching" description="Team sports management and coaching operations." actionHref="/teams" actionLabel="View Teams">
             <div className="space-y-4">
-              <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm transition hover:shadow-md">
-                <div>
-                  <div className="text-sm font-medium text-slate-900">Configured Add Ons</div>
-                  <div className="mt-1 text-xs text-slate-500">
-                    Equipment, facilities, services and access
+              {[
+                { label: "Active Teams", sub: "With rosters and fixture schedules", value: activeTeams.length },
+                { label: "Recurring Series", sub: "iCal RRULE recurring bookings", value: activeSeries.length },
+                { label: "Coaches", sub: "With lesson types and sessions", value: coaches.length },
+              ].map(({ label, sub, value }) => (
+                <div key={label} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm transition hover:shadow-md">
+                  <div>
+                    <div className="text-sm font-medium text-slate-900">{label}</div>
+                    <div className="mt-1 text-xs text-slate-500">{sub}</div>
                   </div>
+                  <div className="text-2xl font-semibold text-slate-950">{value}</div>
                 </div>
-                <div className="text-2xl font-semibold text-slate-950">{addOns.length}</div>
-              </div>
-
-              <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm transition hover:shadow-md">
-                <div>
-                  <div className="text-sm font-medium text-slate-900">Active</div>
-                  <div className="mt-1 text-xs text-slate-500">
-                    Ready to be used in future booking flows
-                  </div>
-                </div>
-                <div className="text-2xl font-semibold text-slate-950">
-                  {activeAddOns.length}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                <div className="text-sm font-medium text-slate-900">Why this matters</div>
-                <div className="mt-2 text-sm leading-6 text-slate-500">
-                  Add ons now provide a structured way to model equipment hire, lights, changing
-                  rooms and access services alongside core facility operations.
-                </div>
-              </div>
+              ))}
             </div>
           </SectionCard>
         </div>
 
+        {/* ── What this pilot demonstrates ── */}
         <SectionCard
-          title="What this pilot now demonstrates"
-          description="A concise executive view of the current rebuild status."
+          title="What this pilot demonstrates"
+          description="An executive view of the platform capabilities now proven across the rebuild."
         >
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
-              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-[#1857E0]">
-                <LayoutGrid className="h-5 w-5 text-white" />
+            {[
+              {
+                icon: LayoutGrid,
+                title: "Operational Core",
+                body: "Facilities, conflict-aware availability, bookings, booking rules and people work together as one operating platform across web, portal and mobile.",
+              },
+              {
+                icon: Crown,
+                title: "Membership Engine",
+                body: "Schemes, plans, entitlement policies and live member records with renewal tracking — independent of the booking module by design.",
+              },
+              {
+                icon: Shield,
+                title: "Teams & Competition",
+                body: "Full team management with rosters, fixtures, player availability responses, squad selection and automated fee charge runs.",
+              },
+              {
+                icon: GraduationCap,
+                title: "Coaching & Programmes",
+                body: "Coach profiles, lesson types and coaching session scheduling on the same booking primitives — no redesign needed for programmes.",
+              },
+              {
+                icon: CreditCard,
+                title: "Payments Infrastructure",
+                body: "Gateway-agnostic payment service with Stripe implemented, idempotency, refunds, webhook normalisation and GoCardless ready to plug in.",
+              },
+              {
+                icon: Package,
+                title: "Commercial Extensibility",
+                body: "Add-ons model equipment hire, ancillary facilities, access services and products. Booking rules apply pricing and access constraints per membership type or role.",
+              },
+              {
+                icon: RefreshCw,
+                title: "Multi-Channel Platform",
+                body: "Admin portal, multi-tenant white-label customer portal and branded Expo mobile app — all live and connected to the same service layer.",
+              },
+              {
+                icon: Layers,
+                title: "Production Architecture",
+                body: "Eight independent NestJS microservices with Prisma migrations, integration test suites, Swagger docs and a clear Azure deployment path.",
+              },
+            ].map(({ icon: Icon, title, body }) => (
+              <div key={title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
+                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-[#1857E0]">
+                  <Icon className="h-5 w-5 text-white" />
+                </div>
+                <div className="font-semibold text-slate-900">{title}</div>
+                <div className="mt-2 text-sm leading-6 text-slate-500">{body}</div>
               </div>
-              <div className="font-semibold text-slate-900">Operational Core</div>
-              <div className="mt-2 text-sm leading-6 text-slate-500">
-                Facilities, availability, bookings and customers now work together as one operating
-                platform.
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
-              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-[#1857E0]">
-                <Crown className="h-5 w-5 text-white" />
-              </div>
-              <div className="font-semibold text-slate-900">Membership Engine</div>
-              <div className="mt-2 text-sm leading-6 text-slate-500">
-                Schemes, plans, policies and memberships are in place to support entitlement led
-                growth.
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
-              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-[#1857E0]">
-                <Package className="h-5 w-5 text-white" />
-              </div>
-              <div className="font-semibold text-slate-900">Commercial Extensibility</div>
-              <div className="mt-2 text-sm leading-6 text-slate-500">
-                Add ons create a route to monetise ancillary services and venue extras beyond the
-                base facility booking.
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
-              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-[#1857E0]">
-                <ShieldCheck className="h-5 w-5 text-white" />
-              </div>
-              <div className="font-semibold text-slate-900">Service Architecture</div>
-              <div className="mt-2 text-sm leading-6 text-slate-500">
-                The platform is now structured across services in a way that can scale beyond the
-                pilot into production.
-              </div>
-            </div>
+            ))}
           </div>
         </SectionCard>
+
       </div>
     </PortalLayout>
   )

@@ -10,6 +10,7 @@ import { HealthModule } from './health/health.module.js'
 import { CoachesModule } from './coaches/coaches.module.js'
 import { LessonTypesModule } from './lesson-types/lesson-types.module.js'
 import { AvailabilityModule } from './availability/availability.module.js'
+import { SessionsModule } from './sessions/sessions.module.js'
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { AvailabilityModule } from './availability/availability.module.js'
     CoachesModule,
     LessonTypesModule,
     AvailabilityModule,
+    SessionsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: TenantContextGuard },

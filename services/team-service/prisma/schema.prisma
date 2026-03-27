@@ -156,6 +156,8 @@ model Fixture {
   durationMinutes Int?          @map("duration_minutes")
   matchType       String?       @map("match_type")  // League, Cup, Friendly, T20, etc.
   status          FixtureStatus @default(draft)
+  homeScore       Int?          @map("home_score")
+  awayScore       Int?          @map("away_score")
   notes           String?
   externalRef     String?       @map("external_ref") // NGB / imported reference
   createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -244,7 +246,7 @@ model Charge {
   teamMemberId         String       @map("team_member_id") @db.Uuid
   amount               Decimal      @db.Decimal(10, 2)
   status               ChargeStatus @default(pending)
-  stripePaymentIntentId String?     @map("stripe_payment_intent_id")
+  paymentId             String?     @map("payment_id")
   paidAt               DateTime?    @map("paid_at") @db.Timestamptz(6)
   notes                String?
   createdAt            DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)

@@ -28,7 +28,7 @@ export class ChargesService {
     teamId: string,
     fixtureId: string,
     dto: CreateChargeRunDto,
-    initiatedBy: string,
+    initiatedBy: string | null,
   ) {
     const fixture = await this.fixturesRepo.findById(tenantId, teamId, fixtureId)
     if (!fixture) {
@@ -84,8 +84,8 @@ export class ChargesService {
     return { data: updated }
   }
 
-  async markChargePaid(chargeId: string, stripePaymentIntentId?: string) {
-    const updated = await this.repo.markChargePaid(chargeId, stripePaymentIntentId)
+  async markChargePaid(chargeId: string, paymentId?: string) {
+    const updated = await this.repo.markChargePaid(chargeId, paymentId)
     return { data: updated }
   }
 }

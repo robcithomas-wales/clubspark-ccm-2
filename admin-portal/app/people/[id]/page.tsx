@@ -10,6 +10,8 @@ import { PersonBookingsPanel } from "@/components/person-bookings-panel"
 import { PersonMembershipsPanel } from "@/components/person-memberships-panel"
 import { PersonRolesPanel } from "@/components/person-roles-panel"
 import { PersonRelationshipsPanel } from "@/components/person-relationships-panel"
+import { PersonActivityPanel } from "@/components/person-activity-panel"
+import { PersonFinancialProfile } from "@/components/person-financial-profile"
 
 function formatDate(value?: string | null) {
   if (!value) return "n/a"
@@ -180,9 +182,13 @@ export default async function PersonDetailPage({
           catalogueTags={catalogueTags}
         />
 
+        <PersonFinancialProfile customerId={person.id} />
+
         <PersonMembershipsPanel customerId={person.id} />
 
         <PersonBookingsPanel customerId={person.id} />
+
+        <PersonActivityPanel customerId={person.id} />
 
         <EditCustomerPanel
           customerId={person.id}

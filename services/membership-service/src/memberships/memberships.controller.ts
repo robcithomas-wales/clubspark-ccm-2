@@ -81,6 +81,12 @@ export class MembershipsController {
     return this.service.listExpiringRenewals(tenantId, organisationId, Number(days) || 30)
   }
 
+  @Post('process-renewals')
+  @HttpCode(HttpStatus.OK)
+  processRenewals(@Query('withinDays') withinDays?: number) {
+    return this.service.processRenewals(Number(withinDays) || 30)
+  }
+
   @Get()
   list(
     @Req() req: any,

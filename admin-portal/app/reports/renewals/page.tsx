@@ -3,6 +3,7 @@ import { ExportButton } from "@/components/reports/export-button"
 import { ReportFilters } from "@/components/reports/report-filters"
 import { HBarChart, DonutChart } from "@/components/reports/charts"
 import { getMembershipsRenewalsDue } from "@/lib/api"
+import { ProcessRenewalsButton } from "@/components/process-renewals-button"
 
 export default async function RenewalsReportPage({
   searchParams,
@@ -54,7 +55,10 @@ export default async function RenewalsReportPage({
     <PortalLayout title="Renewals Forecast" description="Memberships approaching expiry — identify revenue at risk and members needing action.">
       <div className="space-y-6">
 
-        <ReportFilters rangeLabel="Forward-looking renewal windows (7 / 14 / 30 / 60 days from today)" />
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <ReportFilters rangeLabel="Forward-looking renewal windows (7 / 14 / 30 / 60 days from today)" />
+          <ProcessRenewalsButton />
+        </div>
 
         {/* Forecast windows */}
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

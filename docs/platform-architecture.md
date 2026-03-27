@@ -3,7 +3,7 @@
 > **Document purpose:** Records all architectural decisions, the target platform design, and the phased implementation plan. Used as the reference for all development work.
 >
 > **Last updated:** March 2026
-> **Status:** Active — Phase 0 complete. Phase 1+ in progress.
+> **Status:** Active — Phase 0 complete. Teams (Phase 1) and Coaching (Phase 6) live.
 
 ---
 
@@ -29,7 +29,7 @@
 ClubSpark is a **multi-sport SaaS platform** targeting team sports facilities. It is a **pilot that is intended to become the production system** — all decisions should reflect production quality from the start.
 
 **Primary sports:** any team sport (football, rugby, cricket, hockey, padel, tennis, etc.)
-**Coaching module:** coming soon — architecture must be coaching-ready from the start
+**Coaching module:** live — dedicated coaching-service with coaches, lesson types, and session management
 **Scale target:** thousands of tenants, each potentially with thousands of customers
 
 ### Why we are rebuilding
@@ -61,10 +61,13 @@ The existing platform runs on ASP.NET + SQL Server. Core issues:
 |---|---|---|---|
 | template-service | 4000 | NestJS / TypeScript / Fastify | ✅ Live — two-template system (Bold / Club) |
 | venue-service | 4003 | NestJS / TypeScript / Fastify | ✅ Live |
-| people-service | 4004 | NestJS / TypeScript / Fastify | ✅ Live (renamed from customer-service) |
-| booking-service | 4005 | NestJS / TypeScript / Fastify | ✅ Live |
+| people-service | 4004 | NestJS / TypeScript / Fastify | ✅ Live — persons, households, roles, tags, lifecycle |
+| booking-service | 4005 | NestJS / TypeScript / Fastify | ✅ Live — bookings, series, rules, approvals, stats |
 | admin-service | 4006 | NestJS / TypeScript / Fastify | ✅ Live — admin users, RBAC |
-| membership-service | 4010 | NestJS / TypeScript / Fastify | ✅ Live |
+| coaching-service | 4007 | NestJS / TypeScript / Fastify | ✅ Live — coaches, lesson types, lesson sessions |
+| team-service | 4008 | NestJS / TypeScript / Fastify | ✅ Live — teams, rosters, fixtures, availability, charges |
+| membership-service | 4010 | NestJS / TypeScript / Fastify | ✅ Live — schemes, plans, memberships, entitlements, renewals |
+| payment-service | — | NestJS / TypeScript / Fastify | ✅ Live — gateway-agnostic (Stripe live, GoCardless ready) |
 | admin-portal | 3000 | Next.js / React | ✅ Live |
 | customer-portal | — | Next.js / React | ✅ Live — multi-tenant via `/[slug]` |
 | mobile-app | — | Expo / React Native | ✅ Live |
@@ -79,12 +82,21 @@ The existing platform runs on ASP.NET + SQL Server. Core issues:
 - [x] Booking reference fixed — `BK-${randomBytes(5).hex().toUpperCase()}`
 - [x] Indexes defined on all critical tables
 - [x] Connection pooling fixed — single PrismaClient per service with `connection_limit=2` (Supabase session mode)
+- [x] coaching-service built — coaches, lesson types, sessions (port 4007)
+- [x] team-service built — teams, rosters, fixtures, availability, squad selection, charge runs (port 4008)
+- [x] payment-service built — gateway-agnostic Stripe integration with webhook handling
+- [x] People service extended — households, roles, tags, lifecycle history, activity timeline, financial profile
+- [x] Membership service extended — renewal automation endpoint
+- [x] Admin portal extended — coaching sessions, team reports, people activity timeline, dashboard KPIs + charts
+- [x] Customer portal extended — coaching multi-step booking wizard
+- [x] Mobile app extended — coaching booking wizard, teams tab with fixtures and availability responses
+- [x] 331 integration tests passing across 8 services; 48 Playwright e2e tests passing
 
 ### Current database schemas
 
 ```
 -- booking schema
-booking.bookings            — core booking records (with series_id, booking_subject_type/id, pricing fields)
+booking.bookings            — core booking records (series_id, booking_subject_type/id, pricing, approval fields)
 booking.booking_add_ons     — add-ons linked to bookings
 booking.booking_series      — recurring series (iCal RRULE, slot time, season dates)
 booking.booking_rules       — access/pricing rules (belongs in booking module, not membership)
@@ -103,11 +115,14 @@ venue.affiliations
 venue.news_posts
 
 -- people schema (was customer)
-people.customers
+people.persons              — core person records (renamed from customers)
 people.households           — parent/child, guardian relationships
-people.roles                — person roles within an org
-people.tags                 — segmentation tags
-people.lifecycle            — membership lifecycle tracking
+people.household_members    — household membership links
+people.person_roles         — roles within an org (with context, date range, status)
+people.person_tags          — segmentation tag assignments
+people.tags                 — tag definitions
+people.lifecycle_history    — status transition log
+people.person_relationships — arbitrary named relationships between persons
 
 -- membership schema
 membership.membership_schemes
@@ -116,13 +131,32 @@ membership.memberships
 membership.entitlement_policies
 membership.membership_plan_entitlements
 
+-- coaching schema
+coaching.coaches
+coaching.lesson_types
+coaching.coach_lesson_types — many-to-many: coach ↔ lesson type
+coaching.lesson_sessions    — individual session records (status, payment, notes, cancellation)
+
+-- team schema
+team.teams
+team.team_members           — roster with shirt number, position, junior/guest, guardian
+team.fixtures               — matches with opponent, venue, kickoff, lifecycle status
+team.player_availability    — per-fixture availability responses
+team.squad_selections       — published squad (starters + substitutes) per fixture
+team.charge_runs            — fee collection runs per fixture
+team.charges                — individual charges per squad member per run
+
 -- admin schema
 admin.admin_users
+
+-- payment schema
+payment.provider_configs    — per-tenant gateway config (Stripe, GoCardless)
+payment.payments            — payment records with status and provider reference
 ```
 
 ---
 
-## 2. Technology Stack Decisions
+## 3. Technology Stack Decisions
 
 ### Backend services — NestJS
 
@@ -247,13 +281,16 @@ Azure DevOps              — CI/CD pipelines (familiar from .NET)
 |---|---|---|
 | **template-service** | Portal template system (Bold top-nav / Club sidebar-nav) | ✅ Built |
 | **venue-service** | Venues, resources, bookable units, add-on catalogue, availability configs, blackout dates, resource groups, organisations, affiliations | ✅ Built |
-| **people-service** | People (customers), households, roles, tags, lifecycle | ✅ Built |
-| **booking-service** | Bookings, series, booking add-ons, availability checking, booking rules | ✅ Built |
+| **people-service** | Persons, households, roles, tags, lifecycle history, relationships | ✅ Built |
+| **booking-service** | Bookings, series, add-ons, availability checking, booking rules, approvals, stats, auto-expiry | ✅ Built |
 | **admin-service** | Admin users, RBAC | ✅ Built |
-| **membership-service** | Membership schemes, plans, memberships, entitlement policies | ✅ Built |
+| **membership-service** | Membership schemes, plans, memberships, entitlement policies, renewal automation | ✅ Built |
+| **coaching-service** | Coaches, lesson types, coach availability, lesson sessions | ✅ Built |
+| **team-service** | Teams, rosters, fixtures, player availability, squad selection, charge runs | ✅ Built |
+| **payment-service** | Gateway-agnostic payment processing — Stripe live, GoCardless ready | ✅ Built |
 | **pricing-service** | Price calculation at booking time — applies pricing rules, surcharges, discounts | Phase 2 — not started |
 | **access-rules-service** | Who can book what, when, advance windows, booking limits — independent of membership | Phase 4 — not started |
-| **admin-portal** | Next.js admin interface | ✅ Built |
+| **admin-portal** | Next.js admin interface — all domains | ✅ Built |
 | **customer-portal** | Multi-tenant Next.js customer-facing portal | ✅ Built |
 | **mobile-app** | Expo React Native app | ✅ Built |
 
@@ -841,16 +878,61 @@ pg_restore --no-owner -d $AZURE_POSTGRES_URL clubspark_$(date +%Y%m%d).dump
 - [x] Integration tests across all services (with graceful DB-skip)
 - [x] Playwright e2e suite: 5 test files
 
+#### 0.7 — Coaching service ✅
+
+- [x] coaching-service built (NestJS, port 4007) with Prisma + `coaching` schema
+- [x] Coaches: profiles, specialties, active status, lesson type associations
+- [x] Lesson types: sport, duration, pricing, max participants
+- [x] Coach availability: slot-level query by date and duration
+- [x] Lesson sessions: full CRUD with status and payment lifecycle
+- [x] Admin portal: coaches list/detail/create, lesson types, sessions list/detail/create
+- [x] Customer portal: multi-step coaching booking wizard (coach → lesson type → date → slot → confirm)
+- [x] Mobile app: coaching tab with identical booking wizard
+- [x] 45 integration tests passing
+
+#### 0.8 — Team service ✅
+
+- [x] team-service built (NestJS, port 4008) with Prisma + `team` schema
+- [x] Teams with sport, season, age group, gender, and fee schedules
+- [x] Roster management with person-linking, shirt numbers, positions, junior/guest flags
+- [x] Fixtures with full lifecycle (draft → scheduled → squad selected → fees requested → completed)
+- [x] Player availability responses (available / maybe / unavailable) with bulk-request
+- [x] Squad selection (starters + substitutes) with publish action
+- [x] Charge runs with per-player fee application, waive, and manual payment
+- [x] Admin portal: teams, roster, fixtures, availability, squad selection, charge runs
+- [x] Mobile app: teams tab with fixture list and inline availability response
+- [x] Reports: Teams Overview, Match Results, Fee Collection, Player Availability, Player Participation, Fixtures Summary
+- [x] 38 integration tests passing
+
+#### 0.9 — Payment service ✅
+
+- [x] payment-service built — gateway-agnostic payment processing
+- [x] Stripe integration live: checkout, payment intent, webhook handling
+- [x] GoCardless provider config ready (not yet wired)
+- [x] Idempotent payment creation with per-tenant provider routing
+- [x] 27 integration tests passing
+
+#### 0.10 — People platform extended ✅
+
+- [x] Households, roles, tags, lifecycle history fully built
+- [x] Activity timeline: aggregated events from bookings, memberships, and lifecycle
+- [x] Financial profile: active memberships, revenue, last-30-days revenue, total bookings
+- [x] Admin portal: full person detail with timeline and financial profile
+
+#### 0.11 — Membership renewals ✅
+
+- [x] Renewal automation endpoint: `POST /memberships/process-renewals?withinDays=N`
+- [x] Admin portal: process renewals button on renewals report
+
 ---
 
 ### Phase 1 — Identity: teams, clubs, and roles
 
+> **Status:** Team management is live (0.8 above). Club-level grouping and team bookings remain.
+
 - [ ] Add `people.clubs` table and migration
-- [ ] Add `people.teams` table and migration
-- [ ] Add `people.team_members` table and migration
 - [ ] Extend booking to support `booking_subject_type = 'team'` and `booking_subject_id`
 - [ ] Admin UI: club management pages
-- [ ] Admin UI: team management pages (create team, add/remove members, assign captain)
 - [ ] Admin UI: create booking on behalf of a team
 
 ---
@@ -901,14 +983,19 @@ pg_restore --no-owner -d $AZURE_POSTGRES_URL clubspark_$(date +%Y%m%d).dump
 
 ---
 
-### Phase 6 — Coaching (future)
+### Phase 6 — Coaching ✅ (live as of March 2026)
 
-> Architecture is designed to support this without redesign. Coach = a resource with qualifications. Coaching session = a booking linking a coach resource + a court/pitch + participants. Programme = a series booking with registration and capacity.
+> Implemented as a dedicated coaching-service rather than extending the booking model. Coaches, lesson types, and sessions are first-class entities in the `coaching` schema.
 
-- [ ] Add coach qualifications / attributes to resource model
-- [ ] Add group capacity + waitlisting to booking model
-- [ ] Implement programme / course model (series booking with registration)
-- [ ] Admin UI: coaching management
+- [x] coaching-service with coaches, lesson types, and lesson sessions
+- [x] Coach availability slot queries
+- [x] Full session lifecycle: scheduled → confirmed → completed / cancelled / no_show
+- [x] Payment tracking per session: unpaid / paid / waived
+- [x] Admin portal: complete coaching management UI
+- [x] Customer portal: coaching booking wizard
+- [x] Mobile app: coaching booking wizard
+- [ ] Group capacity + waitlisting (future)
+- [ ] Programme / course model — series of sessions with registration (future)
 
 ---
 

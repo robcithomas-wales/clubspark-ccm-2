@@ -10,6 +10,7 @@ import { FixturesModule } from './fixtures/fixtures.module.js'
 import { AvailabilityModule } from './availability/availability.module.js'
 import { SelectionModule } from './selection/selection.module.js'
 import { ChargesModule } from './charges/charges.module.js'
+import { ReportingModule } from './reporting/reporting.module.js'
 import { TenantContextGuard } from './common/guards/tenant-context.guard.js'
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js'
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor.js'
@@ -25,6 +26,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor.js
     AvailabilityModule,
     SelectionModule,
     ChargesModule,
+    ReportingModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: TenantContextGuard },

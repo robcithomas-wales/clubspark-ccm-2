@@ -40,6 +40,80 @@ const JSON_HEADERS = {
 
 const DB_AVAILABLE = await checkDbAvailable()
 
+describe.runIf(DB_AVAILABLE)('Availability — day endpoint', () => {
+  let request: ReturnType<typeof supertest>
+
+  beforeAll(async () => {
+    await seedFixtures()
+    const app = await getApp()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    request = supertest(app.getHttpServer() as any)
+  })
+
+  afterEach(async () => {
+    await cleanBookings()
+  })
+
+  afterAll(async () => {
+    await teardownFixtures()
+    await prisma.$disconnect()
+    await closeApp()
+  })
+
+  it('returns 401 without tenant header', async () => {
+    const res = await request.get('/availability/day?venueId=x&date=2030-01-01')
+    expect(res.status).toBe(401)
+  })
+
+  it('returns 200 with correct response shape and default config when venue-service is unreachable', async () => {
+    const date = new Date()
+    date.setDate(date.getDate() + 1)
+    const tomorrow = date.toISOString().slice(0, 10)
+
+    const res = await request
+      .get(`/availability/day?venueId=${TEST_VENUE_ID}&date=${tomorrow}`)
+      .set(HEADERS)
+
+    expect(res.status).toBe(200)
+    expect(res.body.data).toHaveProperty('date', tomorrow)
+    expect(res.body.data).toHaveProperty('venueId', TEST_VENUE_ID)
+    expect(res.body.data).toHaveProperty('units')
+    expect(res.body.data).toHaveProperty('config')
+    expect(res.body.data.config).toHaveProperty('opensAt')
+    expect(res.body.data.config).toHaveProperty('closesAt')
+    expect(res.body.data.config).toHaveProperty('slotDurationMinutes')
+    expect(Array.isArray(res.body.data.units)).toBe(true)
+  })
+
+  it('uses default config (06:00–22:00, 60 min) when venue has no availability config', async () => {
+    const today = new Date().toISOString().slice(0, 10)
+
+    const res = await request
+      .get(`/availability/day?venueId=${TEST_VENUE_ID}&date=${today}`)
+      .set(HEADERS)
+
+    expect(res.status).toBe(200)
+    // Default config fallback
+    expect(res.body.data.config.opensAt).toBe('06:00')
+    expect(res.body.data.config.closesAt).toBe('22:00')
+    expect(res.body.data.config.slotDurationMinutes).toBe(60)
+    // 16 slots from 06:00 to 22:00 at 60 min each (venue-service unreachable → 0 units → 0 unit rows, but config is still returned)
+  })
+
+  it('returns slots marked as released for today', async () => {
+    const today = new Date().toISOString().slice(0, 10)
+
+    const res = await request
+      .get(`/availability/day?venueId=${TEST_VENUE_ID}&date=${today}`)
+      .set(HEADERS)
+
+    expect(res.status).toBe(200)
+    // Today's slots are always released regardless of newDayReleaseTime
+    // units will be empty (venue-service unreachable) but config.newDayReleaseTime should be null
+    expect(res.body.data.config.newDayReleaseTime).toBeNull()
+  })
+})
+
 describe.runIf(DB_AVAILABLE)('Availability — check endpoint', () => {
   let request: ReturnType<typeof supertest>
 

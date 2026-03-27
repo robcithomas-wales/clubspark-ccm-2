@@ -8,8 +8,23 @@ import {
   getBookingStatsByUnit,
   getBookingStatsByDow,
   getBookableUnits,
+  getAvailabilityConfigs,
 } from "@/lib/api"
 import { resolveReportRange, daysBetween, formatDateRange } from "@/lib/report-utils"
+
+/** Parse "HH:MM" to total minutes. */
+function timeToMins(t: string): number {
+  const [h, m] = t.split(":").map(Number)
+  return (h ?? 0) * 60 + (m ?? 0)
+}
+
+/** Compute daily trading hours from opensAt/closesAt, defaulting to 16h (06:00–22:00). */
+function configuredHoursPerDay(configs: any[]): number {
+  const catchAll = configs.find((c: any) => c.dayOfWeek == null && c.isActive !== false)
+  if (!catchAll?.opensAt || !catchAll?.closesAt) return 16
+  const h = (timeToMins(catchAll.closesAt) - timeToMins(catchAll.opensAt)) / 60
+  return Math.max(1, Math.min(24, h))
+}
 
 export default async function UtilisationReportPage({
   searchParams,
@@ -21,17 +36,13 @@ export default async function UtilisationReportPage({
   const days = daysBetween(from, to)
   const rangeLabel = formatDateRange(from, to)
 
-  const hoursPerDay = Math.min(
-    24,
-    Math.max(1, parseInt(typeof sp.hoursPerDay === "string" ? sp.hoursPerDay : "12", 10) || 12)
-  )
-
-  const [statsRes, dailyRes, byUnitRes, byDowRes, unitsRes] = await Promise.allSettled([
+  const [statsRes, dailyRes, byUnitRes, byDowRes, unitsRes, configsRes] = await Promise.allSettled([
     getBookingStats(),
     getBookingDailyStats(days),
     getBookingStatsByUnit(),
     getBookingStatsByDow(),
     getBookableUnits(),
+    getAvailabilityConfigs({ scopeType: "venue" }),
   ])
 
   const stats = statsRes.status === "fulfilled" ? statsRes.value : null
@@ -41,15 +52,22 @@ export default async function UtilisationReportPage({
   const units: any[] = unitsRes.status === "fulfilled"
     ? (Array.isArray(unitsRes.value) ? unitsRes.value : (unitsRes.value as any)?.data ?? [])
     : []
+  const availabilityConfigs: any[] = configsRes.status === "fulfilled" ? (configsRes.value ?? []) : []
 
   const unitNameMap = new Map<string, string>(units.map((u: any) => [u.id, u.name]))
 
   const activeUnitCount = units.filter((u: any) => u.isActive !== false).length
+  const hoursPerDay = configuredHoursPerDay(availabilityConfigs)
   const availableHours = activeUnitCount * hoursPerDay * days
   const totalBookedHours = daily.reduce((s, d) => s + d.bookedHours, 0)
   const utilisationPct = availableHours > 0
     ? Math.min(100, Math.round((totalBookedHours / availableHours) * 100))
     : 0
+
+  // Derive the opening hours label from config for display
+  const catchAllConfig = availabilityConfigs.find((c: any) => c.dayOfWeek == null && c.isActive !== false)
+  const opensAt = catchAllConfig?.opensAt ?? "06:00"
+  const closesAt = catchAllConfig?.closesAt ?? "22:00"
 
   const perUnitAvailableHours = hoursPerDay * days
   const unitRows = byUnit.map((u) => ({
@@ -82,24 +100,12 @@ export default async function UtilisationReportPage({
     <PortalLayout title="Utilisation Report" description="Facility utilisation by unit, time of day and trend over the selected period.">
       <div className="space-y-6">
 
-        <ReportFilters
-          rangeLabel={rangeLabel}
-          extraFilters={[
-            {
-              key: "hoursPerDay",
-              label: "Open hours/day",
-              options: [6, 8, 10, 12, 14, 16, 18].map((h) => ({
-                value: String(h),
-                label: `${h}h`,
-              })),
-            },
-          ]}
-        />
+        <ReportFilters rangeLabel={rangeLabel} />
 
         {/* KPI row */}
         <div className="grid gap-4 sm:grid-cols-3">
           {[
-            { label: `Overall utilisation (${days} days · ${hoursPerDay}h/day)`, value: `${utilisationPct}%` },
+            { label: `Overall utilisation (${days} days · ${opensAt}–${closesAt})`, value: `${utilisationPct}%` },
             { label: "Total booked hours", value: `${Math.round(totalBookedHours)}h` },
             { label: "Active bookable units", value: activeUnitCount },
           ].map((k) => (
@@ -161,7 +167,7 @@ export default async function UtilisationReportPage({
         {unitRows.length > 0 && (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h3 className="mb-1 text-base font-semibold text-slate-900">Booked hours by unit</h3>
-            <p className="mb-4 text-xs text-slate-400">All-time aggregated — utilisation % calculated against {days}-day window</p>
+            <p className="mb-4 text-xs text-slate-400">All-time aggregated — utilisation % against {days}-day window · {hoursPerDay.toFixed(1)}h/day ({opensAt}–{closesAt})</p>
             <HBarChart
               rows={unitRows.map((u) => ({ label: u.unitName, value: parseFloat(u.bookedHours.toFixed(1)) }))}
               colour="#1857E0"

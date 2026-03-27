@@ -73,6 +73,8 @@ type Fixture = {
   matchType?: string
   status: string
   notes?: string
+  homeScore?: number | null
+  awayScore?: number | null
 }
 
 const RESPONSE_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
@@ -104,6 +106,9 @@ export default function FixtureDetailPage() {
   const [chargeRuns, setChargeRuns] = useState<ChargeRun[]>([])
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
+  const [homeScore, setHomeScore] = useState<string>("")
+  const [awayScore, setAwayScore] = useState<string>("")
+  const [scoreLoading, setScoreLoading] = useState(false)
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -118,6 +123,8 @@ export default function FixtureDetailPage() {
       if (fixRes.ok) {
         const j = await fixRes.json()
         setFixture(j.data)
+        setHomeScore(j.data?.homeScore != null ? String(j.data.homeScore) : "")
+        setAwayScore(j.data?.awayScore != null ? String(j.data.awayScore) : "")
       }
       if (availRes.ok) {
         const j = await availRes.json()
@@ -152,6 +159,21 @@ export default function FixtureDetailPage() {
     await fetch(`/api/teams/${teamId}/fixtures/${fixtureId}/selection/publish`, { method: "POST" })
     await loadData()
     setActionLoading(false)
+  }
+
+  async function saveScore() {
+    setScoreLoading(true)
+    await fetch(`/api/teams/${teamId}/fixtures/${fixtureId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        homeScore: homeScore !== "" ? Number(homeScore) : null,
+        awayScore: awayScore !== "" ? Number(awayScore) : null,
+        status: "completed",
+      }),
+    })
+    await loadData()
+    setScoreLoading(false)
   }
 
   async function initiateChargeRun() {
@@ -238,6 +260,53 @@ export default function FixtureDetailPage() {
               </div>
             </div>
           </div>
+
+          {/* Score entry */}
+          {fixture.status !== "cancelled" && (
+            <div className="border-b border-slate-100 bg-slate-50/60 px-6 py-4">
+              <div className="flex flex-wrap items-end gap-4">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">
+                    {fixture.homeAway === "home" ? "Home (us)" : "Away (them)"}
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={homeScore}
+                    onChange={(e) => setHomeScore(e.target.value)}
+                    placeholder="—"
+                    className="w-20 rounded-xl border border-slate-200 px-3 py-2 text-center text-lg font-bold shadow-sm focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+                <span className="pb-2 text-xl font-bold text-slate-300">:</span>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">
+                    {fixture.homeAway === "home" ? "Away (them)" : "Home (us)"}
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={awayScore}
+                    onChange={(e) => setAwayScore(e.target.value)}
+                    placeholder="—"
+                    className="w-20 rounded-xl border border-slate-200 px-3 py-2 text-center text-lg font-bold shadow-sm focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+                <button
+                  onClick={saveScore}
+                  disabled={scoreLoading}
+                  className="rounded-xl bg-[#1857E0] px-4 py-2 text-sm font-semibold !text-white shadow-sm transition hover:bg-[#1832A8] disabled:opacity-50"
+                >
+                  {scoreLoading ? "Saving…" : "Save result"}
+                </button>
+                {fixture.homeScore != null && fixture.awayScore != null && (
+                  <span className="pb-0.5 text-sm font-semibold text-slate-600">
+                    Saved: {fixture.homeScore} – {fixture.awayScore}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Summary pills */}
           <div className="flex flex-wrap gap-4 px-6 py-4">

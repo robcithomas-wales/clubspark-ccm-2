@@ -29,6 +29,7 @@ model Coach {
   lessonTypes  CoachLessonType[]
   availability CoachAvailability[]
   blocks       CoachBlock[]
+  sessions     LessonSession[]
 
   @@map("coaches")
   @@schema("coaching")
@@ -52,7 +53,8 @@ model LessonType {
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @default(now()) @updatedAt @map("updated_at")
 
-  coaches CoachLessonType[]
+  coaches  CoachLessonType[]
+  sessions LessonSession[]
 
   @@map("lesson_types")
   @@schema("coaching")
@@ -94,6 +96,37 @@ model CoachAvailability {
   @@index([coachId])
   @@index([tenantId])
   @@index([coachId, dayOfWeek])
+}
+
+// A scheduled lesson / session instance — a concrete booking of a coach + lesson type
+// for a specific time. customerId is a cross-ref to people-service (no hard FK).
+model LessonSession {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String   @map("tenant_id") @db.Uuid
+  coachId            String   @map("coach_id") @db.Uuid
+  lessonTypeId       String   @map("lesson_type_id") @db.Uuid
+  customerId         String?  @map("customer_id") @db.Uuid  // optional link to people.persons
+  startsAt           DateTime @map("starts_at")
+  endsAt             DateTime @map("ends_at")
+  status             String   @default("scheduled") // scheduled | confirmed | completed | cancelled | no_show
+  notes              String?
+  paymentStatus      String   @default("unpaid") @map("payment_status") // unpaid | paid | waived
+  priceCharged       Decimal? @map("price_charged") @db.Decimal(10, 2)
+  cancellationReason String?  @map("cancellation_reason")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
+
+  coach      Coach      @relation(fields: [coachId], references: [id], onDelete: Restrict)
+  lessonType LessonType @relation(fields: [lessonTypeId], references: [id], onDelete: Restrict)
+
+  @@map("lesson_sessions")
+  @@schema("coaching")
+  @@index([tenantId])
+  @@index([coachId])
+  @@index([lessonTypeId])
+  @@index([customerId])
+  @@index([tenantId, startsAt])
+  @@index([tenantId, status])
 }
 
 // One-off time blocks where a coach is NOT available (holiday, illness, etc.)

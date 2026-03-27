@@ -281,6 +281,12 @@ export class MembershipsService {
     return { data: rows }
   }
 
+  async processRenewals(withinDays: number) {
+    const now = new Date()
+    const renewed = await this.repo.createAutoRenewals(now, withinDays)
+    return { processed: renewed, runAt: now.toISOString() }
+  }
+
   async bulkTransition(
     tenantId: string,
     organisationId: string,

@@ -24,7 +24,12 @@ export async function cleanLessonTypes(): Promise<void> {
   await prisma.$executeRaw`DELETE FROM coaching.lesson_types WHERE tenant_id = ${TEST_TENANT_ID}::uuid`
 }
 
+export async function cleanSessions(): Promise<void> {
+  await prisma.$executeRaw`DELETE FROM coaching.lesson_sessions WHERE tenant_id = ${TEST_TENANT_ID}::uuid`
+}
+
 export async function cleanAll(): Promise<void> {
+  await cleanSessions()
   await cleanCoaches()
   await cleanLessonTypes()
 }

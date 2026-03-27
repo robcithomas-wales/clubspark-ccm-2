@@ -44,13 +44,18 @@ export default function AccountScreen() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
+  const [bookingsError, setBookingsError] = useState<string | null>(null)
 
   const brandColour = branding?.primaryColour ?? '#1857E0'
   const tenantId = appMeta?.tenantId ?? ''
   const customerId = user?.id ?? ''
 
   const load = useCallback(async () => {
-    if (!tenantId || !customerId) return
+    if (!tenantId || !customerId) {
+      setLoading(false)
+      setRefreshing(false)
+      return
+    }
     try {
       const [profileRes, memRes, bookingsRes] = await Promise.allSettled([
         fetchMyProfile(tenantId, customerId),
@@ -65,6 +70,8 @@ export default function AccountScreen() {
             .filter((b) => b.status === 'active')
             .sort((a, b) => parseISO(b.startsAt).getTime() - parseISO(a.startsAt).getTime()),
         )
+      } else {
+        setBookingsError(bookingsRes.reason?.message ?? 'Failed to load bookings')
       }
     } finally {
       setLoading(false)
@@ -221,7 +228,11 @@ export default function AccountScreen() {
               <Text className="text-xs font-semibold text-slate-500 uppercase tracking-widest px-1 mb-3">
                 Upcoming bookings ({upcomingBookings.length})
               </Text>
-              {upcomingBookings.length === 0 ? (
+              {bookingsError ? (
+                <View className="bg-white rounded-2xl p-4 shadow-sm border border-red-100 items-center">
+                  <Text className="text-sm text-red-400">{bookingsError}</Text>
+                </View>
+              ) : upcomingBookings.length === 0 ? (
                 <View className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 items-center">
                   <Text className="text-sm text-slate-400">No upcoming bookings</Text>
                 </View>

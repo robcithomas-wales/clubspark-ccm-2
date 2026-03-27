@@ -70,6 +70,8 @@ export class FixturesRepository {
     if (dto.matchType !== undefined) data.matchType = dto.matchType ?? null
     if (dto.notes !== undefined) data.notes = dto.notes ?? null
     if (dto.status !== undefined) data.status = dto.status
+    if (dto.homeScore !== undefined) data.homeScore = dto.homeScore ?? null
+    if (dto.awayScore !== undefined) data.awayScore = dto.awayScore ?? null
 
     await this.prisma.fixture.updateMany({ where: { tenantId, teamId, id }, data })
     return this.findById(tenantId, teamId, id)

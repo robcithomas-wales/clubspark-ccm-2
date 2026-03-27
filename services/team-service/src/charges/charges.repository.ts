@@ -34,7 +34,7 @@ export class ChargesRepository {
   async createRun(
     tenantId: string,
     fixtureId: string,
-    initiatedBy: string,
+    initiatedBy: string | null,
     notes: string | undefined,
     charges: Array<{ teamMemberId: string; amount: number }>,
   ) {
@@ -79,13 +79,13 @@ export class ChargesRepository {
     })
   }
 
-  async markChargePaid(chargeId: string, stripePaymentIntentId?: string) {
+  async markChargePaid(chargeId: string, paymentId?: string) {
     return this.prisma.charge.update({
       where: { id: chargeId },
       data: {
         status: 'paid',
         paidAt: new Date(),
-        stripePaymentIntentId: stripePaymentIntentId ?? null,
+        paymentId: paymentId ?? null,
       },
     })
   }

@@ -1,0 +1,171 @@
+// ClubSpark — Payment Service Prisma Schema
+// Owns the payment schema: provider_configs, payments, payment_attempts, refunds, webhook_events
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+  output          = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["payment"]
+}
+
+// ── Enums ────────────────────────────────────────────────────────────────────
+
+enum PaymentStatus {
+  pending
+  requires_action
+  processing
+  succeeded
+  failed
+  cancelled
+
+  @@schema("payment")
+}
+
+enum RefundStatus {
+  pending
+  succeeded
+  failed
+
+  @@schema("payment")
+}
+
+enum ChargeRunStatus {
+  draft
+  sent
+  completed
+  cancelled
+
+  @@schema("payment")
+}
+
+// ── Models ───────────────────────────────────────────────────────────────────
+
+// Per-tenant gateway configuration. A tenant can have multiple providers
+// (e.g. Stripe for cards, GoCardless for direct debit).
+// IMPORTANT: credentials jsonb contains secret keys — encrypt at rest in production
+// and prefer Azure Key Vault for the actual secret values.
+model ProviderConfig {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  provider    String   // 'stripe' | 'gocardless' | 'worldpay'
+  currency    String   @default("GBP") @db.Char(3)
+  isDefault   Boolean  @default(true) @map("is_default")
+  // Encrypted in production. Keys vary by provider:
+  // stripe:      { secretKey, webhookSecret, publishableKey }
+  // gocardless:  { accessToken, webhookSecret }
+  credentials Json
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  payments      Payment[]
+  webhookEvents WebhookEvent[]
+
+  @@unique([tenantId, provider, currency])
+  @@map("provider_configs")
+  @@schema("payment")
+  @@index([tenantId, isActive])
+  @@index([tenantId, isDefault])
+}
+
+// Canonical gateway-agnostic payment record.
+model Payment {
+  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String        @map("tenant_id") @db.Uuid
+  // Callers must supply a stable idempotency key. Identical keys return the
+  // existing payment rather than creating a duplicate charge.
+  idempotencyKey   String        @unique @map("idempotency_key")
+  // What this payment is for — cross-service reference (no hard FK)
+  subjectType      String        @map("subject_type") // 'booking' | 'membership' | 'charge_run_item'
+  subjectId        String        @map("subject_id") @db.Uuid
+  customerId       String?       @map("customer_id") @db.Uuid
+  providerConfigId String        @map("provider_config_id") @db.Uuid
+  // Amount in smallest currency unit (pence for GBP)
+  amount           Int
+  currency         String        @default("GBP") @db.Char(3)
+  // Gateway's own reference (e.g. Stripe PaymentIntent ID)
+  gatewayRef       String?       @map("gateway_ref")
+  status           PaymentStatus @default(pending)
+  failureReason    String?       @map("failure_reason")
+  // Arbitrary caller context passed through to the gateway and stored here
+  metadata         Json?
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  providerConfig ProviderConfig   @relation(fields: [providerConfigId], references: [id])
+  attempts       PaymentAttempt[]
+  refunds        Refund[]
+
+  @@map("payments")
+  @@schema("payment")
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, subjectType, subjectId])
+  @@index([tenantId, customerId])
+  @@index([gatewayRef])
+}
+
+// One record per gateway call attempt. Supports retry tracking.
+model PaymentAttempt {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  paymentId    String   @map("payment_id") @db.Uuid
+  gatewayRef   String?  @map("gateway_ref")
+  status       String
+  errorCode    String?  @map("error_code")
+  errorMessage String?  @map("error_message")
+  attemptedAt  DateTime @default(now()) @map("attempted_at") @db.Timestamptz(6)
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@map("payment_attempts")
+  @@schema("payment")
+  @@index([paymentId])
+}
+
+// Refunds are first-class records, not just negative payments.
+model Refund {
+  id         String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  paymentId  String       @map("payment_id") @db.Uuid
+  // Amount in smallest currency unit. Null = full refund.
+  amount     Int?
+  currency   String       @default("GBP") @db.Char(3)
+  gatewayRef String?      @map("gateway_ref")
+  reason     String?
+  status     RefundStatus @default(pending)
+  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@map("refunds")
+  @@schema("payment")
+  @@index([paymentId])
+  @@index([status])
+}
+
+// Raw webhook events — always persisted before processing.
+// Never lose an event even if processing fails.
+model WebhookEvent {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  providerConfigId String? @map("provider_config_id") @db.Uuid
+  provider       String
+  // The gateway's own event ID — used to deduplicate replayed webhooks
+  gatewayEventId String?   @unique @map("gateway_event_id")
+  eventType      String    @map("event_type")
+  payload        Json
+  processedAt    DateTime? @map("processed_at") @db.Timestamptz(6)
+  error          String?
+  receivedAt     DateTime  @default(now()) @map("received_at") @db.Timestamptz(6)
+
+  providerConfig ProviderConfig? @relation(fields: [providerConfigId], references: [id])
+
+  @@map("webhook_events")
+  @@schema("payment")
+  @@index([provider, eventType])
+  @@index([providerConfigId])
+}
