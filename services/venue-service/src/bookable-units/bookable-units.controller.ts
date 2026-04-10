@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Body, Query, HttpCode, HttpStatus } from '@nestjs/common'
+import { Controller, Get, Post, Patch, Param, Body, Query, HttpCode, HttpStatus, NotFoundException } from '@nestjs/common'
 import { ApiTags, ApiSecurity, ApiQuery } from '@nestjs/swagger'
 import { BookableUnitsService } from './bookable-units.service.js'
 import { CreateBookableUnitDto } from './dto/create-bookable-unit.dto.js'
@@ -23,6 +23,25 @@ export class BookableUnitsController {
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() dto: CreateBookableUnitDto, @TenantCtx() ctx: TenantContext) {
     const unit = await this.service.create(ctx.tenantId, dto)
+    return { data: unit }
+  }
+
+  @Patch('bookable-units/:id')
+  async update(
+    @Param('id') id: string,
+    @Body() body: {
+      name?: string
+      unitType?: string
+      sortOrder?: number
+      capacity?: number | null
+      isActive?: boolean
+      isOptionalExtra?: boolean
+      parentUnitId?: string | null
+    },
+    @TenantCtx() ctx: TenantContext,
+  ) {
+    const unit = await this.service.update(ctx.tenantId, id, body)
+    if (!unit) throw new NotFoundException(`Bookable unit ${id} not found`)
     return { data: unit }
   }
 

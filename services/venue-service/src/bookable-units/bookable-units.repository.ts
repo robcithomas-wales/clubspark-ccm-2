@@ -37,10 +37,11 @@ export class BookableUnitsRepository {
     })
   }
 
-  create(tenantId: string, dto: CreateBookableUnitDto) {
-    return this.prisma.write.bookableUnit.create({
+  async create(tenantId: string, dto: CreateBookableUnitDto) {
+    const id = randomUUID()
+    const unit = await this.prisma.write.bookableUnit.create({
       data: {
-        id: randomUUID(),
+        id,
         tenantId,
         venueId: dto.venueId,
         resourceId: dto.resourceId,
@@ -54,6 +55,53 @@ export class BookableUnitsRepository {
       },
       select: this.unitSelect,
     })
+
+    if (dto.parentUnitId) {
+      await this.upsertParentConflict(id, dto.parentUnitId)
+    }
+
+    return unit
+  }
+
+  async update(tenantId: string, id: string, data: {
+    name?: string
+    unitType?: string
+    sortOrder?: number
+    capacity?: number | null
+    isActive?: boolean
+    isOptionalExtra?: boolean
+    parentUnitId?: string | null
+  }) {
+    const existing = await this.prisma.read.bookableUnit.findFirst({ where: { id, tenantId }, select: { id: true } })
+    if (!existing) return null
+
+    const unit = await this.prisma.write.bookableUnit.update({
+      where: { id, tenantId },
+      data,
+      select: this.unitSelect,
+    })
+
+    // Sync parent conflict row if parentUnitId changed
+    if ('parentUnitId' in data) {
+      // Remove any existing parent conflict for this unit
+      await this.prisma.write.$executeRaw`
+        DELETE FROM venue.unit_conflicts
+        WHERE (unit_id = ${id}::uuid OR conflicting_unit_id = ${id}::uuid)
+      `
+      if (data.parentUnitId) {
+        await this.upsertParentConflict(id, data.parentUnitId)
+      }
+    }
+
+    return unit
+  }
+
+  private async upsertParentConflict(childId: string, parentId: string) {
+    await this.prisma.write.$executeRaw`
+      INSERT INTO venue.unit_conflicts (unit_id, conflicting_unit_id)
+      VALUES (${childId}::uuid, ${parentId}::uuid)
+      ON CONFLICT DO NOTHING
+    `
   }
 
   async findConflictingUnitIds(unitId: string): Promise<string[]> {

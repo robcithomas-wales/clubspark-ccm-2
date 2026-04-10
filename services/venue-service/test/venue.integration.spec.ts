@@ -642,7 +642,7 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
       const childId = child.body.data.id
 
       // Verify conflict row exists in DB
-      const conflicts = await prisma.read.$queryRaw<{ unit_id: string; conflicting_unit_id: string }[]>`
+      const conflicts = await prisma.$queryRaw<{ unit_id: string; conflicting_unit_id: string }[]>`
         SELECT unit_id::text, conflicting_unit_id::text
         FROM venue.unit_conflicts
         WHERE unit_id = ${childId}::uuid AND conflicting_unit_id = ${parentId}::uuid
@@ -673,7 +673,7 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
       expect(patch.body.data.parentUnitId).toBeNull()
 
       // Conflict row should be gone
-      const conflicts = await prisma.read.$queryRaw<{ unit_id: string }[]>`
+      const conflicts = await prisma.$queryRaw<{ unit_id: string }[]>`
         SELECT unit_id::text FROM venue.unit_conflicts
         WHERE unit_id = ${childId}::uuid OR conflicting_unit_id = ${childId}::uuid
       `

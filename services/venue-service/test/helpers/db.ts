@@ -50,6 +50,12 @@ export async function teardownFixtures(): Promise<void> {
   await prisma.$executeRaw`
     DELETE FROM venue.blackout_dates WHERE tenant_id = ${TEST_TENANT_ID}::uuid
   `
+  // unit_conflicts must be deleted before bookable_units (FK constraint)
+  await prisma.$executeRaw`
+    DELETE FROM venue.unit_conflicts
+    WHERE unit_id IN (SELECT id FROM venue.bookable_units WHERE tenant_id = ${TEST_TENANT_ID}::uuid)
+       OR conflicting_unit_id IN (SELECT id FROM venue.bookable_units WHERE tenant_id = ${TEST_TENANT_ID}::uuid)
+  `
   await prisma.$executeRaw`
     DELETE FROM venue.bookable_units WHERE tenant_id = ${TEST_TENANT_ID}::uuid
   `
