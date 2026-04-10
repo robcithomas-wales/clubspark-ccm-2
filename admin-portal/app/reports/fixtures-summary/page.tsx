@@ -76,7 +76,7 @@ export default async function FixturesSummaryReportPage({
   ]
 
   return (
-    <PortalLayout title="Season Fixture Summary" description="Complete fixture breakdown by team, month, type, and status.">
+    <PortalLayout title="Fixtures Summary" description="Complete fixture breakdown by team, month, type, and status.">
       <div className="space-y-6">
 
         {/* Filters */}

@@ -7,11 +7,13 @@ dotenv.config({ path: path.resolve(__dirname, '.env') })
 export default defineConfig({
   testDir: './tests',
   fullyParallel: false,
+  workers: 1,
   retries: 1,
   timeout: 30_000,
+  expect: { timeout: 10_000 },
   globalSetup: './global-setup.ts',
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: `http://localhost:${process.env['ADMIN_PORTAL_PORT'] ?? '3001'}`,
     headless: true,
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',

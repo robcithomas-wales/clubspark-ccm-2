@@ -34,14 +34,14 @@ export default async function TeamsOverviewReportPage() {
   ]
 
   return (
-    <PortalLayout title="Cross-Team Overview" description="Active squads, upcoming fixtures and outstanding fees across all teams.">
+    <PortalLayout title="Teams Overview" description="Active squads, upcoming fixtures and outstanding fees across all teams.">
       <div className="space-y-6">
 
         {/* KPIs */}
         <div className="grid gap-4 sm:grid-cols-4">
           {[
-            { label: "Total active teams", value: teams.length },
-            { label: "Total active players", value: totalPlayers },
+            { label: "Total teams", value: teams.length },
+            { label: "Total players", value: totalPlayers },
             { label: "Coaches & managers", value: totalCoaches },
             { label: "Upcoming fixtures", value: totalUpcoming },
           ].map((k) => (

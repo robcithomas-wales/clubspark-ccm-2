@@ -105,6 +105,7 @@ export default function NewVenuePage() {
                 Venue name <span className="text-rose-500">*</span>
               </label>
               <input
+                id="name"
                 type="text"
                 required
                 value={form.name}
@@ -120,6 +121,7 @@ export default function NewVenuePage() {
                 City
               </label>
               <input
+                id="city"
                 type="text"
                 value={form.city}
                 onChange={(e) => set("city", e.target.value)}
@@ -135,6 +137,7 @@ export default function NewVenuePage() {
                   Country
                 </label>
                 <select
+                  id="country"
                   value={form.country}
                   onChange={(e) => set("country", e.target.value)}
                   className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-[#1857E0] focus:ring-2 focus:ring-[#1857E0]/20 transition bg-white"
@@ -149,6 +152,7 @@ export default function NewVenuePage() {
                   Timezone
                 </label>
                 <select
+                  id="timezone"
                   value={form.timezone}
                   onChange={(e) => set("timezone", e.target.value)}
                   className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-[#1857E0] focus:ring-2 focus:ring-[#1857E0]/20 transition bg-white"
@@ -174,7 +178,7 @@ export default function NewVenuePage() {
         <div className="flex items-center gap-3">
           <button
             type="submit"
-            disabled={saving || !form.name.trim()}
+            disabled={saving}
             className="inline-flex items-center gap-2 rounded-xl bg-[#1857E0] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1445c0] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? "Creating…" : "Create venue"}

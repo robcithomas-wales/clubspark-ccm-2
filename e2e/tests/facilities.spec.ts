@@ -37,7 +37,7 @@ test.describe('Venues', () => {
   test('venues list page loads', async ({ page }) => {
     await page.goto('/venues')
 
-    await expect(page.getByRole('heading', { name: /venues/i })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /venues/i }).first()).toBeVisible()
   })
 
   test('Create Venue page renders all fields', async ({ page }) => {
@@ -90,7 +90,7 @@ test.describe('Bookable Units', () => {
   test('Create Bookable Unit page renders key fields', async ({ page }) => {
     await page.goto('/bookable-units/new')
 
-    await expect(page.getByRole('heading', { name: /add bookable unit/i })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /create bookable unit/i })).toBeVisible()
     await expect(page.locator('#name')).toBeVisible()
   })
 })

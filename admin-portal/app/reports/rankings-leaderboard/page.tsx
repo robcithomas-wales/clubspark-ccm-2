@@ -94,7 +94,7 @@ export default async function RankingsLeaderboardReportPage() {
 
   return (
     <PortalLayout
-      title="Rankings Leaderboard Report"
+      title="Rankings Leaderboard"
       description="Ranked standings, ELO distribution and form analysis across all ranking configs."
     >
       <div id="report-root" className="space-y-6">
@@ -106,8 +106,8 @@ export default async function RankingsLeaderboardReportPage() {
         {/* KPI row */}
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[
-            { label: "Ranking Configs", value: totalConfigs },
-            { label: "Total Ranked Entries", value: totalRankedEntries },
+            { label: "Rating Configs", value: totalConfigs },
+            { label: "Total Rated Entries", value: totalRankedEntries },
             { label: "ELO Configs", value: eloConfigs.length },
             { label: "Points Table Configs", value: pointsConfigs.length },
           ].map(({ label, value }) => (
@@ -121,15 +121,15 @@ export default async function RankingsLeaderboardReportPage() {
         {totalConfigs === 0 && (
           <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center shadow-sm">
             <Trophy className="mx-auto mb-4 h-12 w-12 text-slate-300" />
-            <h3 className="text-base font-semibold text-slate-700">No ranking configs yet</h3>
+            <h3 className="text-base font-semibold text-slate-700">No rating configs yet</h3>
             <p className="mt-2 text-sm text-slate-500">
-              Create a ranking config to start tracking player and team ratings.
+              Create a rating config to start tracking player and team ratings.
             </p>
             <Link
               href="/rankings/new"
               className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-[#1857E0] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1245b5]"
             >
-              Create your first ranking config
+              Create your first rating config
             </Link>
           </div>
         )}
@@ -265,7 +265,7 @@ export default async function RankingsLeaderboardReportPage() {
                   {config.sport} — {config.algorithm === "ELO" ? "ELO Rating" : "Points Table"}
                   {config.scope === "SEASON" ? ` (${config.season ?? "Season"})` : config.scope === "ALL_TIME" ? " (All-time)" : " (Competition)"}
                 </h2>
-                <p className="mt-0.5 text-sm text-slate-500">{total} ranked {config.entryType === "TEAM" ? "teams" : "players"}</p>
+                <p className="mt-0.5 text-sm text-slate-500">{total} rated {config.entryType === "TEAM" ? "teams" : "players"}</p>
               </div>
               <Link
                 href={`/rankings?config=${config.id}`}
@@ -276,7 +276,7 @@ export default async function RankingsLeaderboardReportPage() {
             </div>
             {entries.length === 0 ? (
               <div className="px-6 py-8 text-center text-sm text-slate-400">
-                No entries yet. Rankings update automatically when match results are verified.
+                No entries yet. Ratings update automatically when match results are verified.
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -346,7 +346,7 @@ export default async function RankingsLeaderboardReportPage() {
                 </table>
                 {total > 20 && (
                   <div className="border-t border-slate-100 px-6 py-3 text-sm text-slate-400">
-                    Showing top 20 of {total} — <Link href={`/rankings?config=${config.id}`} className="text-[#1857E0] hover:underline">view all</Link>
+                    Showing top 20 of {total} — <Link href={`/rankings?config=${config.id}`} className="text-[#1857E0] hover:underline">view all ratings</Link>
                   </div>
                 )}
               </div>
