@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { PortalLayout } from "@/components/portal-layout"
-import { getVenues, getResourceGroups, createResource } from "@/lib/api"
+import { getVenues, createResource } from "@/lib/api"
+import { VenueGroupSelectors } from "@/components/venue-group-selectors"
 
 async function createResourceAction(formData: FormData) {
   "use server"
@@ -49,10 +50,7 @@ export default async function NewResourcePage({
   const params = searchParams ? await searchParams : {}
   const defaultVenueId = params?.venueId || ""
 
-  const [venues, groups] = await Promise.all([
-    getVenues(),
-    defaultVenueId ? getResourceGroups({ venueId: defaultVenueId }) : Promise.resolve([]),
-  ])
+  const venues = await getVenues()
 
   return (
     <PortalLayout
@@ -109,44 +107,10 @@ export default async function NewResourcePage({
                 </select>
               </div>
 
-              <div>
-                <label htmlFor="venueId" className="mb-2 block text-sm font-medium text-slate-700">
-                  Venue <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  id="venueId"
-                  name="venueId"
-                  required
-                  defaultValue={defaultVenueId}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#1857E0]"
-                >
-                  <option value="">Select a venue</option>
-                  {venues.map((venue: any) => (
-                    <option key={venue.id} value={venue.id}>
-                      {venue.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label htmlFor="groupId" className="mb-2 block text-sm font-medium text-slate-700">
-                  Resource Group
-                </label>
-                <select
-                  id="groupId"
-                  name="groupId"
-                  defaultValue=""
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#1857E0]"
-                >
-                  <option value="">No group</option>
-                  {groups.map((group: any) => (
-                    <option key={group.id} value={group.id}>
-                      {group.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <VenueGroupSelectors
+                venues={venues.map((v: any) => ({ id: v.id, name: v.name }))}
+                defaultVenueId={defaultVenueId}
+              />
 
               <div>
                 <label htmlFor="sport" className="mb-2 block text-sm font-medium text-slate-700">

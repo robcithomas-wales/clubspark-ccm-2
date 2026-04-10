@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { CalendarDays, Users, Trophy, BarChart2, ListOrdered } from "lucide-react"
+import { CalendarDays, Users, BarChart2, ListOrdered, MessageSquare, ShieldAlert, Send } from "lucide-react"
 import { PortalLayout } from "@/components/portal-layout"
 import { getCompetitionById, getCompetitionEntries, getCompetitionMatches } from "@/lib/api"
 import { CompetitionStatusBadge } from "@/components/competition-status-badge"
@@ -34,6 +34,9 @@ export default async function CompetitionOverviewPage({
     { label: "Draw & Fixtures", href: `/competitions/${id}/draw`, icon: CalendarDays, count: allMatches.length },
     { label: "Results", href: `/competitions/${id}/fixtures`, icon: ListOrdered, count: completedMatches },
     { label: "Standings", href: `/competitions/${id}/standings`, icon: BarChart2 },
+    { label: "Messages", href: `/competitions/${id}/messages`, icon: MessageSquare },
+    { label: "Discipline", href: `/competitions/${id}/discipline`, icon: ShieldAlert },
+    { label: "Submit", href: `/competitions/${id}/submissions`, icon: Send },
   ]
 
   return (
@@ -56,9 +59,31 @@ export default async function CompetitionOverviewPage({
               <span className="text-sm text-slate-500">{competition.season}</span>
             </>
           )}
-          <div className="ml-auto flex gap-2">
+          <div className="ml-auto flex flex-wrap gap-2">
+            {competition.status === "DRAFT" && (
+              <form action={`/api/competitions/${id}/approve?action=submit-for-approval`} method="POST">
+                <button type="submit" className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 transition hover:bg-blue-100">
+                  Submit for approval
+                </button>
+              </form>
+            )}
+            {competition.status === "AWAITING_APPROVAL" && (
+              <>
+                <form action={`/api/competitions/${id}/approve?action=approve`} method="POST">
+                  <button type="submit" className="rounded-lg border border-green-200 bg-green-50 px-3 py-1 text-xs font-medium text-green-700 transition hover:bg-green-100">
+                    Approve
+                  </button>
+                </form>
+                <form action={`/api/competitions/${id}/approve?action=reject`} method="POST">
+                  <input type="hidden" name="reason" value="Rejected by administrator" />
+                  <button type="submit" className="rounded-lg border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700 transition hover:bg-red-100">
+                    Reject
+                  </button>
+                </form>
+              </>
+            )}
             {["DRAFT", "REGISTRATION_OPEN", "IN_PROGRESS", "COMPLETED"].map((status) => (
-              competition.status !== status && (
+              competition.status !== status && competition.status !== "AWAITING_APPROVAL" && (
                 <form key={status} action={`/api/competitions/${id}`} method="POST">
                   <input type="hidden" name="_method" value="PATCH" />
                   <input type="hidden" name="status" value={status} />
@@ -88,7 +113,7 @@ export default async function CompetitionOverviewPage({
         </div>
 
         {/* Quick nav cards */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
           {navItems.map(item => {
             const Icon = item.icon
             return (

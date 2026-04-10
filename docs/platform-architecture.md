@@ -2,8 +2,8 @@
 
 > **Document purpose:** Records all architectural decisions, the target platform design, and the phased implementation plan. Used as the reference for all development work.
 >
-> **Last updated:** March 2026
-> **Status:** Active — Phase 0 complete. Teams (Phase 1), Coaching (Phase 6), and Competitions live.
+> **Last updated:** April 2026
+> **Status:** Active — Phase 0 complete. Teams (Phase 1), Coaching (Phase 6), Competitions, Rankings, and Team Sport Website Pages live.
 
 ---
 
@@ -60,17 +60,17 @@ The existing platform runs on ASP.NET + SQL Server. Core issues:
 | Service | Port | Stack | Status |
 |---|---|---|---|
 | template-service | 4000 | NestJS / TypeScript / Fastify | ✅ Live — two-template system (Bold / Club) |
-| venue-service | 4003 | NestJS / TypeScript / Fastify | ✅ Live |
+| venue-service | 4003 | NestJS / TypeScript / Fastify | ✅ Live — venues, orgs, sponsors, affiliations |
 | people-service | 4004 | NestJS / TypeScript / Fastify | ✅ Live — persons, households, roles, tags, lifecycle |
 | booking-service | 4005 | NestJS / TypeScript / Fastify | ✅ Live — bookings, series, rules, approvals, stats |
 | admin-service | 4006 | NestJS / TypeScript / Fastify | ✅ Live — admin users, RBAC |
 | coaching-service | 4007 | NestJS / TypeScript / Fastify | ✅ Live — coaches, lesson types, lesson sessions |
-| team-service | 4008 | NestJS / TypeScript / Fastify | ✅ Live — teams, rosters, fixtures, availability, charges |
+| team-service | 4008 | NestJS / TypeScript / Fastify | ✅ Live — teams, rosters (roles + photos), fixtures, availability, charges, public API |
 | competition-service | 4009 | NestJS / TypeScript / Fastify | ✅ Live — competitions, divisions, entries, draws, matches, results, standings |
 | membership-service | 4010 | NestJS / TypeScript / Fastify | ✅ Live — schemes, plans, memberships, entitlements, renewals |
-| payment-service | — | NestJS / TypeScript / Fastify | ✅ Live — gateway-agnostic (Stripe live, GoCardless ready) |
-| admin-portal | 3000 | Next.js / React | ✅ Live |
-| customer-portal | — | Next.js / React | ✅ Live — multi-tenant via `/[slug]` |
+| payment-service | 4011 | NestJS / TypeScript / Fastify | ✅ Live — gateway-agnostic (Stripe live, GoCardless ready) |
+| admin-portal | 3005 | Next.js / React | ✅ Live |
+| customer-portal | 3006 | Next.js / React | ✅ Live — multi-tenant via `/[slug]`, teams pages |
 | mobile-app | — | Expo / React Native | ✅ Live |
 
 ### Phase 0 issues (all resolved)
@@ -92,10 +92,20 @@ The existing platform runs on ASP.NET + SQL Server. Core issues:
 - [x] Customer portal extended — coaching multi-step booking wizard
 - [x] Mobile app extended — coaching booking wizard, teams tab with fixtures and availability responses
 - [x] competition-service built — competitions, divisions, entries, draws, matches, results, standings (port 4009)
+- [x] Rankings system built — ELO + Points Table ranking configs, ranking entries, match events, leaderboard reports
+- [x] Team Sport Website Pages — customer portal teams grid, team detail (squad/coaches/fixtures/results), sponsor carousel; venue-service sponsors module; `hasTeams` org flag; `fixturesUrl` + `isPublic` on teams; `role` + `photoUrl` on roster members; public unauthenticated API endpoints
 - [x] Admin portal extended — three competition report pages (overview, entries, results), revenue report enhanced with competition entry fee revenue stream, fee collection report enhanced, Save PDF button on all reports
 - [x] Customer portal extended — competition list, detail, and entry flow
 - [x] Mobile app extended — Competitions tab with live competition list
-- [x] 336 integration tests passing across 9 services; 62 Playwright e2e tests passing
+- [x] 348 integration tests passing across 9 services; 92 Playwright e2e tests passing
+- [x] Create Venue page — full form, POST /venues endpoint, organisationId FK-safe create
+- [x] Edit Resource page — pre-populated form, PATCH /resources/:id
+- [x] Edit Resource Group page — pre-populated form, PATCH /resource-groups/:id
+- [x] Edit Bookable Unit page — pre-populated form with human-readable venue/resource names, PATCH /bookable-units/:id
+- [x] Parent-child unit conflict auto-sync — conflict rows auto-created/cleared in venue.unit_conflicts when parentUnitId set or changed
+- [x] Facilities explorer — ID fields replaced with human-readable names; unit parent shown by name not UUID
+- [x] Availability page — dynamic venue picker (no hardcoded ID); NOW line hydration-safe (client-only render)
+- [x] Support chat widget — admin portal and customer portal; tenant-header auth for read ops, bearer for bookings
 
 ### Current database schemas
 
@@ -115,9 +125,10 @@ venue.add_ons               — product add-ons (persisted)
 venue.availability_configs
 venue.blackout_dates
 venue.resource_groups
-venue.organisations
+venue.organisations         — incl. has_teams flag
 venue.affiliations
 venue.news_posts
+venue.sponsors              — club sponsors (logo, website URL, display order)
 
 -- people schema (was customer)
 people.persons              — core person records (renamed from customers)
@@ -143,11 +154,11 @@ coaching.coach_lesson_types — many-to-many: coach ↔ lesson type
 coaching.lesson_sessions    — individual session records (status, payment, notes, cancellation)
 
 -- team schema
-team.teams
-team.team_members           — roster with shirt number, position, junior/guest, guardian
+team.teams                  — incl. fixtures_url (external link), is_public flag
+team.team_members           — roster with role (player/coach/manager), photo_url, shirt number, position, junior/guest, guardian
 team.fixtures               — matches with opponent, venue, kickoff, lifecycle status
-team.player_availability    — per-fixture availability responses
-team.squad_selections       — published squad (starters + substitutes) per fixture
+team.availability_responses — per-fixture player availability responses
+team.selections             — published squad (starters + substitutes) per fixture
 team.charge_runs            — fee collection runs per fixture
 team.charges                — individual charges per squad member per run
 
@@ -293,13 +304,13 @@ Azure DevOps              — CI/CD pipelines (familiar from .NET)
 | Service | Responsibility | Status |
 |---|---|---|
 | **template-service** | Portal template system (Bold top-nav / Club sidebar-nav) | ✅ Built |
-| **venue-service** | Venues, resources, bookable units, add-on catalogue, availability configs, blackout dates, resource groups, organisations, affiliations | ✅ Built |
+| **venue-service** | Venues, resources, bookable units, add-on catalogue, availability configs, blackout dates, resource groups, organisations (incl. `hasTeams` flag), affiliations, sponsors | ✅ Built |
 | **people-service** | Persons, households, roles, tags, lifecycle history, relationships | ✅ Built |
 | **booking-service** | Bookings, series, add-ons, availability checking, booking rules, approvals, stats, auto-expiry | ✅ Built |
 | **admin-service** | Admin users, RBAC | ✅ Built |
 | **membership-service** | Membership schemes, plans, memberships, entitlement policies, renewal automation | ✅ Built |
 | **coaching-service** | Coaches, lesson types, coach availability, lesson sessions | ✅ Built |
-| **team-service** | Teams, rosters, fixtures, player availability, squad selection, charge runs | ✅ Built |
+| **team-service** | Teams (incl. `fixturesUrl`, `isPublic`), rosters (incl. `role`, `photoUrl`), fixtures, player availability, squad selection, charge runs, public read API for customer portal | ✅ Built |
 | **competition-service** | Competitions, divisions, entries, draw generation, matches, results, standings | ✅ Built |
 | **payment-service** | Gateway-agnostic payment processing — Stripe live, GoCardless ready | ✅ Built |
 | **pricing-service** | Price calculation at booking time — applies pricing rules, surcharges, discounts | Phase 2 — not started |

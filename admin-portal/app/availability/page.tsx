@@ -1,4 +1,4 @@
-import { getDayAvailability } from "@/lib/api"
+import { getDayAvailability, getVenues } from "@/lib/api"
 import { PortalLayout } from "@/components/portal-layout"
 import { AvailabilityBoard } from "@/components/availability-board"
 
@@ -51,12 +51,13 @@ export default async function AvailabilityPage({
   const params = searchParams ? await searchParams : {}
   const selectedDate = params?.date || getTodayDateString()
 
-  const venueId = "11111111-1111-1111-1111-111111111111"
+  const venues = await getVenues()
+  const selectedVenueId = params?.venueId || venues[0]?.id || ""
+  const selectedVenue = venues.find((v: any) => v.id === selectedVenueId) ?? venues[0]
 
-  const availability = await getDayAvailability({
-    venueId,
-    date: selectedDate,
-  })
+  const availability = selectedVenueId
+    ? await getDayAvailability({ venueId: selectedVenueId, date: selectedDate })
+    : { units: [], config: {} }
 
   const units = availability.units || []
   const config = availability.config as any
@@ -102,9 +103,33 @@ export default async function AvailabilityPage({
             <div className="mt-2 text-xl font-semibold text-slate-900">
               {formatDateLabel(selectedDate)}
             </div>
+            {selectedVenue ? (
+              <div className="mt-1 text-sm text-slate-500">{selectedVenue.name}</div>
+            ) : null}
           </div>
 
-          <form method="GET" className="flex items-end gap-3">
+          <form method="GET" className="flex flex-wrap items-end gap-3">
+            {venues.length > 1 ? (
+              <div>
+                <label
+                  htmlFor="venueId"
+                  className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500"
+                >
+                  Venue
+                </label>
+                <select
+                  id="venueId"
+                  name="venueId"
+                  defaultValue={selectedVenueId}
+                  className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none"
+                >
+                  {venues.map((v: any) => (
+                    <option key={v.id} value={v.id}>{v.name}</option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+
             <div>
               <label
                 htmlFor="date"

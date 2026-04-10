@@ -23,7 +23,7 @@ export default async function globalSetup(_config: FullConfig) {
   await page.goto('http://localhost:3000/login')
   await page.locator('#email').fill(email)
   await page.locator('#password').fill(password)
-  await page.getByRole('button', { name: /sign in/i }).click()
+  await page.locator('form').getByRole('button', { name: /sign in/i }).click()
 
   // Wait until we're past the login page
   await page.waitForURL((url) => !url.pathname.startsWith('/login'), {

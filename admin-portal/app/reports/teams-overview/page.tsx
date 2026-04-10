@@ -19,12 +19,15 @@ export default async function TeamsOverviewReportPage() {
     .sort((a, b) => b.outstandingFees - a.outstandingFees)
     .map((t) => ({ label: t.name, value: Math.round(t.outstandingFees), valueFormatted: `£${t.outstandingFees.toFixed(2)}` }))
 
+  const totalCoaches = teams.reduce((s, t) => s + t.coachCount, 0)
+
   const exportColumns = [
     { key: "name", header: "Team" },
     { key: "sport", header: "Sport" },
     { key: "season", header: "Season" },
     { key: "ageGroup", header: "Age Group" },
     { key: "activePlayers", header: "Active Players" },
+    { key: "coachCount", header: "Coaches / Managers" },
     { key: "totalFixtures", header: "Total Fixtures" },
     { key: "upcomingFixtures", header: "Upcoming Fixtures" },
     { key: "outstandingFees", header: "Outstanding Fees (£)" },
@@ -35,10 +38,11 @@ export default async function TeamsOverviewReportPage() {
       <div className="space-y-6">
 
         {/* KPIs */}
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-4">
           {[
             { label: "Total active teams", value: teams.length },
             { label: "Total active players", value: totalPlayers },
+            { label: "Coaches & managers", value: totalCoaches },
             { label: "Upcoming fixtures", value: totalUpcoming },
           ].map((k) => (
             <div key={k.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -79,7 +83,7 @@ export default async function TeamsOverviewReportPage() {
             <table className="min-w-full divide-y divide-slate-100 text-sm">
               <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <tr>
-                  {["Team", "Sport", "Season", "Players", "Fixtures", "Upcoming", "Outstanding Fees"].map((h) => (
+                  {["Team", "Sport", "Season", "Players", "Coaches", "Fixtures", "Upcoming", "Outstanding Fees"].map((h) => (
                     <th key={h} className="px-4 py-3 text-left">{h}</th>
                   ))}
                 </tr>
@@ -91,6 +95,7 @@ export default async function TeamsOverviewReportPage() {
                     <td className="px-4 py-2 text-slate-600 capitalize">{t.sport}</td>
                     <td className="px-4 py-2 text-slate-600">{t.season ?? "—"}</td>
                     <td className="px-4 py-2 text-slate-700">{t.activePlayers}</td>
+                    <td className="px-4 py-2 text-slate-700">{t.coachCount}</td>
                     <td className="px-4 py-2 text-slate-700">{t.totalFixtures}</td>
                     <td className="px-4 py-2 text-slate-700">{t.upcomingFixtures}</td>
                     <td className="px-4 py-2">
@@ -103,7 +108,7 @@ export default async function TeamsOverviewReportPage() {
                   </tr>
                 ))}
                 {teams.length === 0 && (
-                  <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-slate-400">No teams found.</td></tr>
+                  <tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-slate-400">No teams found.</td></tr>
                 )}
               </tbody>
             </table>

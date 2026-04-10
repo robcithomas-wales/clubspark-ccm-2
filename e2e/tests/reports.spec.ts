@@ -190,6 +190,70 @@ test.describe('Reports — competition reports', () => {
   })
 })
 
+test.describe('Reports — team reports', () => {
+  test('teams overview report loads with KPI cards', async ({ page }) => {
+    await page.goto('/reports/teams-overview')
+
+    await expect(page.getByRole('heading', { name: /teams overview/i })).toBeVisible()
+    await expect(page.getByText(/total teams/i).first()).toBeVisible()
+    await expect(page.getByText(/total players/i).first()).toBeVisible()
+  })
+
+  test('teams overview has Export CSV button', async ({ page }) => {
+    await page.goto('/reports/teams-overview')
+
+    await expect(page.getByRole('button', { name: /export csv/i }).first()).toBeVisible()
+  })
+
+  test('squad composition report loads with KPI cards', async ({ page }) => {
+    await page.goto('/reports/squad-composition')
+
+    await expect(page.getByRole('heading', { name: /squad composition/i })).toBeVisible()
+    await expect(page.getByText(/total players/i).first()).toBeVisible()
+    await expect(page.getByText(/coaches/i).first()).toBeVisible()
+  })
+
+  test('team website readiness report loads with KPI cards', async ({ page }) => {
+    await page.goto('/reports/team-website-readiness')
+
+    await expect(page.getByRole('heading', { name: /website readiness/i })).toBeVisible()
+    await expect(page.getByText(/total teams/i).first()).toBeVisible()
+    await expect(page.getByText(/public/i).first()).toBeVisible()
+  })
+
+  test('match results report loads', async ({ page }) => {
+    await page.goto('/reports/match-results')
+
+    await expect(page.getByRole('heading', { name: /match results/i })).toBeVisible()
+  })
+
+  test('player availability report loads', async ({ page }) => {
+    await page.goto('/reports/player-availability')
+
+    await expect(page.getByRole('heading', { name: /player availability/i })).toBeVisible()
+  })
+
+  test('player participation report loads', async ({ page }) => {
+    await page.goto('/reports/player-participation')
+
+    await expect(page.getByRole('heading', { name: /player participation/i })).toBeVisible()
+  })
+
+  test('fixtures summary report loads', async ({ page }) => {
+    await page.goto('/reports/fixtures-summary')
+
+    await expect(page.getByRole('heading', { name: /fixtures summary/i })).toBeVisible()
+  })
+})
+
+test.describe('Reports — rankings', () => {
+  test('rankings leaderboard report loads with KPI cards', async ({ page }) => {
+    await page.goto('/reports/rankings-leaderboard')
+
+    await expect(page.getByRole('heading', { name: /rankings/i })).toBeVisible()
+  })
+})
+
 test.describe('Reports — print / PDF', () => {
   test('bookings report has a Save PDF button', async ({ page }) => {
     await page.goto('/reports/bookings')

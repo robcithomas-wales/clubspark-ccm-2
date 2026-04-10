@@ -166,7 +166,15 @@ export default async function ResourceDetailPage({
           >
             Back to resources
           </Link>
-          <DeleteResourceButton id={resource.id} name={resource.name} />
+          <div className="flex items-center gap-3">
+            <Link
+              href={`/resources/${resource.id}/edit`}
+              className="inline-flex h-11 items-center justify-center rounded-xl bg-[#1857E0] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1445c0]"
+            >
+              Edit resource
+            </Link>
+            <DeleteResourceButton id={resource.id} name={resource.name} />
+          </div>
         </div>
       </div>
     </PortalLayout>

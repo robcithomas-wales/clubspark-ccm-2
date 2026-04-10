@@ -45,6 +45,7 @@ export function SiteNav() {
     { label: "Events", href: `/${slug}/events` },
     { label: "Competitions", href: `/${slug}/competitions` },
     { label: "Coaching", href: `/${slug}/coaching` },
+    ...(org.hasTeams ? [{ label: "Teams", href: `/${slug}/teams` }] : []),
   ]
 
   const isActive = (href: string) => pathname === href

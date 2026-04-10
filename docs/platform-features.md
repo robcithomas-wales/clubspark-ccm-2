@@ -1,6 +1,6 @@
 # Club & Coach Platform — Feature Overview
 
-> **Version:** Phase 0 complete (March 2026) — Competitions module added
+> **Version:** Phase 0 complete (April 2026) — Team Sport Website Pages, Sponsors, and Rankings added
 > **Audience:** Internal — product, engineering, commercial teams
 
 ---
@@ -38,8 +38,9 @@ Manages the physical infrastructure of a venue.
 - **Availability Configs** — define opening hours, slot intervals, and booking durations per venue, resource group, or individual resource
 - **Blackout Dates** — block specific dates or date ranges when a venue or resource is unavailable
 - **Booking Rules** — access and pricing rules governing who can book and at what price (supports membership-type and role-based rules)
-- **Organisations** — tenant identity, branding (logo, primary colour), portal slug, and public description
+- **Organisations** — tenant identity, branding (logo, primary colour), portal slug, public description, and `hasTeams` flag to enable team sport website pages
 - **Affiliations** — organisation-level sport affiliation records
+- **Sponsors** — club sponsor records (logo, website URL, display order); shown in the sponsor carousel on team pages; full CRUD behind auth plus a public read endpoint for the customer portal
 
 ---
 
@@ -101,14 +102,15 @@ Manages the coaching operation end-to-end.
 ### 6. Team Service (port 4008)
 Full team sports management for clubs with competitive fixtures.
 
-- **Teams** — create teams with sport, season, age group, gender, and fee schedule (default, junior, substitute match fees)
-- **Roster Management** — add and edit squad members; supports shirt number, position, junior/guest flags, and guardian details; soft-delete preserves history
+- **Teams** — create teams with sport, season, age group, gender, and fee schedule (default, junior, substitute match fees); `fixturesUrl` for external fixture list link (FA Full-Time, ECB Play-Cricket, etc.); `isPublic` flag controls customer portal visibility
+- **Roster Management** — add and edit squad members with `role` (player / coach / manager), `photoUrl`, shirt number, position, junior/guest flags, and guardian details; soft-delete preserves history
 - **Person Linking** — roster members can be linked to person records in the People service
 - **Fixtures** — schedule matches with opponent, kickoff time, venue, home/away, match type, and notes; lifecycle statuses: draft → scheduled → squad selected → fees requested → completed / cancelled
 - **Fixture Cancellation** — cancel fixtures with a single action
 - **Availability** — players respond to fixture availability (available / maybe / unavailable); managers can bulk-request responses from all active squad members
 - **Squad Selection** — set and publish the squad for a fixture (starters, substitutes, non-playing)
 - **Charge Runs** — initiate fee collection against the selected squad; automatically applies the team's senior/junior/substitute fee schedule; individual charges can be waived or marked as manually paid
+- **Public API** — unauthenticated endpoints for the customer portal: list public teams, team detail with roster (players and coaches separated) and upcoming fixtures
 
 ---
 
@@ -130,6 +132,7 @@ Full competition and league management across all sports.
 - **Matches** — fixture records per draw: home/away entries, scheduled time, venue, round, match number
 - **Results** — score submission, verification, and dispute workflow: `SUBMITTED → VERIFIED / DISPUTED`; auto-triggers standings recalculation on verify
 - **Standings** — automatic standings recalculation on result verification: wins, losses, draws, points, goal difference with configurable points-per-win rule
+- **Rankings** — configurable ranking system per tenant; supports ELO (point change per match outcome) and Points Table (cumulative wins/losses/draws); ranking entries track current and peak rank, total points, and match record; match events log each result's point change; leaderboard endpoint returns ranked list ordered by points
 
 ---
 
@@ -156,20 +159,27 @@ The admin portal is the primary management interface for club/venue staff. It us
 - Recent bookings table and membership snapshot
 
 ### Facilities
-- Unified view to browse and jump to venues, resources, and bookable units in one place
+- **Facilities Explorer** — unified hierarchical view of all venues → resources → bookable units; expand/collapse per venue and resource; search filters the tree in real time; quick-links to View, Add Resource, Add Unit, Add Venue from the explorer
+- Bookable unit cards in the explorer show unit type badge, capacity, sort order, and parent unit name (resolved from the parent's name, not raw UUID)
 
 ### Venues
-- Create and edit venues with full address and settings
+- **Create Venue** — full creation form with name (required), city, country (dropdown), and timezone (dropdown); submits to venue-service and redirects to the new venue's detail page
+- View and edit venue details
 - Manage resources within each venue
-- Configure bookable units with pricing, durations, and advance booking limits
 
 ### Resources & Bookable Units
-- Manage individual resources and their bookable units
+- **Edit Resource** — pre-populated form with all resource attributes: name, type, venue (read-only), resource group (reactive to venue), sport, surface, colour, booking purposes, description, and isIndoor/hasLighting/isActive toggles
+- **Edit Resource Group** — pre-populated form with name, venue (read-only), sport, sort order, colour, and description
+- **Edit Bookable Unit** — pre-populated form with name, unit type, capacity, sort order, parent unit (dropdown of other units), and isActive/isOptionalExtra toggles; venue and resource shown as human-readable names (read-only)
 - Resource groups for shared configuration
+- Parent-child unit conflicts — when a bookable unit is assigned a `parentUnitId`, a conflict row is automatically created/synced in `venue.unit_conflicts` so that booking a half automatically blocks the full unit and vice versa
 
 ### Availability
-- Visual grid of slot availability across all active bookable units
-- Day/week view for real-time slot checking
+- Visual grid (availability board) of slot availability across all active bookable units for a selected date
+- Venue picker dropdown (shown when multiple venues exist); defaults to first venue automatically — no hardcoded IDs
+- "NOW" live indicator line showing current time position across the board; hydration-safe (renders client-side only after mount)
+- KPI cards: bookable unit count, available slots, booked slots with totals
+- Click a booked slot to navigate to that booking's detail page; click a free slot to navigate to the create-booking flow
 
 ### Availability Configs
 - Opening hours configuration per venue, resource group, or resource
@@ -248,8 +258,17 @@ The admin portal is the primary management interface for club/venue staff. It us
 | Competition Overview | Total competitions, open for entry, in progress, entry count, entry fee revenue, status and sport breakdown, entries per competition, competitions timeline |
 | Competition Entries | Total entries, confirmed, pending, fees collected vs outstanding; filter by competition and status; entries by status and per competition |
 | Competition Results | Total matches, completed, pending, disputed, completion rate; filter by competition and status; match status and per-round breakdown |
+| Teams Overview | Team count, total players, total coaches & managers, fixtures volume; coachCount column in table |
+| Squad Composition | Total players, coaches & managers, juniors, guests per team; profile completion bars (position/shirt/photo ratios); HBar charts for players per team and profile completion |
+| Team Website Readiness | Teams public/private, fixtures URL set, fully-ready count; photo completion progress bar per team; clickable fixtures URL |
+| Rankings Leaderboard | Ranked player/team list ordered by points for the configured ranking system (ELO or Points Table); current rank, peak rank, total points, match record |
 
 All reports include date-range filtering and CSV export. All reports include a **Save PDF** button (browser print, captures SVG charts).
+
+### Support Chat
+- AI-powered support chat widget in the admin portal (bottom-right corner on all pages)
+- Uses Claude claude-sonnet-4-6 with venue-aware tool calls: list venues, list resources, search availability, make booking
+- Tenant-scoped: reads venue/resource data using the admin's tenant context
 
 ### Settings
 - **Organisation** — name, logo, branding colour, website slug, public-facing description
@@ -272,6 +291,7 @@ The customer portal is a white-label Next.js web app served under the organisati
 - **News** — news feed with individual article pages
 - **Events** — upcoming events listing
 - **Competitions** — live competition list with sport/format badges, status, entry count, and entry fee; competition detail page with divisions, confirmed entry count, and entry fee; entry form to register for a competition
+- **Teams** *(enabled per org via `hasTeams` flag)* — sport-grouped team grid showing member count and external fixtures shortcut; **Team Detail** page with coaching staff section, squad cards (photo, shirt number, position), upcoming fixtures list, recent results, external fixtures CTA button, and sponsor carousel
 
 ### Self-Service Account
 - **Login / Register** — email and password authentication via Supabase
@@ -281,6 +301,12 @@ The customer portal is a white-label Next.js web app served under the organisati
 ### Booking
 - **Book** — browse available resources, select date and time slot, confirm and pay
 - Resources shown are filtered to the venue's configured availability and pricing
+
+### Support Chat
+- AI-powered support chat widget (bottom-right corner)
+- Handles natural-language booking requests: "book a court for Sunday at 1pm"
+- Tool calls: list venues, list resources, search availability; `make_booking` requires customer authentication
+- Read-only venue/availability calls use tenant header auth (no customer JWT required)
 
 ### Coaching
 - **Multi-step booking wizard** — coaches → lesson type → date (14-day calendar) → available time slots → confirmation
@@ -355,7 +381,7 @@ The platform is fully multi-tenant from day one:
 
 | Suite | Count | Status |
 |---|---|---|
-| venue-service integration | 61 | Passing |
+| venue-service integration | 73 | Passing |
 | booking-service integration | 61 | Passing |
 | people-service integration | 35 | Passing |
 | membership-service integration | 50 | Passing |
@@ -363,12 +389,12 @@ The platform is fully multi-tenant from day one:
 | team-service integration | 38 | Passing |
 | admin-service integration | 18 | Passing |
 | competition-service integration | 28 | Passing |
-| **Total integration** | **336** | **All passing** |
-| Playwright e2e (admin portal) | 62 | All passing |
-| **Grand total** | **398** | |
+| **Total integration** | **348** | **All passing** |
+| Playwright e2e (admin portal) | 92 | All passing |
+| **Grand total** | **440** | |
 
 All integration tests run against a real PostgreSQL database and use `describe.runIf(DB_AVAILABLE)` to gracefully skip when the database is unreachable.
 
 ---
 
-*Document updated March 2026. Reflects Phase 0 complete feature set plus Competitions module.*
+*Document updated April 2026. Reflects Phase 0 complete feature set plus Competitions, Rankings, and Team Sport Website Pages (Sponsors, public Teams/Squad pages).*

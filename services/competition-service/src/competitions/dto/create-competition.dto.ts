@@ -12,6 +12,7 @@ export class CreateCompetitionDto {
   @IsOptional() @IsEnum(EntryType) entryType?: EntryType
   @IsOptional() @IsDateString() registrationOpensAt?: string
   @IsOptional() @IsDateString() registrationClosesAt?: string
+  @IsOptional() @IsDateString() lateEntryClosesAt?: string
   @IsOptional() @IsDateString() startDate?: string
   @IsOptional() @IsDateString() endDate?: string
   @IsOptional() @IsInt() @Min(2) maxEntries?: number

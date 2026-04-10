@@ -533,14 +533,12 @@ export function FacilitiesExplorer({
                                           ) : null}
                                         </div>
 
-                                        <div className="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                                          <div className="truncate">Unit id: {unit.id}</div>
-                                          {unit.parentUnitId ? (
-                                            <div className="mt-1 truncate">
-                                              Parent: {unit.parentUnitId}
-                                            </div>
-                                          ) : null}
-                                        </div>
+                                        {unit.parentUnitId ? (
+                                          <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                                            <span className="font-medium text-slate-600">Parent: </span>
+                                            {units.find((u) => u.id === unit.parentUnitId)?.name ?? unit.parentUnitId}
+                                          </div>
+                                        ) : null}
 
                                         <div className="mt-4 flex gap-2">
                                           <ActionButton onClick={() => handleViewUnit(unit.id)}>

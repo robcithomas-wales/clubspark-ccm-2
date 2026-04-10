@@ -1,12 +1,15 @@
+import { View } from 'react-native'
 import { Tabs } from 'expo-router'
 import { useBranding } from '../../contexts/BrandingContext'
 import { House, CalendarDays, Star, GraduationCap, User, Shield, Trophy } from 'lucide-react-native'
+import { SupportChatWidget } from '../../components/SupportChatWidget'
 
 export default function TabLayout() {
   const { branding } = useBranding()
   const brandColour = branding?.primaryColour ?? '#1857E0'
 
   return (
+    <View style={{ flex: 1 }}>
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -75,5 +78,7 @@ export default function TabLayout() {
         }}
       />
     </Tabs>
+    <SupportChatWidget />
+    </View>
   )
 }

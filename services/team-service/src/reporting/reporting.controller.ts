@@ -42,4 +42,20 @@ export class ReportingController {
   ) {
     return this.service.getPlayerStats(req.tenantContext.tenantId, teamId)
   }
+
+  @Get('website-readiness')
+  @ApiOperation({ summary: 'Team website readiness: public status, fixtures URL, photo completion, portal URL' })
+  websiteReadiness(
+    @Request() req: FastifyRequest & { tenantContext: { tenantId: string } },
+  ) {
+    return this.service.getWebsiteReadiness(req.tenantContext.tenantId)
+  }
+
+  @Get('squad-composition')
+  @ApiOperation({ summary: 'Squad composition: role split, profile completeness per team' })
+  squadComposition(
+    @Request() req: FastifyRequest & { tenantContext: { tenantId: string } },
+  ) {
+    return this.service.getSquadComposition(req.tenantContext.tenantId)
+  }
 }

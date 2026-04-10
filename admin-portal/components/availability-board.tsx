@@ -109,9 +109,10 @@ export function AvailabilityBoard({
     return Array.from(seen).sort()
   }, [units])
 
-  const [now, setNow] = React.useState<Date>(new Date())
+  const [now, setNow] = React.useState<Date | null>(null)
 
   React.useEffect(() => {
+    setNow(new Date())
     const interval = window.setInterval(() => setNow(new Date()), 60_000)
     return () => window.clearInterval(interval)
   }, [])
@@ -130,9 +131,10 @@ export function AvailabilityBoard({
   // "now" line position
   const firstSlotMs = slotKeys.length > 0 ? new Date(slotKeys[0]).getTime() : 0
   const lastSlotMs  = slotKeys.length > 0 ? new Date(slotKeys[slotKeys.length - 1]).getTime() : 0
-  const nowMs = now.getTime()
+  const nowMs = now?.getTime() ?? 0
 
   const showNowLine =
+    now !== null &&
     isSameUtcDay(now, selectedDate) &&
     slotKeys.length > 0 &&
     nowMs >= firstSlotMs &&

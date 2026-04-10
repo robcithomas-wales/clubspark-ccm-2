@@ -32,6 +32,7 @@ import {
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { PrintButton } from "@/components/reports/print-button"
+import { SupportChatWidget } from "@/components/support-chat-widget"
 
 const navSections = [
   {
@@ -103,7 +104,9 @@ const navSections = [
         children: [
           { label: "All Competitions", href: "/competitions" },
           { label: "New Competition", href: "/competitions/new" },
-          { label: "Rankings", href: "/rankings" },
+          { label: "Ratings", href: "/rankings" },
+          { label: "Work Cards", href: "/work-cards" },
+          { label: "Discipline", href: "/discipline" },
         ],
       },
     ],
@@ -149,10 +152,12 @@ const navSections = [
           { label: "Player Availability", href: "/reports/player-availability" },
           { label: "Player Participation", href: "/reports/player-participation" },
           { label: "Fixtures Summary", href: "/reports/fixtures-summary" },
+          { label: "Team Website Readiness", href: "/reports/team-website-readiness" },
+          { label: "Squad Composition", href: "/reports/squad-composition" },
           { label: "Competition Overview", href: "/reports/competition-overview" },
           { label: "Competition Entries", href: "/reports/competition-entries" },
           { label: "Competition Results", href: "/reports/competition-results" },
-          { label: "Rankings Leaderboard", href: "/reports/rankings-leaderboard" },
+          { label: "Ratings Leaderboard", href: "/reports/rankings-leaderboard" },
         ],
       },
     ],
@@ -438,6 +443,8 @@ export function PortalLayout({
             </div>
           </div>
         </header>
+
+        <SupportChatWidget />
 
         <div className="flex-1 px-5 py-4 md:px-8 md:py-5">
           <div className="mx-auto max-w-7xl">

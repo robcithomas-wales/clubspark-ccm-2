@@ -36,6 +36,24 @@ export async function getVenues() {
   return (json.data ?? json) as any[]
 }
 
+export async function createVenue(input: {
+  name: string
+  city?: string
+  country?: string
+  timezone?: string
+}) {
+  const res = await fetch(`${FACILITY_SERVICE}/venues`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(input),
+  })
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`Failed to create venue: ${res.status} ${err}`)
+  }
+  return res.json()
+}
+
 export async function getBookableUnits() {
   const res = await fetch(`${FACILITY_SERVICE}/bookable-units`, {
     headers: await getAuthHeaders(),
@@ -1796,6 +1814,7 @@ export type TeamOverviewRow = {
   season?: string
   ageGroup?: string
   activePlayers: number
+  coachCount: number
   totalFixtures: number
   upcomingFixtures: number
   outstandingFees: number
@@ -1909,6 +1928,59 @@ export async function getTeamReportCharges(season?: string): Promise<TeamChargeR
 export async function getTeamReportPlayerStats(teamId?: string): Promise<PlayerStatsTeam[]> {
   const qs = teamId ? `?teamId=${encodeURIComponent(teamId)}` : ""
   const res = await fetch(`${TEAM_SERVICE}/reporting/player-stats${qs}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data ?? []
+}
+
+export type TeamWebsiteReadinessRow = {
+  id: string
+  name: string
+  sport: string
+  season?: string
+  ageGroup?: string
+  isPublic: boolean
+  fixturesUrl: string | null
+  totalMembers: number
+  membersWithPhoto: number
+  photoCompletionPct: number | null
+  hasFixtures: boolean
+  portalPath: string
+}
+
+export type TeamSquadCompositionRow = {
+  id: string
+  name: string
+  sport: string
+  season?: string
+  ageGroup?: string
+  playerCount: number
+  coachCount: number
+  managerCount: number
+  totalMembers: number
+  juniorCount: number
+  guestCount: number
+  withPosition: number
+  withShirtNumber: number
+  withPhoto: number
+  profileCompletionPct: number | null
+}
+
+export async function getTeamReportWebsiteReadiness(): Promise<TeamWebsiteReadinessRow[]> {
+  const res = await fetch(`${TEAM_SERVICE}/reporting/website-readiness`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data ?? []
+}
+
+export async function getTeamReportSquadComposition(): Promise<TeamSquadCompositionRow[]> {
+  const res = await fetch(`${TEAM_SERVICE}/reporting/squad-composition`, {
     headers: await getAuthHeaders(),
     cache: "no-store",
   })

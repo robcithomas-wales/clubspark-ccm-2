@@ -1,11 +1,15 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common'
 import { EntriesRepository } from './entries.repository.js'
+import { PrismaService } from '../prisma/prisma.service.js'
 import type { CreateEntryDto } from './dto/create-entry.dto.js'
 import type { UpdateEntryDto } from './dto/update-entry.dto.js'
 
 @Injectable()
 export class EntriesService {
-  constructor(private readonly repo: EntriesRepository) {}
+  constructor(
+    private readonly repo: EntriesRepository,
+    private readonly prisma: PrismaService,
+  ) {}
 
   async list(competitionId: string, divisionId?: string) {
     return { data: await this.repo.list(competitionId, divisionId) }
@@ -13,7 +17,18 @@ export class EntriesService {
 
   async create(competitionId: string, dto: CreateEntryDto) {
     if (!dto.personId && !dto.teamId) throw new BadRequestException('Either personId or teamId is required')
-    const entry = await this.repo.create(competitionId, dto)
+
+    // Determine if this is a late entry (after registrationClosesAt but within lateEntryClosesAt)
+    const competition = await this.prisma.competition.findFirst({ where: { id: competitionId } })
+    const now = new Date()
+    const isLateEntry = Boolean(
+      competition?.registrationClosesAt &&
+      now > competition.registrationClosesAt &&
+      competition.lateEntryClosesAt &&
+      now <= competition.lateEntryClosesAt,
+    )
+
+    const entry = await this.repo.create(competitionId, { ...dto, isLateEntry } as any)
     return { data: entry }
   }
 

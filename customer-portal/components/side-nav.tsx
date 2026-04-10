@@ -5,7 +5,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
   Home, Calendar, CreditCard, Newspaper, Trophy, GraduationCap,
-  User, LogOut, Menu, X, ChevronRight,
+  User, LogOut, Menu, X, ChevronRight, Users,
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useOrg } from "@/lib/org-context"
@@ -44,6 +44,7 @@ export function SideNav() {
     { label: "Events",        href: `/${slug}/events`,        icon: Trophy },
     { label: "Competitions", href: `/${slug}/competitions`, icon: Trophy },
     { label: "Coaching",     href: `/${slug}/coaching`,     icon: GraduationCap },
+    ...(org.hasTeams ? [{ label: "Teams", href: `/${slug}/teams`, icon: Users }] : []),
   ]
 
   const isActive = (href: string) => pathname === href

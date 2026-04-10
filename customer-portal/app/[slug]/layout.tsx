@@ -4,6 +4,7 @@ import { SiteNav } from "@/components/site-nav"
 import { SiteFooter } from "@/components/site-footer"
 import { SideNav } from "@/components/side-nav"
 import { fetchOrgBySlug } from "@/lib/api"
+import { SupportChatWidget } from "@/components/support-chat-widget"
 
 // Google Fonts URL for a given font name
 function googleFontUrl(font: string | null): string | null {
@@ -48,6 +49,8 @@ export default async function SlugLayout({
         body { font-family: var(--font-body); }
         h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); }
       `}</style>
+
+      <SupportChatWidget />
 
       {org.portalTemplate === "club" ? (
         /* ── Club template: fixed sidebar + scrollable content area ── */

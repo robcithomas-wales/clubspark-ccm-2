@@ -10,7 +10,12 @@ export class ReportingService {
     const teams = await this.prisma.team.findMany({
       where: { tenantId, isActive: true },
       include: {
-        _count: { select: { members: true, fixtures: true } },
+        _count: {
+          select: {
+            members: { where: { isActive: true } },
+            fixtures: true,
+          },
+        },
       },
     })
 
@@ -32,13 +37,23 @@ export class ReportingService {
           }),
         ])
 
+        const [playerCount, coachCount] = await Promise.all([
+          this.prisma.teamMember.count({
+            where: { teamId: team.id, isActive: true, role: 'player' },
+          }),
+          this.prisma.teamMember.count({
+            where: { teamId: team.id, isActive: true, role: { in: ['coach', 'manager'] } },
+          }),
+        ])
+
         return {
           id: team.id,
           name: team.name,
           sport: team.sport,
           season: team.season,
           ageGroup: team.ageGroup,
-          activePlayers: team._count.members,
+          activePlayers: playerCount,
+          coachCount,
           totalFixtures: team._count.fixtures,
           upcomingFixtures: upcomingCount,
           outstandingFees: Number(outstandingAgg._sum.amount ?? 0),
@@ -155,6 +170,105 @@ export class ReportingService {
     return { data: result }
   }
 
+  // ── Website readiness per team ────────────────────────────────────────────
+  async getWebsiteReadiness(tenantId: string) {
+    const teams = await this.prisma.team.findMany({
+      where: { tenantId, isActive: true },
+      include: {
+        members: {
+          where: { isActive: true },
+          select: { id: true, photoUrl: true, displayName: true, position: true, role: true },
+        },
+        fixtures: {
+          where: { status: { notIn: ['cancelled'] } },
+          select: { id: true },
+          take: 1,
+        },
+      },
+    })
+
+    const result = teams.map((team) => {
+      const totalMembers = team.members.length
+      const membersWithPhoto = team.members.filter((m) => m.photoUrl).length
+      const photoCompletionPct = totalMembers > 0 ? Math.round((membersWithPhoto / totalMembers) * 100) : null
+
+      return {
+        id: team.id,
+        name: team.name,
+        sport: team.sport,
+        season: team.season,
+        ageGroup: team.ageGroup,
+        isPublic: team.isPublic,
+        fixturesUrl: team.fixturesUrl ?? null,
+        totalMembers,
+        membersWithPhoto,
+        photoCompletionPct,
+        hasFixtures: team.fixtures.length > 0,
+        portalPath: `/teams/${team.id}`,
+      }
+    })
+
+    return { data: result }
+  }
+
+  // ── Squad composition per team ────────────────────────────────────────────
+  async getSquadComposition(tenantId: string) {
+    const teams = await this.prisma.team.findMany({
+      where: { tenantId, isActive: true },
+      include: {
+        members: {
+          where: { isActive: true },
+          select: {
+            id: true,
+            displayName: true,
+            role: true,
+            position: true,
+            shirtNumber: true,
+            photoUrl: true,
+            isJunior: true,
+            isGuest: true,
+          },
+        },
+      },
+    })
+
+    const result = teams.map((team) => {
+      const players = team.members.filter((m) => m.role === 'player')
+      const coaches = team.members.filter((m) => m.role === 'coach')
+      const managers = team.members.filter((m) => m.role === 'manager')
+
+      const withPosition = players.filter((m) => m.position).length
+      const withShirtNumber = players.filter((m) => m.shirtNumber !== null).length
+      const withPhoto = team.members.filter((m) => m.photoUrl).length
+      const juniorCount = players.filter((m) => m.isJunior).length
+      const guestCount = players.filter((m) => m.isGuest).length
+
+      const profileScore = players.length > 0
+        ? Math.round(((withPosition + withShirtNumber) / (players.length * 2)) * 100)
+        : null
+
+      return {
+        id: team.id,
+        name: team.name,
+        sport: team.sport,
+        season: team.season,
+        ageGroup: team.ageGroup,
+        playerCount: players.length,
+        coachCount: coaches.length,
+        managerCount: managers.length,
+        totalMembers: team.members.length,
+        juniorCount,
+        guestCount,
+        withPosition,
+        withShirtNumber,
+        withPhoto,
+        profileCompletionPct: profileScore,
+      }
+    })
+
+    return { data: result }
+  }
+
   // ── Player stats: availability + selection per team ────────────────────────
   async getPlayerStats(tenantId: string, teamId?: string) {
     const teamFilter = teamId
@@ -165,10 +279,11 @@ export class ReportingService {
       where: teamFilter,
       include: {
         members: {
-          where: { isActive: true },
+          where: { isActive: true, role: 'player' },
           select: {
             id: true,
             displayName: true,
+            role: true,
             position: true,
             shirtNumber: true,
             isJunior: true,

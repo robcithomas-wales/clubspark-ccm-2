@@ -1,5 +1,6 @@
 import Link from "next/link"
-import { getBookableUnits } from "@/lib/api"
+import { getBookableUnits, getResources } from "@/lib/api"
+import { notFound } from "next/navigation"
 import { PortalLayout } from "@/components/portal-layout"
 
 export default async function UnitDetailPage({
@@ -8,21 +9,10 @@ export default async function UnitDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const units = await getBookableUnits()
+  const [units, resources] = await Promise.all([getBookableUnits(), getResources()])
   const unit = units.find((item: any) => item.id === id)
 
-  if (!unit) {
-    return (
-      <PortalLayout
-        title="Bookable Unit"
-        description="Bookable unit details"
-      >
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-6 text-sm font-medium text-rose-700">
-          Bookable unit not found.
-        </div>
-      </PortalLayout>
-    )
-  }
+  if (!unit) notFound()
 
   return (
     <PortalLayout
@@ -70,19 +60,21 @@ export default async function UnitDetailPage({
 
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                Resource id
+                Resource
               </div>
-              <div className="mt-2 break-all text-sm text-slate-900">
-                {unit.resourceId || "Unknown"}
+              <div className="mt-2 text-sm text-slate-900">
+                {resources.find((r: any) => r.id === unit.resourceId)?.name ?? unit.resourceId ?? "Unknown"}
               </div>
             </div>
 
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                Parent unit id
+                Parent unit
               </div>
-              <div className="mt-2 break-all text-sm text-slate-900">
-                {unit.parentUnitId || "None"}
+              <div className="mt-2 text-sm text-slate-900">
+                {unit.parentUnitId
+                  ? (units.find((u: any) => u.id === unit.parentUnitId)?.name ?? unit.parentUnitId)
+                  : "None"}
               </div>
             </div>
 
@@ -90,19 +82,25 @@ export default async function UnitDetailPage({
               <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
                 Unit id
               </div>
-              <div className="mt-2 break-all text-sm text-slate-900">
+              <div className="mt-2 break-all text-sm font-mono text-slate-400">
                 {unit.id}
               </div>
             </div>
           </div>
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex items-center justify-between">
           <Link
             href="/facilities"
-            className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            className="inline-flex h-11 items-center justify-center rounded-xl border border-[#1857E0] bg-white px-5 text-sm font-medium text-[#1857E0] transition hover:bg-blue-50"
           >
             Back to facilities
+          </Link>
+          <Link
+            href={`/bookable-units/${unit.id}/edit`}
+            className="inline-flex h-11 items-center justify-center rounded-xl bg-[#1857E0] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1445c0]"
+          >
+            Edit unit
           </Link>
         </div>
       </div>

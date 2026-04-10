@@ -42,6 +42,7 @@ import {
   getOrganisation,
   getResources,
   getTeams,
+  getTeamReportOverview,
   getVenues,
   getAllCompetitionsForReport,
   getRankingConfigs,
@@ -140,6 +141,7 @@ export default async function DashboardPage() {
     availabilityConfigsResult,
     competitionsResult,
     rankingConfigsResult,
+    teamOverviewResult,
   ] = await Promise.allSettled([
     getVenues(),
     getResources(),
@@ -162,6 +164,7 @@ export default async function DashboardPage() {
     getAvailabilityConfigs({ scopeType: "venue" }),
     getAllCompetitionsForReport(),
     getRankingConfigs(),
+    getTeamReportOverview(),
   ])
 
   const venuesResponse = venuesResult.status === "fulfilled" ? venuesResult.value : null
@@ -187,6 +190,7 @@ export default async function DashboardPage() {
     : []
   const rawCompetitions: any[] = competitionsResult.status === "fulfilled" ? competitionsResult.value : []
   const rankingConfigs: any[] = rankingConfigsResult.status === "fulfilled" ? (rankingConfigsResult.value as any[] ?? []) : []
+  const teamOverview: any[] = teamOverviewResult.status === "fulfilled" ? (teamOverviewResult.value as any[] ?? []) : []
 
   function extractData(r: any): any[] {
     if (!r) return []
@@ -214,6 +218,9 @@ export default async function DashboardPage() {
   const activeAddOns = addOns.filter((a: any) => a.status === "active")
   const activeSeries = series.filter((s: any) => s.status === "active")
   const activeTeams = teams.filter((t: any) => t.isActive !== false)
+  const totalSquadPlayers = teamOverview.reduce((s, t) => s + (t.activePlayers ?? 0), 0)
+  const totalSquadCoaches = teamOverview.reduce((s, t) => s + (t.coachCount ?? 0), 0)
+  const publicTeams = teams.filter((t: any) => t.isPublic !== false).length
 
   const activeCompetitions = rawCompetitions.filter((c: any) => c.status === "IN_PROGRESS" || c.status === "REGISTRATION_OPEN")
   const openForEntry = rawCompetitions.filter((c: any) => c.status === "REGISTRATION_OPEN")
@@ -293,13 +300,13 @@ export default async function DashboardPage() {
       title: "Teams",
       href: "/teams",
       icon: Shield,
-      summary: `${activeTeams.length} active teams with rosters, fixtures, availability and fee collection`,
+      summary: `${activeTeams.length} active teams · ${totalSquadPlayers} players · ${totalSquadCoaches} coaches · public portal pages with squad, fixtures and sponsors`,
     },
     {
-      title: "Competitions & Rankings",
+      title: "Competitions & Ratings",
       href: "/reports/competition-overview",
       icon: Trophy,
-      summary: `${rawCompetitions.length} competitions · ${activeCompetitions.length} active · ${rankingConfigs.length} ranking configs · ELO and Points Table`,
+      summary: `${rawCompetitions.length} competitions · ${activeCompetitions.length} active · ${rankingConfigs.length} rating configs · ELO and Points Table`,
     },
     {
       title: "Coaching",
@@ -323,13 +330,13 @@ export default async function DashboardPage() {
       title: "Reports",
       href: "/reports/bookings",
       icon: BarChart3,
-      summary: `Booking, revenue, utilisation, membership, coaching, teams and competition reporting`,
+      summary: `23 reports across bookings, revenue, utilisation, membership, coaching, teams, squad composition, website readiness and competition analytics`,
     },
     {
       title: "Customer Portal",
       href: "/website/design",
       icon: Globe,
-      summary: `Multi-tenant white-label portal with booking, account and membership self-service`,
+      summary: `Multi-tenant white-label portal with booking, account, membership self-service and public team pages with squad, fixtures and sponsors`,
     },
     {
       title: "Mobile App",
@@ -353,14 +360,16 @@ export default async function DashboardPage() {
     "Pending approval workflow with admin sign-off before booking confirmation",
     "People platform with household, role, tag and lifecycle tracking",
     "Membership schemes, plans, entitlement policies and live member records with renewal tracking",
-    "Team management — rosters, fixtures, player availability, squad selection and fee charge runs",
+    "Team management — rosters with player/coach/manager roles, fixtures, player availability, squad selection and fee charge runs",
+    "Public team pages on the customer portal — squad grid, upcoming fixtures, recent results and sponsor carousel per team",
     "Competition management — competitions, divisions, entries, automated draw generation, match results, standings and reporting",
-    "Rankings engine — ELO rating system for individual sports and Points Table for team sports, updating automatically from verified match results",
+    "Ratings engine — ELO rating system for individual sports and Points Table for team sports, updating automatically from verified match results",
     "Coaching service — coach profiles, lesson types and session scheduling",
     "Add-ons for equipment hire, ancillary facilities, access services and products",
     "Gateway-agnostic payment service — Stripe implemented, GoCardless ready, idempotent by design",
-    "Multi-tenant admin portal, white-label customer portal and branded Expo mobile app",
-    "Reporting suite — bookings, revenue, utilisation, membership, coaching, teams and competition analytics with PDF export",
+    "Org-level sponsor management with public sponsor carousel on team portal pages",
+    "Multi-tenant admin portal, white-label customer portal with public team pages and branded Expo mobile app",
+    "Reporting suite — 23 reports covering bookings, revenue, utilisation, membership, coaching, teams, squad composition, team website readiness and competition analytics with PDF and CSV export",
     "Role-based admin access control across all portal functions",
     "Microservice architecture ready to scale to production on Azure",
     "411-test automated regression suite — 349 service integration tests across 8 microservices and 62 Playwright e2e tests covering end-to-end user journeys, all running against a real database",
@@ -409,7 +418,7 @@ export default async function DashboardPage() {
           <StatCard
             title="Teams"
             value={activeTeams.length}
-            description={`${series.length} recurring series across all sport types.`}
+            description={`${totalSquadPlayers} players · ${totalSquadCoaches} coaches & managers · ${publicTeams} public on portal.`}
             icon={Shield}
             accent="#7c3aed"
           />
@@ -423,7 +432,7 @@ export default async function DashboardPage() {
           <StatCard
             title="Competitions"
             value={rawCompetitions.length}
-            description={`${activeCompetitions.length} active · ${openForEntry.length} open for entry · ${rankingConfigs.length} ranking config${rankingConfigs.length !== 1 ? "s" : ""}.`}
+            description={`${activeCompetitions.length} active · ${openForEntry.length} open for entry · ${rankingConfigs.length} rating config${rankingConfigs.length !== 1 ? "s" : ""}.`}
             icon={Trophy}
             accent="#f97316"
           />
@@ -704,14 +713,14 @@ export default async function DashboardPage() {
             </div>
           </SectionCard>
 
-          <SectionCard title="Teams, Coaching &amp; Competitions" description="Team sports management, coaching operations, competition lifecycle and rankings." actionHref="/teams" actionLabel="View Teams">
+          <SectionCard title="Teams, Coaching &amp; Competitions" description="Team sports management, coaching operations, competition lifecycle and ratings." actionHref="/teams" actionLabel="View Teams">
             <div className="space-y-4">
               {[
                 { label: "Active Teams", sub: "With rosters and fixture schedules", value: activeTeams.length },
                 { label: "Recurring Series", sub: "iCal RRULE recurring bookings", value: activeSeries.length },
                 { label: "Coaches", sub: "With lesson types and sessions", value: coaches.length },
                 { label: "Competitions", sub: `${activeCompetitions.length} active · ${openForEntry.length} open for entry`, value: rawCompetitions.length },
-                { label: "Ranking Configs", sub: "ELO and Points Table across sports", value: rankingConfigs.length },
+                { label: "Rating Configs", sub: "ELO and Points Table across sports", value: rankingConfigs.length },
               ].map(({ label, sub, value }) => (
                 <div key={label} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm transition hover:shadow-md">
                   <div>
@@ -744,8 +753,8 @@ export default async function DashboardPage() {
               },
               {
                 icon: Shield,
-                title: "Teams, Competition & Rankings",
-                body: "Full team management with rosters, fixtures, player availability, squad selection and charge runs — plus a full competition lifecycle (entries, draws, results, standings) and an automatic rankings engine: ELO for individual sports and Points Table for team sports.",
+                title: "Teams, Competition & Ratings",
+                body: "Full team management with rosters, fixtures, player availability, squad selection and charge runs — plus a full competition lifecycle (entries, draws, results, standings) and an automatic ratings engine: ELO for individual sports and Points Table for team sports.",
               },
               {
                 icon: GraduationCap,

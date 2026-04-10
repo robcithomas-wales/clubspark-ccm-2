@@ -44,6 +44,7 @@ export class CompetitionsRepository {
         entryType: (dto.entryType ?? 'INDIVIDUAL') as any,
         registrationOpensAt: dto.registrationOpensAt ? new Date(dto.registrationOpensAt) : null,
         registrationClosesAt: dto.registrationClosesAt ? new Date(dto.registrationClosesAt) : null,
+        lateEntryClosesAt: dto.lateEntryClosesAt ? new Date(dto.lateEntryClosesAt) : null,
         startDate: dto.startDate ? new Date(dto.startDate) : null,
         endDate: dto.endDate ? new Date(dto.endDate) : null,
         maxEntries: dto.maxEntries ?? null,
@@ -68,6 +69,12 @@ export class CompetitionsRepository {
     if (dto.status !== undefined) data.status = dto.status
     if (dto.registrationOpensAt !== undefined) data.registrationOpensAt = new Date(dto.registrationOpensAt)
     if (dto.registrationClosesAt !== undefined) data.registrationClosesAt = new Date(dto.registrationClosesAt)
+    if ((dto as any).lateEntryClosesAt !== undefined) data.lateEntryClosesAt = new Date((dto as any).lateEntryClosesAt)
+    if ((dto as any).approvedBy !== undefined) data.approvedBy = (dto as any).approvedBy
+    if ((dto as any).approvedAt !== undefined) data.approvedAt = new Date((dto as any).approvedAt)
+    if ((dto as any).rejectedBy !== undefined) data.rejectedBy = (dto as any).rejectedBy
+    if ((dto as any).rejectedAt !== undefined) data.rejectedAt = new Date((dto as any).rejectedAt)
+    if ((dto as any).rejectionReason !== undefined) data.rejectionReason = (dto as any).rejectionReason
     if (dto.startDate !== undefined) data.startDate = new Date(dto.startDate)
     if (dto.endDate !== undefined) data.endDate = new Date(dto.endDate)
     if (dto.maxEntries !== undefined) data.maxEntries = dto.maxEntries

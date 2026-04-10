@@ -5,6 +5,7 @@ const BOOKING_URL = process.env.NEXT_PUBLIC_BOOKING_SERVICE_URL!
 const CUSTOMER_URL = process.env.NEXT_PUBLIC_CUSTOMER_SERVICE_URL!
 const MEMBERSHIP_URL = process.env.NEXT_PUBLIC_MEMBERSHIP_SERVICE_URL!
 const COACHING_URL = process.env.NEXT_PUBLIC_COACHING_SERVICE_URL || "http://127.0.0.1:4007"
+const TEAM_URL = process.env.NEXT_PUBLIC_TEAM_SERVICE_URL || "http://127.0.0.1:4008"
 
 // ─── Auth headers ─────────────────────────────────────────────────────────────
 
@@ -41,6 +42,7 @@ export type Org = {
   faviconUrl: string | null
   homePageContent: Record<string, any> | null
   portalTemplate: string
+  hasTeams: boolean
 }
 
 // ─── News (public) ────────────────────────────────────────────────────────────
@@ -490,4 +492,74 @@ export async function submitCompetitionEntry(
   }
   const json = await res.json()
   return json.data ?? null
+}
+
+// ─── Teams (public) ───────────────────────────────────────────────────────────
+
+export type PublicTeam = {
+  id: string
+  name: string
+  sport: string
+  season: string | null
+  ageGroup: string | null
+  gender: string | null
+  fixturesUrl: string | null
+  _count: { members: number }
+}
+
+export type PublicMember = {
+  id: string
+  displayName: string
+  role: "player" | "coach" | "manager"
+  photoUrl: string | null
+  position: string | null
+  shirtNumber: number | null
+}
+
+export type PublicFixture = {
+  id: string
+  opponent: string
+  homeAway: "home" | "away" | "neutral"
+  venue: string | null
+  kickoffAt: string
+  matchType: string | null
+  status: string
+  homeScore: number | null
+  awayScore: number | null
+}
+
+export type PublicTeamDetail = PublicTeam & {
+  members: PublicMember[]
+  fixtures: PublicFixture[]
+}
+
+export async function fetchPublicTeams(tenantId: string): Promise<PublicTeam[]> {
+  const res = await fetch(`${TEAM_URL}/teams/public/by-tenant?tenantId=${tenantId}`, { cache: "no-store" })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data ?? []
+}
+
+export async function fetchPublicTeam(tenantId: string, teamId: string): Promise<PublicTeamDetail | null> {
+  const res = await fetch(`${TEAM_URL}/teams/public/${teamId}?tenantId=${tenantId}`, { cache: "no-store" })
+  if (!res.ok) return null
+  const json = await res.json()
+  return json.data ?? null
+}
+
+// ─── Sponsors (public) ────────────────────────────────────────────────────────
+
+export type Sponsor = {
+  id: string
+  name: string
+  logoUrl: string
+  websiteUrl: string | null
+  displayOrder: number
+}
+
+export async function fetchPublicSponsors(tenantId: string): Promise<Sponsor[]> {
+  const res = await fetch(`${VENUE_URL}/sponsors/public?tenantId=${tenantId}`, { cache: "no-store" })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data ?? []
 }

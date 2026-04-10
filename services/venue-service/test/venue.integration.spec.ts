@@ -591,6 +591,138 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
 
       expect(res.status).toBe(400)
     })
+
+    it('updates a bookable unit via PATCH', async () => {
+      const res = await request
+        .patch(`/bookable-units/${unitId}`)
+        .set(JSON_HEADERS)
+        .send({ name: 'Full Court (Updated)', capacity: 6, sortOrder: 2 })
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.name).toBe('Full Court (Updated)')
+      expect(res.body.data.capacity).toBe(6)
+      expect(res.body.data.sortOrder).toBe(2)
+    })
+
+    it('returns 404 when patching a non-existent unit', async () => {
+      const res = await request
+        .patch(`/bookable-units/${TEST_NONEXISTENT_ID}`)
+        .set(JSON_HEADERS)
+        .send({ name: 'Ghost' })
+
+      expect(res.status).toBe(404)
+    })
+
+    it('auto-creates a conflict row when parentUnitId is set on create', async () => {
+      // Create parent unit
+      const parent = await request
+        .post('/bookable-units')
+        .set(JSON_HEADERS)
+        .send({
+          venueId: TEST_VENUE_ID,
+          resourceId: TEST_RESOURCE_ID,
+          name: 'Parent Court',
+          unitType: 'full',
+        })
+      expect(parent.status).toBe(201)
+      const parentId = parent.body.data.id
+
+      // Create child unit linked to parent
+      const child = await request
+        .post('/bookable-units')
+        .set(JSON_HEADERS)
+        .send({
+          venueId: TEST_VENUE_ID,
+          resourceId: TEST_RESOURCE_ID,
+          name: 'Child Half Court',
+          unitType: 'half',
+          parentUnitId: parentId,
+        })
+      expect(child.status).toBe(201)
+      const childId = child.body.data.id
+
+      // Verify conflict row exists in DB
+      const conflicts = await prisma.read.$queryRaw<{ unit_id: string; conflicting_unit_id: string }[]>`
+        SELECT unit_id::text, conflicting_unit_id::text
+        FROM venue.unit_conflicts
+        WHERE unit_id = ${childId}::uuid AND conflicting_unit_id = ${parentId}::uuid
+      `
+      expect(conflicts.length).toBe(1)
+    })
+
+    it('clears conflict row when parentUnitId is removed via PATCH', async () => {
+      // Create parent + child
+      const parent = await request
+        .post('/bookable-units')
+        .set(JSON_HEADERS)
+        .send({ venueId: TEST_VENUE_ID, resourceId: TEST_RESOURCE_ID, name: 'Temp Parent', unitType: 'full' })
+      const parentId = parent.body.data.id
+
+      const child = await request
+        .post('/bookable-units')
+        .set(JSON_HEADERS)
+        .send({ venueId: TEST_VENUE_ID, resourceId: TEST_RESOURCE_ID, name: 'Temp Child', unitType: 'half', parentUnitId: parentId })
+      const childId = child.body.data.id
+
+      // Remove parent link
+      const patch = await request
+        .patch(`/bookable-units/${childId}`)
+        .set(JSON_HEADERS)
+        .send({ parentUnitId: null })
+      expect(patch.status).toBe(200)
+      expect(patch.body.data.parentUnitId).toBeNull()
+
+      // Conflict row should be gone
+      const conflicts = await prisma.read.$queryRaw<{ unit_id: string }[]>`
+        SELECT unit_id::text FROM venue.unit_conflicts
+        WHERE unit_id = ${childId}::uuid OR conflicting_unit_id = ${childId}::uuid
+      `
+      expect(conflicts.length).toBe(0)
+    })
+  })
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Venues — Create
+  // ══════════════════════════════════════════════════════════════════════════
+
+  describe('Venues — Create', () => {
+    it('creates a venue and returns 201', async () => {
+      const res = await request
+        .post('/venues')
+        .set(JSON_HEADERS)
+        .send({
+          name: 'New Test Venue',
+          city: 'Cardiff',
+          country: 'GB',
+          timezone: 'Europe/London',
+        })
+
+      expect(res.status).toBe(201)
+      expect(res.body.data.id).toBeDefined()
+      expect(res.body.data.name).toBe('New Test Venue')
+      expect(res.body.data.city).toBe('Cardiff')
+      expect(res.body.data.country).toBe('GB')
+      expect(res.body.data.timezone).toBe('Europe/London')
+    })
+
+    it('creates a venue with only a name', async () => {
+      const res = await request
+        .post('/venues')
+        .set(JSON_HEADERS)
+        .send({ name: 'Minimal Venue' })
+
+      expect(res.status).toBe(201)
+      expect(res.body.data.name).toBe('Minimal Venue')
+    })
+
+    it('returns 400 when name is missing', async () => {
+      const res = await request
+        .post('/venues')
+        .set(JSON_HEADERS)
+        .send({ city: 'Cardiff' })
+
+      expect(res.status).toBe(400)
+    })
   })
 
   // ══════════════════════════════════════════════════════════════════════════

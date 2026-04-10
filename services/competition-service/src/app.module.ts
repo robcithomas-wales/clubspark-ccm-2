@@ -14,6 +14,11 @@ import { DrawModule } from './draw/draw.module.js'
 import { MatchesModule } from './matches/matches.module.js'
 import { StandingsModule } from './standings/standings.module.js'
 import { RankingsModule } from './rankings/rankings.module.js'
+import { AuditModule } from './audit/audit.module.js'
+import { DisciplineModule } from './discipline/discipline.module.js'
+import { WorkCardsModule } from './work-cards/work-cards.module.js'
+import { SubmissionsModule } from './submissions/submissions.module.js'
+import { MessagesModule } from './messages/messages.module.js'
 
 @Module({
   imports: [
@@ -27,6 +32,11 @@ import { RankingsModule } from './rankings/rankings.module.js'
     MatchesModule,
     StandingsModule,
     RankingsModule,
+    AuditModule,
+    DisciplineModule,
+    WorkCardsModule,
+    SubmissionsModule,
+    MessagesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: TenantContextGuard },

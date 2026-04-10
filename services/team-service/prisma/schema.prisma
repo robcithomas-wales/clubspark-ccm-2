@@ -77,6 +77,14 @@ enum ChargeStatus {
   @@schema("team")
 }
 
+enum MemberRole {
+  player
+  coach
+  manager
+
+  @@schema("team")
+}
+
 // ── Models ───────────────────────────────────────────────────────────────────
 
 // A team belonging to a club (tenant). Tracks sport, season, fee defaults.
@@ -93,6 +101,8 @@ model Team {
   substituteMatchFee Decimal? @map("substitute_match_fee") @db.Decimal(10, 2)
   // selected | starters_only | all_available | manual
   chargeRule         String   @default("selected") @map("charge_rule")
+  fixturesUrl        String?  @map("fixtures_url")   // external link e.g. FA Full-Time, ECB Play-Cricket
+  isPublic           Boolean  @default(true) @map("is_public")
   isActive           Boolean  @default(true) @map("is_active")
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -113,13 +123,15 @@ model TeamMember {
   id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId       String    @map("tenant_id") @db.Uuid
   teamId         String    @map("team_id") @db.Uuid
-  personId       String?   @map("person_id") @db.Uuid  // soft ref to people.persons
-  displayName    String    @map("display_name")
+  personId       String?    @map("person_id") @db.Uuid  // soft ref to people.persons
+  displayName    String     @map("display_name")
+  role           MemberRole @default(player)
+  photoUrl       String?    @map("photo_url")
   email          String?
   phone          String?
-  position       String?   // e.g. "Goalkeeper", "Wicketkeeper", "Batsman"
-  shirtNumber    Int?      @map("shirt_number")
-  isGuest        Boolean   @default(false) @map("is_guest")
+  position       String?    // e.g. "Goalkeeper", "Wicketkeeper", "Batsman"
+  shirtNumber    Int?       @map("shirt_number")
+  isGuest        Boolean    @default(false) @map("is_guest")
   isJunior       Boolean   @default(false) @map("is_junior")
   dateOfBirth    DateTime? @map("date_of_birth") @db.Date
   guardianName   String?   @map("guardian_name")

@@ -148,12 +148,18 @@ export default async function ResourceGroupDetailPage({
           )}
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex items-center justify-between">
           <Link
             href="/resource-groups"
             className="inline-flex h-11 items-center justify-center rounded-xl border border-[#1857E0] bg-white px-5 text-sm font-medium text-[#1857E0] transition hover:bg-blue-50"
           >
             Back to groups
+          </Link>
+          <Link
+            href={`/resource-groups/${group.id}/edit`}
+            className="inline-flex h-11 items-center justify-center rounded-xl bg-[#1857E0] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1445c0]"
+          >
+            Edit group
           </Link>
         </div>
       </div>

@@ -4,9 +4,12 @@ import { type NestFastifyApplication, FastifyAdapter } from '@nestjs/platform-fa
 import { ValidationPipe, Logger, VersioningType } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
-import type { FastifyRequest } from 'fastify'
 import { AppModule } from './app.module.js'
 import type { AppConfig } from './config/configuration.js'
+
+// TODO: raw body capture for webhook signature verification (Stripe, GoCardless)
+// Requires a Fastify preHandler hook approach — the addContentTypeParser route
+// conflicts with Fastify's built-in parser registration order in NestJS.
 
 async function bootstrap(): Promise<void> {
   const logger = new Logger('Bootstrap')
@@ -16,25 +19,6 @@ async function bootstrap(): Promise<void> {
     new FastifyAdapter({
       logger: process.env['NODE_ENV'] !== 'production',
     }),
-  )
-
-  // Preserve raw body buffer on all requests so webhook handlers can verify
-  // gateway signatures (Stripe, GoCardless etc. require the raw payload).
-  app.getHttpAdapter().getInstance().addContentTypeParser(
-    'application/json',
-    { parseAs: 'buffer' },
-    (
-      _req: FastifyRequest,
-      body: Buffer,
-      done: (err: Error | null, payload?: unknown) => void,
-    ) => {
-      ;(_req as FastifyRequest & { rawBody: Buffer }).rawBody = body
-      try {
-        done(null, JSON.parse(body.toString()))
-      } catch (e) {
-        done(e as Error)
-      }
-    },
   )
 
   const config = app.get(ConfigService<AppConfig, true>)

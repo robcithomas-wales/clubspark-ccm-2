@@ -30,6 +30,7 @@ enum EntryType {
 
 enum CompetitionStatus {
   DRAFT
+  AWAITING_APPROVAL
   REGISTRATION_OPEN
   IN_PROGRESS
   COMPLETED
@@ -76,6 +77,43 @@ enum ResultStatus {
   @@schema("competitions")
 }
 
+enum DisciplineOutcome {
+  WARNING
+  FINE
+  MATCH_BAN
+  COMPETITION_BAN
+  SUSPENSION
+  DISQUALIFICATION
+  NO_ACTION
+  @@schema("competitions")
+}
+
+enum DisciplineCaseStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  APPEALED
+  CLOSED
+  @@schema("competitions")
+}
+
+enum SubmissionStatus {
+  DRAFT
+  SUBMITTED
+  ACKNOWLEDGED
+  REJECTED
+  @@schema("competitions")
+}
+
+enum MessageAudience {
+  ALL_ENTRANTS
+  CONFIRMED_ENTRANTS
+  PENDING_ENTRANTS
+  DIVISION
+  SPECIFIC
+  @@schema("competitions")
+}
+
 model Competition {
   id                   String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId             String            @map("tenant_id") @db.Uuid
@@ -89,6 +127,7 @@ model Competition {
   status               CompetitionStatus @default(DRAFT)
   registrationOpensAt  DateTime?         @map("registration_opens_at")
   registrationClosesAt DateTime?         @map("registration_closes_at")
+  lateEntryClosesAt    DateTime?         @map("late_entry_closes_at")
   startDate            DateTime?         @map("start_date")
   endDate              DateTime?         @map("end_date")
   maxEntries           Int?              @map("max_entries")
@@ -97,12 +136,20 @@ model Competition {
   eligibilityRules     Json?             @map("eligibility_rules")
   tiebreakRules        Json?             @map("tiebreak_rules")
   isPublic             Boolean           @default(true) @map("is_public")
+  approvedBy           String?           @map("approved_by") @db.Uuid
+  approvedAt           DateTime?         @map("approved_at")
+  rejectedBy           String?           @map("rejected_by") @db.Uuid
+  rejectedAt           DateTime?         @map("rejected_at")
+  rejectionReason      String?           @map("rejection_reason")
   createdAt            DateTime          @default(now()) @map("created_at")
   updatedAt            DateTime          @default(now()) @updatedAt @map("updated_at")
 
-  divisions Division[]
-  entries   Entry[]
-  matches   Match[]
+  divisions    Division[]
+  entries      Entry[]
+  matches      Match[]
+  discipline   DisciplineCase[]
+  submissions  TournamentSubmission[]
+  messages     CompetitionMessage[]
 
   @@map("competitions")
   @@schema("competitions")
@@ -138,6 +185,7 @@ model Entry {
   teamId          String?     @map("team_id") @db.Uuid     // cross-ref to team-service
   displayName     String      @map("display_name")          // denormalised
   seed            Int?
+  isLateEntry     Boolean     @default(false) @map("is_late_entry")
   status          EntryStatus @default(PENDING)
   paymentStatus   String      @default("unpaid") @map("payment_status")
   notes           String?
@@ -305,4 +353,147 @@ model RankingMatchEvent {
   @@index([configId])
   @@index([matchId])
   @@index([entryId])
+}
+
+// ── Audit Log ──────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  action     String
+  actorId    String?  @map("actor_id") @db.Uuid
+  actorType  String   @default("admin") @map("actor_type")
+  before     Json?
+  after      Json?
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("audit_logs")
+  @@schema("competitions")
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, createdAt(sort: Desc)])
+}
+
+// ── Discipline ─────────────────────────────────────────────────────────────────
+
+model DisciplineCase {
+  id            String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String               @map("tenant_id") @db.Uuid
+  competitionId String?              @map("competition_id") @db.Uuid
+  matchId       String?              @map("match_id") @db.Uuid
+  personId      String?              @map("person_id") @db.Uuid
+  teamId        String?              @map("team_id") @db.Uuid
+  displayName   String               @map("display_name")
+  description   String
+  status        DisciplineCaseStatus @default(OPEN)
+  createdBy     String?              @map("created_by") @db.Uuid
+  resolvedAt    DateTime?            @map("resolved_at")
+  resolvedBy    String?              @map("resolved_by") @db.Uuid
+  createdAt     DateTime             @default(now()) @map("created_at")
+  updatedAt     DateTime             @default(now()) @updatedAt @map("updated_at")
+
+  competition Competition?      @relation(fields: [competitionId], references: [id])
+  actions     DisciplineAction[]
+
+  @@map("discipline_cases")
+  @@schema("competitions")
+  @@index([tenantId])
+  @@index([tenantId, personId])
+  @@index([competitionId])
+}
+
+model DisciplineAction {
+  id             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  caseId         String            @map("case_id") @db.Uuid
+  outcome        DisciplineOutcome
+  banMatches     Int?              @map("ban_matches")
+  suspendedUntil DateTime?         @map("suspended_until")
+  fineAmount     Decimal?          @map("fine_amount") @db.Decimal(10, 2)
+  notes          String?
+  issuedBy       String?           @map("issued_by") @db.Uuid
+  issuedAt       DateTime          @default(now()) @map("issued_at")
+
+  case DisciplineCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@map("discipline_actions")
+  @@schema("competitions")
+  @@index([caseId])
+}
+
+// ── Work Cards ─────────────────────────────────────────────────────────────────
+
+model WorkCard {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  personId     String    @map("person_id") @db.Uuid
+  sport        String    @default("tennis")
+  grade        String?
+  category     String?
+  playingLevel String?   @map("playing_level")
+  ntrp         Decimal?  @db.Decimal(3, 1)
+  utr          Decimal?  @db.Decimal(5, 2)
+  ltaRating    Decimal?  @map("lta_rating") @db.Decimal(5, 2)
+  eligibleFrom DateTime? @map("eligible_from")
+  eligibleTo   DateTime? @map("eligible_to")
+  externalRef  String?   @map("external_ref")
+  notes        String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([tenantId, personId, sport])
+  @@map("work_cards")
+  @@schema("competitions")
+  @@index([tenantId, sport])
+  @@index([personId])
+}
+
+// ── Tournament Submissions ─────────────────────────────────────────────────────
+
+model TournamentSubmission {
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String           @map("tenant_id") @db.Uuid
+  competitionId   String           @map("competition_id") @db.Uuid
+  submittedBy     String?          @map("submitted_by") @db.Uuid
+  submittedAt     DateTime?        @map("submitted_at")
+  status          SubmissionStatus @default(DRAFT)
+  governingBody   String?          @map("governing_body")
+  externalRef     String?          @map("external_ref")
+  submissionData  Json?            @map("submission_data")
+  responseData    Json?            @map("response_data")
+  acknowledgedAt  DateTime?        @map("acknowledged_at")
+  rejectedAt      DateTime?        @map("rejected_at")
+  rejectionReason String?          @map("rejection_reason")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @default(now()) @updatedAt @map("updated_at")
+
+  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+
+  @@map("tournament_submissions")
+  @@schema("competitions")
+  @@index([tenantId])
+  @@index([competitionId])
+}
+
+// ── Competition Messages ───────────────────────────────────────────────────────
+
+model CompetitionMessage {
+  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String          @map("tenant_id") @db.Uuid
+  competitionId  String          @map("competition_id") @db.Uuid
+  subject        String
+  body           String          @db.Text
+  audience       MessageAudience @default(ALL_ENTRANTS)
+  divisionId     String?         @map("division_id") @db.Uuid
+  sentBy         String?         @map("sent_by") @db.Uuid
+  sentAt         DateTime        @default(now()) @map("sent_at")
+  recipientCount Int             @default(0) @map("recipient_count")
+
+  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+
+  @@map("competition_messages")
+  @@schema("competitions")
+  @@index([tenantId])
+  @@index([competitionId])
 }

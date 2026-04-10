@@ -19,6 +19,17 @@ export class DrawController {
     return this.service.generateDraw(req.tenantContext.tenantId, competitionId, divisionId)
   }
 
+  @Post('next-round')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Generate next Swiss round pairings' })
+  nextSwissRound(
+    @Request() req: FastifyRequest & { tenantContext: { tenantId: string } },
+    @Param('competitionId') competitionId: string,
+    @Param('divisionId') divisionId: string,
+  ) {
+    return this.service.generateNextSwissRound(req.tenantContext.tenantId, competitionId, divisionId)
+  }
+
   @Delete()
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Reset draw (delete all matches and standings) for a division' })
