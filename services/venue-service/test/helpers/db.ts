@@ -34,8 +34,8 @@ export async function seedFixtures(): Promise<void> {
   `
 
   await prisma.$executeRaw`
-    INSERT INTO venue.resources (id, tenant_id, venue_id, name, resource_type, is_active)
-    VALUES (${TEST_RESOURCE_ID}::uuid, ${TEST_TENANT_ID}::uuid, ${TEST_VENUE_ID}::uuid, 'Test Court 1', 'court', true)
+    INSERT INTO venue.resources (id, tenant_id, venue_id, name, resource_type, is_active, updated_at)
+    VALUES (${TEST_RESOURCE_ID}::uuid, ${TEST_TENANT_ID}::uuid, ${TEST_VENUE_ID}::uuid, 'Test Court 1', 'court', true, NOW())
     ON CONFLICT (id) DO NOTHING
   `
 }
