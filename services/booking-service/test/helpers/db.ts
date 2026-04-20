@@ -10,7 +10,7 @@ import {
 } from '../fixtures/index.js'
 
 export const prisma = new PrismaClient({
-  datasourceUrl: `${process.env['DATABASE_URL']}?connection_limit=2`,
+  datasourceUrl: `${process.env['DATABASE_URL']}?pgbouncer=true&connection_limit=2`,
 })
 
 /**
@@ -76,6 +76,12 @@ export async function cleanBookings(): Promise<void> {
     )
   `
   await prisma.$executeRaw`
+    DELETE FROM booking.booking_payment_splits
+    WHERE booking_id IN (
+      SELECT id FROM booking.bookings WHERE tenant_id = ${TEST_TENANT_ID}::uuid
+    )
+  `
+  await prisma.$executeRaw`
     DELETE FROM booking.bookings WHERE tenant_id = ${TEST_TENANT_ID}::uuid
   `
 }
@@ -114,10 +120,34 @@ export async function cleanBookingSeries(): Promise<void> {
 }
 
 /**
+ * Remove all sessions (and their participants, which cascade).
+ */
+export async function cleanSessions(): Promise<void> {
+  await prisma.$executeRaw`DELETE FROM booking.sessions WHERE tenant_id = ${TEST_TENANT_ID}::uuid`
+}
+
+/**
+ * Remove all pricing rules.
+ */
+export async function cleanPricingRules(): Promise<void> {
+  await prisma.$executeRaw`DELETE FROM booking.pricing_rules WHERE tenant_id = ${TEST_TENANT_ID}::uuid`
+}
+
+/**
+ * Remove all refund policies.
+ */
+export async function cleanRefundPolicies(): Promise<void> {
+  await prisma.$executeRaw`DELETE FROM booking.refund_policies WHERE tenant_id = ${TEST_TENANT_ID}::uuid`
+}
+
+/**
  * Remove all fixture rows. Call in afterAll.
  */
 export async function teardownFixtures(): Promise<void> {
   await cleanBookings()
+  await cleanSessions()
+  await cleanPricingRules()
+  await cleanRefundPolicies()
   await prisma.$executeRaw`
     DELETE FROM booking.booking_series WHERE tenant_id = ${TEST_TENANT_ID}::uuid
   `

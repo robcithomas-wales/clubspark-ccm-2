@@ -2,12 +2,13 @@ import 'dotenv/config'
 import { PrismaClient } from '../../src/generated/prisma/index.js'
 import {
   TEST_TENANT_ID,
+  TEST_ORG_ID,
   TEST_VENUE_ID,
   TEST_RESOURCE_ID,
 } from '../fixtures/index.js'
 
 export const prisma = new PrismaClient({
-  datasourceUrl: `${process.env['DATABASE_URL']}?connection_limit=2`,
+  datasourceUrl: `${process.env['DATABASE_URL']}?pgbouncer=true&connection_limit=2`,
 })
 
 /**
@@ -24,9 +25,15 @@ export async function checkDbAvailable(): Promise<boolean> {
 }
 
 /**
- * Insert a venue and resource that tests can reference.
+ * Insert an organisation, venue, and resource that tests can reference.
  */
 export async function seedFixtures(): Promise<void> {
+  await prisma.$executeRaw`
+    INSERT INTO venue.organisations (id, tenant_id, name, slug, updated_at)
+    VALUES (${TEST_ORG_ID}::uuid, ${TEST_TENANT_ID}::uuid, 'Test Club', 'test-club-30000000', NOW())
+    ON CONFLICT (id) DO NOTHING
+  `
+
   await prisma.$executeRaw`
     INSERT INTO venue.venues (id, tenant_id, name, timezone, country)
     VALUES (${TEST_VENUE_ID}::uuid, ${TEST_TENANT_ID}::uuid, 'Test Venue', 'Europe/London', 'GB')
@@ -71,4 +78,17 @@ export async function teardownFixtures(): Promise<void> {
   await prisma.$executeRaw`
     DELETE FROM venue.venues WHERE tenant_id = ${TEST_TENANT_ID}::uuid
   `
+  await prisma.$executeRaw`
+    DELETE FROM venue.sponsors WHERE tenant_id = ${TEST_TENANT_ID}::uuid
+  `
+  await prisma.$executeRaw`
+    DELETE FROM venue.organisations WHERE tenant_id = ${TEST_TENANT_ID}::uuid
+  `
+}
+
+/**
+ * Remove sponsors created during sponsor-specific tests.
+ */
+export async function cleanSponsors(): Promise<void> {
+  await prisma.$executeRaw`DELETE FROM venue.sponsors WHERE tenant_id = ${TEST_TENANT_ID}::uuid`
 }
