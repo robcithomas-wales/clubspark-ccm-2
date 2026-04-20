@@ -30,6 +30,7 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
   let request: ReturnType<typeof supertest>
 
   beforeAll(async () => {
+    await prisma.$connect()
     await seedFixtures()
     const app = await getApp()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -418,6 +419,105 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
         .set(HEADERS)
 
       expect(res.status).toBe(204)
+    })
+  })
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Availability Configs — Seasonal Schedule Linking
+  // ══════════════════════════════════════════════════════════════════════════
+
+  describe('Availability Configs — Seasonal Schedule Linking', () => {
+    let scheduleId: string
+    let linkedConfigId: string
+
+    it('creates a seasonal schedule to link configs against', async () => {
+      const res = await request
+        .post('/seasonal-schedules')
+        .set(JSON_HEADERS)
+        .send({
+          venueId: TEST_VENUE_ID,
+          name: 'Summer 2099',
+          startDate: '2099-06-01',
+          endDate: '2099-08-31',
+        })
+
+      expect(res.status).toBe(201)
+      expect(res.body.data.id).toBeDefined()
+      scheduleId = res.body.data.id
+    })
+
+    it('creates an availability config linked to a seasonal schedule', async () => {
+      const res = await request
+        .post('/availability-configs')
+        .set(JSON_HEADERS)
+        .send({
+          scopeType: 'venue',
+          scopeId: TEST_VENUE_ID,
+          opensAt: '07:00',
+          closesAt: '21:00',
+          slotDurationMinutes: 60,
+          seasonalScheduleId: scheduleId,
+        })
+
+      expect(res.status).toBe(201)
+      expect(res.body.data.seasonalScheduleId).toBe(scheduleId)
+      linkedConfigId = res.body.data.id
+    })
+
+    it('filters configs by scheduleId — returns only linked configs', async () => {
+      // Create an unlinked config for contrast
+      await request
+        .post('/availability-configs')
+        .set(JSON_HEADERS)
+        .send({ scopeType: 'venue', scopeId: TEST_VENUE_ID, opensAt: '08:00' })
+
+      const res = await request
+        .get(`/availability-configs?scheduleId=${scheduleId}`)
+        .set(HEADERS)
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.length).toBeGreaterThanOrEqual(1)
+      expect(res.body.data.every((c: any) => c.seasonalScheduleId === scheduleId)).toBe(true)
+    })
+
+    it('filters with scheduleId=none — returns only unlinked configs', async () => {
+      const res = await request
+        .get('/availability-configs?scheduleId=none')
+        .set(HEADERS)
+
+      expect(res.status).toBe(200)
+      expect(
+        res.body.data.every((c: any) => c.seasonalScheduleId === null || c.seasonalScheduleId === undefined),
+      ).toBe(true)
+    })
+
+    it('gets the linked config by id and includes seasonalScheduleId', async () => {
+      const res = await request
+        .get(`/availability-configs/${linkedConfigId}`)
+        .set(HEADERS)
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.seasonalScheduleId).toBe(scheduleId)
+    })
+
+    it('patches a config to remove the seasonal schedule link', async () => {
+      const res = await request
+        .patch(`/availability-configs/${linkedConfigId}`)
+        .set(JSON_HEADERS)
+        .send({ seasonalScheduleId: null })
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.seasonalScheduleId).toBeNull()
+    })
+
+    it('patches a config to re-attach it to a schedule', async () => {
+      const res = await request
+        .patch(`/availability-configs/${linkedConfigId}`)
+        .set(JSON_HEADERS)
+        .send({ seasonalScheduleId: scheduleId })
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.seasonalScheduleId).toBe(scheduleId)
     })
   })
 

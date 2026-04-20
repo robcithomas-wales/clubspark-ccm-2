@@ -8,5 +8,6 @@ export default defineConfig({
     testTimeout: 30_000,
     pool: 'forks',
     singleFork: true,
+    fileParallelism: false,
   },
 })
