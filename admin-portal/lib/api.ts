@@ -2427,3 +2427,550 @@ export async function deleteRankingConfig(configId: string) {
   })
   return res.ok
 }
+// ─── Comms Service ───────────────────────────────────────────────────────────
+
+const COMMS_SERVICE =
+  process.env.NEXT_PUBLIC_COMMS_SERVICE_URL || "http://127.0.0.1:4012"
+
+export async function getMessageLog(limit = 100, offset = 0) {
+  const res = await fetch(
+    `${COMMS_SERVICE}/v1/message-log?limit=${limit}&offset=${offset}`,
+    { headers: await getAuthHeaders(), cache: "no-store" },
+  )
+  if (!res.ok) throw new Error("Failed to fetch message log")
+  return res.json() as Promise<{ data: any[]; total: number }>
+}
+
+export async function getCommsTemplates() {
+  const res = await fetch(`${COMMS_SERVICE}/v1/templates`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to fetch templates")
+  return res.json() as Promise<any[]>
+}
+
+export async function updateCommsTemplate(
+  key: string,
+  payload: { customFooter?: string; replyTo?: string; isActive?: boolean },
+) {
+  const res = await fetch(`${COMMS_SERVICE}/v1/templates/${key}`, {
+    method: "PATCH",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) throw new Error("Failed to update template")
+  return res.json()
+}
+
+export async function sendCampaign(payload: {
+  channel: "email" | "sms"
+  subject?: string
+  body?: string
+  replyTo?: string
+  audienceDefinition: string
+  scheduledAt?: string
+  name?: string
+}) {
+  const res = await fetch(`${COMMS_SERVICE}/v1/campaigns`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) throw new Error("Failed to send campaign")
+  return res.json()
+}
+
+export async function getCampaigns() {
+  const res = await fetch(`${COMMS_SERVICE}/v1/campaigns`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to fetch campaigns")
+  return res.json() as Promise<any[]>
+}
+
+// ─── Pricing Rules ────────────────────────────────────────────────────────────
+
+export async function getPricingRules() {
+  const res = await fetch(`${BOOKING_SERVICE}/v1/pricing-rules`, {
+    headers: { ...await getAuthHeaders(), "x-tenant-id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" },
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to fetch pricing rules")
+  return res.json() as Promise<{ data: any[]; total: number }>
+}
+
+// ─── Open Sessions (booking-service join-a-session) ───────────────────────────
+
+export async function getOpenSessions(filters: { status?: string; upcoming?: boolean } = {}) {
+  const qs = new URLSearchParams()
+  if (filters.status) qs.set("status", filters.status)
+  if (filters.upcoming) qs.set("upcoming", "true")
+  const res = await fetch(`${BOOKING_SERVICE}/v1/sessions${qs.toString() ? `?${qs}` : ""}`, {
+    headers: { ...await getAuthHeaders(), "x-tenant-id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" },
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to fetch sessions")
+  return res.json() as Promise<{ data: any[]; total: number }>
+}
+
+// ─── Integration Service ──────────────────────────────────────────────────────
+
+const INTEGRATION_SERVICE =
+  process.env.NEXT_PUBLIC_INTEGRATION_SERVICE_URL || "http://127.0.0.1:4013"
+
+export async function getApiKeys() {
+  const res = await fetch(`${INTEGRATION_SERVICE}/v1/api-keys`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to load API keys")
+  return res.json() as Promise<{ data: ApiKey[] }>
+}
+
+export async function createApiKey(dto: { name: string; scopes: string[] }) {
+  const res = await fetch(`${INTEGRATION_SERVICE}/v1/api-keys`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(dto),
+  })
+  if (!res.ok) throw new Error("Failed to create API key")
+  return res.json() as Promise<ApiKey & { plaintext: string }>
+}
+
+export async function suspendApiKey(id: string) {
+  const res = await fetch(`${INTEGRATION_SERVICE}/v1/api-keys/${id}/suspend`, {
+    method: "PATCH",
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) throw new Error("Failed to suspend API key")
+  return res.json()
+}
+
+export async function activateApiKey(id: string) {
+  const res = await fetch(`${INTEGRATION_SERVICE}/v1/api-keys/${id}/activate`, {
+    method: "PATCH",
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) throw new Error("Failed to activate API key")
+  return res.json()
+}
+
+export async function revokeApiKey(id: string) {
+  const res = await fetch(`${INTEGRATION_SERVICE}/v1/api-keys/${id}`, {
+    method: "DELETE",
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) throw new Error("Failed to revoke API key")
+  return res.json()
+}
+
+export async function getApiKeyUsage(id: string, page = 1) {
+  const res = await fetch(`${INTEGRATION_SERVICE}/v1/api-keys/${id}/usage?page=${page}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to load API key usage")
+  return res.json() as Promise<{ data: ApiKeyUsageEntry[]; pagination: PaginationMeta }>
+}
+
+export async function getWebhookSubscriptions() {
+  const res = await fetch(`${INTEGRATION_SERVICE}/v1/webhook-subscriptions`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to load webhook subscriptions")
+  return res.json() as Promise<{ data: WebhookSubscription[] }>
+}
+
+export async function createWebhookSubscription(dto: {
+  name: string
+  endpointUrl: string
+  eventTypes: string[]
+}) {
+  const res = await fetch(`${INTEGRATION_SERVICE}/v1/webhook-subscriptions`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(dto),
+  })
+  if (!res.ok) throw new Error("Failed to create webhook subscription")
+  return res.json() as Promise<WebhookSubscription & { secret: string }>
+}
+
+export async function updateWebhookSubscription(
+  id: string,
+  dto: Partial<{ name: string; endpointUrl: string; eventTypes: string[]; isActive: boolean }>,
+) {
+  const res = await fetch(`${INTEGRATION_SERVICE}/v1/webhook-subscriptions/${id}`, {
+    method: "PATCH",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(dto),
+  })
+  if (!res.ok) throw new Error("Failed to update webhook subscription")
+  return res.json() as Promise<WebhookSubscription>
+}
+
+export async function deleteWebhookSubscription(id: string) {
+  const res = await fetch(`${INTEGRATION_SERVICE}/v1/webhook-subscriptions/${id}`, {
+    method: "DELETE",
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) throw new Error("Failed to delete webhook subscription")
+  return res.json()
+}
+
+export async function getWebhookDeliveries(subscriptionId: string, page = 1) {
+  const res = await fetch(
+    `${INTEGRATION_SERVICE}/v1/webhook-deliveries?subscriptionId=${subscriptionId}&page=${page}`,
+    { headers: await getAuthHeaders(), cache: "no-store" },
+  )
+  if (!res.ok) throw new Error("Failed to load webhook deliveries")
+  return res.json() as Promise<{ data: WebhookDelivery[]; pagination: PaginationMeta }>
+}
+
+export async function retryWebhookDelivery(id: string) {
+  const res = await fetch(`${INTEGRATION_SERVICE}/v1/webhook-deliveries/${id}/retry`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) throw new Error("Failed to retry webhook delivery")
+  return res.json()
+}
+
+// ─── Integration types ────────────────────────────────────────────────────────
+
+export type ApiKey = {
+  id: string
+  name: string
+  scopes: string[]
+  isActive: boolean
+  createdAt: string
+  lastUsedAt: string | null
+  requestCount: number
+}
+
+export type ApiKeyUsageEntry = {
+  id: string
+  endpoint: string
+  responseCode: number
+  timestamp: string
+}
+
+export type WebhookSubscription = {
+  id: string
+  name: string
+  endpointUrl: string
+  eventTypes: string[]
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export type WebhookDelivery = {
+  id: string
+  eventType: string
+  status: "pending" | "delivered" | "failed" | "dead"
+  attempts: number
+  responseCode: number | null
+  nextRetryAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+// ─── Accounting integration ───────────────────────────────────────────────────
+
+export type OAuthConnection = {
+  id: string
+  provider: "xero" | "quickbooks"
+  providerTenantId: string | null
+  scopes: string[]
+  connectedAt: string
+  tokenExpiry: string
+}
+
+export type AccountingSettings = {
+  provider: string
+  revenueAccountCode: string
+  taxRateId: string | null
+  invoiceMode: string
+  currencyCode: string
+}
+
+export type AccountingSyncEntry = {
+  id: string
+  eventType: string
+  sourceId: string
+  sourceType: string
+  status: "pending" | "synced" | "failed" | "dead"
+  providerRef: string | null
+  attempts: number
+  errorMessage: string | null
+  syncedAt: string | null
+  createdAt: string
+}
+
+export async function getOAuthConnections() {
+  const res = await fetch(`${INTEGRATION_SERVICE}/v1/connections`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to load OAuth connections")
+  return res.json() as Promise<{ data: OAuthConnection[] }>
+}
+
+export async function disconnectOAuth(provider: string) {
+  const res = await fetch(`${INTEGRATION_SERVICE}/v1/connections/${provider}`, {
+    method: "DELETE",
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) throw new Error(`Failed to disconnect ${provider}`)
+  return res.json()
+}
+
+export async function getXeroConnectUrl() {
+  const res = await fetch(`${INTEGRATION_SERVICE}/v1/connections/xero/connect`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) throw new Error("Failed to get Xero connect URL")
+  return res.json() as Promise<{ url: string }>
+}
+
+export async function getQuickBooksConnectUrl() {
+  const res = await fetch(`${INTEGRATION_SERVICE}/v1/connections/quickbooks/connect`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) throw new Error("Failed to get QuickBooks connect URL")
+  return res.json() as Promise<{ url: string }>
+}
+
+export async function getAccountingSettings() {
+  const res = await fetch(`${INTEGRATION_SERVICE}/v1/accounting/settings`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to load accounting settings")
+  return res.json() as Promise<AccountingSettings | null>
+}
+
+export async function saveAccountingSettings(dto: {
+  provider: string
+  revenueAccountCode: string
+  taxRateId?: string
+  invoiceMode?: string
+  currencyCode?: string
+}) {
+  const res = await fetch(`${INTEGRATION_SERVICE}/v1/accounting/settings`, {
+    method: "PUT",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(dto),
+  })
+  if (!res.ok) throw new Error("Failed to save accounting settings")
+  return res.json() as Promise<AccountingSettings>
+}
+
+export async function getAccountCodes() {
+  const res = await fetch(`${INTEGRATION_SERVICE}/v1/accounting/settings/account-codes`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return []
+  return res.json() as Promise<Array<{ code: string; name: string }>>
+}
+
+export async function getTaxRates() {
+  const res = await fetch(`${INTEGRATION_SERVICE}/v1/accounting/settings/tax-rates`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return []
+  return res.json() as Promise<Array<{ taxType: string; name: string }>>
+}
+
+export async function getAccountingSyncLog(page = 1) {
+  const res = await fetch(`${INTEGRATION_SERVICE}/v1/accounting/sync-log?page=${page}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to load sync log")
+  return res.json() as Promise<{ data: AccountingSyncEntry[]; pagination: PaginationMeta }>
+}
+
+// ─── Analytics Service ────────────────────────────────────────────────────────
+
+const ANALYTICS_SERVICE =
+  process.env.NEXT_PUBLIC_ANALYTICS_SERVICE_URL || "http://127.0.0.1:4014"
+
+export type MemberScore = {
+  personId: string
+  churnRisk: number
+  churnBand: "low" | "medium" | "high"
+  churnFactors: Record<string, number>
+  ltvScore: number
+  ltvScoreFormatted: string
+  ltvFactors: Record<string, number>
+  defaultRisk: number
+  defaultBand: "low" | "medium" | "high"
+  defaultFactors: Record<string, number>
+  optimalSendHour: number | null
+  sendHourConfidence: number | null
+  computedAt: string
+}
+
+export async function getPersonScore(personId: string) {
+  const res = await fetch(`${ANALYTICS_SERVICE}/v1/scores/${personId}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return null
+  return res.json() as Promise<MemberScore | null>
+}
+
+export async function getBulkScores(personIds: string[]) {
+  if (personIds.length === 0) return {} as Record<string, MemberScore>
+  const res = await fetch(`${ANALYTICS_SERVICE}/v1/scores/bulk`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({ personIds }),
+    cache: "no-store",
+  })
+  if (!res.ok) return {} as Record<string, MemberScore>
+  return res.json() as Promise<Record<string, MemberScore>>
+}
+
+export async function getHighChurnMembers(minChurnRisk = 60, page = 1) {
+  const res = await fetch(
+    `${ANALYTICS_SERVICE}/v1/scores?minChurnRisk=${minChurnRisk}&page=${page}`,
+    { headers: await getAuthHeaders(), cache: "no-store" },
+  )
+  if (!res.ok) throw new Error("Failed to load churn scores")
+  return res.json() as Promise<{ data: MemberScore[]; pagination: PaginationMeta }>
+}
+
+export async function triggerScoreCompute() {
+  const res = await fetch(`${ANALYTICS_SERVICE}/v1/scores/compute`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) throw new Error("Failed to trigger score computation")
+  return res.json() as Promise<{ scheduled: boolean }>
+}
+
+// ─── Forecasting ──────────────────────────────────────────────────────────────
+
+export type ForecastSlot = {
+  id: string
+  unitId: string
+  forecastDate: string
+  hourSlot: number
+  predictedOccupancy: number
+  historicalWeeks: number
+  isDeadSlot: boolean
+  computedAt: string
+}
+
+export type DeadSlotSummary = {
+  unitId: string
+  deadSlotCount: number
+  lowestOccupancy: number
+  nextDeadSlot: ForecastSlot
+  slots: ForecastSlot[]
+}
+
+export async function getForecasts(params: { fromDate?: string; toDate?: string; unitId?: string; deadSlotsOnly?: boolean } = {}) {
+  const qs = new URLSearchParams()
+  if (params.fromDate) qs.set("fromDate", params.fromDate)
+  if (params.toDate) qs.set("toDate", params.toDate)
+  if (params.unitId) qs.set("unitId", params.unitId)
+  if (params.deadSlotsOnly) qs.set("deadSlotsOnly", "true")
+  const res = await fetch(`${ANALYTICS_SERVICE}/v1/forecasts?${qs}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return [] as ForecastSlot[]
+  return res.json() as Promise<ForecastSlot[]>
+}
+
+export async function getDeadSlots() {
+  const res = await fetch(`${ANALYTICS_SERVICE}/v1/forecasts/dead-slots`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return [] as DeadSlotSummary[]
+  return res.json() as Promise<DeadSlotSummary[]>
+}
+
+export async function triggerForecastCompute() {
+  const res = await fetch(`${ANALYTICS_SERVICE}/v1/forecasts/compute`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) throw new Error("Failed to trigger forecast computation")
+  return res.json() as Promise<{ slotsComputed: number; deadSlots: number }>
+}
+
+// ─── Anomaly Detection ────────────────────────────────────────────────────────
+
+export type AnomalyFlag = {
+  id: string
+  personId: string | null
+  entityType: string
+  entityId: string
+  ruleId: string
+  severity: "warning" | "alert"
+  description: string
+  metadata: Record<string, unknown>
+  resolvedAt: string | null
+  createdAt: string
+}
+
+export async function getAnomalyFlags(params: { page?: number; unresolvedOnly?: boolean; severity?: string } = {}) {
+  const qs = new URLSearchParams()
+  if (params.page) qs.set("page", String(params.page))
+  if (params.unresolvedOnly !== undefined) qs.set("unresolvedOnly", String(params.unresolvedOnly))
+  if (params.severity) qs.set("severity", params.severity)
+  const res = await fetch(`${ANALYTICS_SERVICE}/v1/anomalies?${qs}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to load anomalies")
+  return res.json() as Promise<{ data: AnomalyFlag[]; pagination: PaginationMeta }>
+}
+
+export async function triggerAnomalyDetection() {
+  const res = await fetch(`${ANALYTICS_SERVICE}/v1/anomalies/detect`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) throw new Error("Failed to trigger anomaly detection")
+  return res.json() as Promise<{ flagged: number }>
+}
+
+// ─── Player Matching ──────────────────────────────────────────────────────────
+
+export type MatchCandidate = {
+  personId: string
+  displayName: string
+  eloRating: number | null
+  eloGap: number | null
+  recentBookingCount: number
+  matchScore: number
+}
+
+export type MatchResult = {
+  seeker: { personId: string; displayName: string; eloRating: number | null; sport: string }
+  matches: MatchCandidate[]
+  total: number
+  hasElo: boolean
+}
+
+export async function findPlayerMatches(personId: string, sport: string) {
+  const res = await fetch(`${ANALYTICS_SERVICE}/v1/match/${personId}?sport=${encodeURIComponent(sport)}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!res.ok) return null
+  return res.json() as Promise<MatchResult>
+}

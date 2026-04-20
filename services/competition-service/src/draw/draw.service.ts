@@ -93,6 +93,84 @@ export class DrawService {
   }
 
   /**
+   * Seeds confirmed entries by ELO rating from the matching ranking config.
+   * Seed 1 = highest rated, seed N = lowest rated.
+   * If no ELO ranking config exists for the competition's sport, falls back to
+   * alphabetical order by displayName, which is still deterministic.
+   */
+  async seedEntriesByElo(
+    tenantId: string,
+    competitionId: string,
+    divisionId: string,
+  ): Promise<{ seeded: number; source: 'elo' | 'fallback' }> {
+    const competition = await this.prisma.competition.findFirst({
+      where: { id: competitionId, tenantId },
+    })
+    if (!competition) throw new BadRequestException('Competition not found')
+
+    const division = await this.prisma.division.findFirst({
+      where: { id: divisionId, competitionId },
+    })
+    if (!division) throw new BadRequestException('Division not found')
+
+    const entries = await this.prisma.entry.findMany({
+      where: { divisionId, status: 'CONFIRMED' },
+      orderBy: { createdAt: 'asc' },
+    })
+    if (entries.length === 0) throw new BadRequestException('No confirmed entries to seed')
+
+    // Look up ELO ranking config for this tenant + sport
+    const rankingConfig = await this.prisma.rankingConfig.findFirst({
+      where: { tenantId, sport: competition.sport ?? '', algorithm: 'ELO' },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    let seedOrder: string[] // entry IDs in seed order (1 = first)
+
+    if (rankingConfig) {
+      // Fetch ELO ratings for all entry subjects (personId or teamId)
+      const subjectIds = entries
+        .map((e) => e.personId ?? e.teamId)
+        .filter((id): id is string => id !== null)
+
+      const rankingEntries = await this.prisma.rankingEntry.findMany({
+        where: { configId: rankingConfig.id, OR: [{ personId: { in: subjectIds } }, { teamId: { in: subjectIds } }] },
+        orderBy: { eloRating: 'desc' },
+      })
+
+      // Build a map: subjectId → eloRating
+      const eloMap = new Map<string, number>()
+      for (const re of rankingEntries) {
+        const id = re.personId ?? re.teamId
+        if (id) eloMap.set(id, re.eloRating)
+      }
+
+      // Sort entries: ranked by ELO desc, unranked entries go to the end
+      const sorted = [...entries].sort((a, b) => {
+        const idA = a.personId ?? a.teamId ?? ''
+        const idB = b.personId ?? b.teamId ?? ''
+        const eloA = eloMap.get(idA) ?? 0
+        const eloB = eloMap.get(idB) ?? 0
+        return eloB - eloA
+      })
+      seedOrder = sorted.map((e) => e.id)
+    } else {
+      // Fallback: alphabetical by displayName
+      const sorted = [...entries].sort((a, b) => (a.displayName ?? '').localeCompare(b.displayName ?? ''))
+      seedOrder = sorted.map((e) => e.id)
+    }
+
+    // Write seed numbers 1..N
+    await this.prisma.$transaction(
+      seedOrder.map((id, i) =>
+        this.prisma.entry.update({ where: { id }, data: { seed: i + 1 } }),
+      ),
+    )
+
+    return { seeded: seedOrder.length, source: rankingConfig ? 'elo' : 'fallback' }
+  }
+
+  /**
    * Generates the next round of matches for a SWISS format division.
    * Called after all matches in the current round are completed.
    */

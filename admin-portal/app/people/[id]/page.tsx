@@ -12,6 +12,8 @@ import { PersonRolesPanel } from "@/components/person-roles-panel"
 import { PersonRelationshipsPanel } from "@/components/person-relationships-panel"
 import { PersonActivityPanel } from "@/components/person-activity-panel"
 import { PersonFinancialProfile } from "@/components/person-financial-profile"
+import { AiInsightsPanel } from "@/components/ai-insights-panel"
+import { PlayerMatchingPanel } from "@/components/player-matching-panel"
 
 function formatDate(value?: string | null) {
   if (!value) return "n/a"
@@ -181,6 +183,10 @@ export default async function PersonDetailPage({
           personTags={person.personTags ?? []}
           catalogueTags={catalogueTags}
         />
+
+        <AiInsightsPanel personId={person.id} />
+
+        <PlayerMatchingPanel personId={person.id} />
 
         <PersonFinancialProfile customerId={person.id} />
 

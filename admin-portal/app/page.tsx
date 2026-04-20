@@ -2,6 +2,7 @@ import Link from "next/link"
 import {
   ArrowRight,
   BarChart3,
+  Brain,
   Building2,
   CalendarDays,
   CheckCircle2,
@@ -9,8 +10,10 @@ import {
   Crown,
   GraduationCap,
   Globe,
+  Key,
   Layers,
   LayoutGrid,
+  MessageSquare,
   Package,
   PoundSterling,
   RefreshCw,
@@ -20,9 +23,11 @@ import {
   Trophy,
   TrendingUp,
   Users,
+  Zap,
 } from "lucide-react"
 import { PortalLayout } from "@/components/portal-layout"
 import { RecentBookingsTable } from "@/components/recent-bookings-table"
+import { DashboardTrendChart } from "@/components/dashboard-trend-chart"
 import {
   getAddOnServices,
   getAvailabilityConfigs,
@@ -46,6 +51,10 @@ import {
   getVenues,
   getAllCompetitionsForReport,
   getRankingConfigs,
+  getApiKeys,
+  getWebhookSubscriptions,
+  getHighChurnMembers,
+  getAnomalyFlags,
 } from "@/lib/api"
 
 function StatCard({
@@ -142,6 +151,10 @@ export default async function DashboardPage() {
     competitionsResult,
     rankingConfigsResult,
     teamOverviewResult,
+    apiKeysResult,
+    webhookSubsResult,
+    highChurnResult,
+    anomalyAlertsResult,
   ] = await Promise.allSettled([
     getVenues(),
     getResources(),
@@ -165,6 +178,10 @@ export default async function DashboardPage() {
     getAllCompetitionsForReport(),
     getRankingConfigs(),
     getTeamReportOverview(),
+    getApiKeys(),
+    getWebhookSubscriptions(),
+    getHighChurnMembers(60, 1),
+    getAnomalyFlags(1, 50, { unresolvedOnly: true, severity: "alert" }),
   ])
 
   const venuesResponse = venuesResult.status === "fulfilled" ? venuesResult.value : null
@@ -191,6 +208,10 @@ export default async function DashboardPage() {
   const rawCompetitions: any[] = competitionsResult.status === "fulfilled" ? competitionsResult.value : []
   const rankingConfigs: any[] = rankingConfigsResult.status === "fulfilled" ? (rankingConfigsResult.value as any[] ?? []) : []
   const teamOverview: any[] = teamOverviewResult.status === "fulfilled" ? (teamOverviewResult.value as any[] ?? []) : []
+  const apiKeys: any[] = apiKeysResult.status === "fulfilled" ? ((apiKeysResult.value as any)?.data ?? []) : []
+  const webhookSubs: any[] = webhookSubsResult.status === "fulfilled" ? ((webhookSubsResult.value as any)?.data ?? []) : []
+  const highChurnTotal: number = highChurnResult.status === "fulfilled" ? ((highChurnResult.value as any)?.pagination?.total ?? 0) : 0
+  const anomalyAlertCount: number = anomalyAlertsResult.status === "fulfilled" ? ((anomalyAlertsResult.value as any)?.pagination?.total ?? 0) : 0
 
   function extractData(r: any): any[] {
     if (!r) return []
@@ -221,6 +242,9 @@ export default async function DashboardPage() {
   const totalSquadPlayers = teamOverview.reduce((s, t) => s + (t.activePlayers ?? 0), 0)
   const totalSquadCoaches = teamOverview.reduce((s, t) => s + (t.coachCount ?? 0), 0)
   const publicTeams = teams.filter((t: any) => t.isPublic !== false).length
+
+  const activeApiKeys = apiKeys.filter((k: any) => k.isActive)
+  const activeWebhookSubs = webhookSubs.filter((s: any) => s.isActive)
 
   const activeCompetitions = rawCompetitions.filter((c: any) => c.status === "IN_PROGRESS" || c.status === "REGISTRATION_OPEN")
   const openForEntry = rawCompetitions.filter((c: any) => c.status === "REGISTRATION_OPEN")
@@ -303,10 +327,10 @@ export default async function DashboardPage() {
       summary: `${activeTeams.length} active teams · ${totalSquadPlayers} players · ${totalSquadCoaches} coaches · public portal pages with squad, fixtures and sponsors`,
     },
     {
-      title: "Competitions & Ratings",
+      title: "Competitions & Rankings",
       href: "/reports/competition-overview",
       icon: Trophy,
-      summary: `${rawCompetitions.length} competitions · ${activeCompetitions.length} active · ${rankingConfigs.length} rating configs · ELO and Points Table`,
+      summary: `${rawCompetitions.length} competitions · ${activeCompetitions.length} active · ${rankingConfigs.length} ranking configs · ELO and Points Table · submissions, audit trail and messaging`,
     },
     {
       title: "Coaching",
@@ -322,15 +346,21 @@ export default async function DashboardPage() {
     },
     {
       title: "Payments",
-      href: "/settings",
+      href: "/reports/payment-health",
       icon: CreditCard,
       summary: `Gateway-agnostic payment service · Stripe live · GoCardless ready`,
+    },
+    {
+      title: "Discipline & Work Cards",
+      href: "/discipline",
+      icon: ShieldCheck,
+      summary: `Disciplinary records against competitions with status tracking · staff work cards linked to operational workflows`,
     },
     {
       title: "Reports",
       href: "/reports/bookings",
       icon: BarChart3,
-      summary: `23 reports across bookings, revenue, utilisation, membership, coaching, teams, squad composition, website readiness and competition analytics`,
+      summary: `22 reports across bookings, revenue, utilisation, membership, coaching, teams, squad composition, website readiness, competition analytics and rankings leaderboard`,
     },
     {
       title: "Customer Portal",
@@ -342,7 +372,7 @@ export default async function DashboardPage() {
       title: "Mobile App",
       href: "/settings",
       icon: Smartphone,
-      summary: `Expo React Native app with auth, booking flow and account management`,
+      summary: `Expo React Native app — auth, booking flow, teams tab, coaching wizard, competitions tab and account management`,
     },
     {
       title: "Booking Rules",
@@ -350,11 +380,44 @@ export default async function DashboardPage() {
       icon: ShieldCheck,
       summary: `Access and pricing rules by membership type, role, time window and day of week`,
     },
+    {
+      title: "Communications Centre",
+      href: "/communications/log",
+      icon: MessageSquare,
+      summary: `Email & SMS campaigns · rich text composer · 10 system notification templates · suppression, guardian routing, message log and campaign analytics`,
+    },
+    {
+      title: "Support Chat",
+      href: "/settings",
+      icon: Layers,
+      summary: `AI-assisted support widget embedded in admin and customer portals — tenant-authenticated, real-time assistance`,
+    },
+    {
+      title: "Plan & Billing",
+      href: "/pricing",
+      icon: PoundSterling,
+      summary: `SaaS pricing engine — Core, Growth, Pro and Enterprise plans · feature entitlements · org subscriptions · add-ons`,
+    },
+    {
+      title: "Integrations",
+      href: "/settings/integrations/api-keys",
+      icon: Zap,
+      summary: `${activeApiKeys.length} active API key${activeApiKeys.length !== 1 ? "s" : ""} · ${activeWebhookSubs.length} active webhook subscription${activeWebhookSubs.length !== 1 ? "s" : ""} · scoped credentials, HMAC-signed delivery and retry worker`,
+    },
+    {
+      title: "AI Insights",
+      href: "/reports/anomalies",
+      icon: Brain,
+      summary: `Churn/LTV/default scoring · ${highChurnTotal} high-churn member${highChurnTotal !== 1 ? "s" : ""} flagged · ${anomalyAlertCount} unresolved anomaly alert${anomalyAlertCount !== 1 ? "s" : ""} · utilisation forecasting with dead-slot detection · player matching by ELO · ELO draw seeding`,
+    },
   ]
 
   const pilotSummaryItems = [
     "Flexible facility hierarchy — venues, resources and bookable units with conflict-aware availability",
-    "Real-time availability checking across full and partial facility configurations",
+    "Full CRUD for venues, resources, resource groups and bookable units — create and edit flows across admin portal",
+    "Parent-child bookable unit conflict auto-sync — unit_conflicts rows auto-created and cleared when parent/child relationships change",
+    "Facilities explorer with human-readable names — IDs replaced with venue and resource names throughout; unit parent shown by name",
+    "Real-time availability checking across full and partial facility configurations with dynamic venue picker and hydration-safe NOW indicator",
     "Recurring (series) bookings with iCal RRULE support and per-occurrence management",
     "Booking access and pricing rules by membership type, role, time window and day of week",
     "Pending approval workflow with admin sign-off before booking confirmation",
@@ -363,16 +426,34 @@ export default async function DashboardPage() {
     "Team management — rosters with player/coach/manager roles, fixtures, player availability, squad selection and fee charge runs",
     "Public team pages on the customer portal — squad grid, upcoming fixtures, recent results and sponsor carousel per team",
     "Competition management — competitions, divisions, entries, automated draw generation, match results, standings and reporting",
-    "Ratings engine — ELO rating system for individual sports and Points Table for team sports, updating automatically from verified match results",
+    "Competition submissions with admin approval workflow and rejection flow",
+    "Competition audit trail — full chronological log of all competition state changes and admin actions",
+    "Competition messaging — admin-to-participant messaging thread per competition",
+    "Discipline module — disciplinary records against competitions with status tracking and admin management",
+    "Work cards — staff task management linked to competitions and operational workflows",
+    "Ratings/rankings engine — ELO rating system for individual sports and Points Table for team sports, updating automatically from verified match results",
+    "Rankings leaderboard report — filterable per sport, gender and age group with rank, rating and trend indicators",
     "Coaching service — coach profiles, lesson types and session scheduling",
     "Add-ons for equipment hire, ancillary facilities, access services and products",
     "Gateway-agnostic payment service — Stripe implemented, GoCardless ready, idempotent by design",
+    "Support chat widget — AI-assisted real-time support embedded in admin portal and customer portal, tenant-authenticated",
     "Org-level sponsor management with public sponsor carousel on team portal pages",
     "Multi-tenant admin portal, white-label customer portal with public team pages and branded Expo mobile app",
-    "Reporting suite — 23 reports covering bookings, revenue, utilisation, membership, coaching, teams, squad composition, team website readiness and competition analytics with PDF and CSV export",
+    "Reporting suite — 22 reports covering bookings, revenue, utilisation, membership, coaching, teams, squad composition, team website readiness, competition analytics and rankings leaderboard with PDF and CSV export",
     "Role-based admin access control across all portal functions",
+    "Communications Centre — email and SMS campaigns with rich text composer, scheduling, audience targeting, suppression, guardian routing for minors and message log",
+    "10 system notification templates — booking confirmed/cancelled/reminder, membership activated/renewal/expired, payment success/failure/refund and fixture reminder; Azure Communication Services ready",
+    "Advanced audience builder — AND/OR rule engine with membership status, age range, tags, booking history, payment status and lifecycle stage; save named audience definitions",
+    "Campaign analytics — per-campaign sent/delivery/open/click/bounce rates driven by the message log with visual engagement funnel",
+    "Split payments — record multiple payers per booking with per-payer status (unpaid/partial/paid/refunded) and running collection total",
+    "Seasonal availability config linking — override opening hours, slot duration and new-day release time per season with venue/group/resource scope and day-of-week targeting",
+    "Integration layer — API key issuance with scoped credentials (HMAC-hashed, cs_ prefixed, shown once), webhook subscriptions with per-subscription signing secrets, delivery worker with exponential retry and dead-letter status",
+    "Inbound event fan-out — booking-service, membership-service and payment-service all forward domain events to integration-service for delivery to registered webhook endpoints",
+    "Accounting integration — Xero and QuickBooks OAuth 2.0 with token encryption at rest; real-time payment and membership event sync to invoices and credit notes; nightly batch reconciliation",
+    "AI analytics — nightly member scoring across churn risk, lifetime value, payment default risk and optimal send hour; anomaly detection across 4 rules (dormant spike, payment failure spike, court hoarding, extreme duration); 7–14 day utilisation forecasting with dead-slot detection; player matching by ELO proximity with activity bonus",
+    "ELO draw seeding — competition draws auto-seeded by ELO rating before generation; alphabetical fallback when no rating config exists",
     "Microservice architecture ready to scale to production on Azure",
-    "411-test automated regression suite — 349 service integration tests across 8 microservices and 62 Playwright e2e tests covering end-to-end user journeys, all running against a real database",
+    "817-test automated regression suite — 733 service integration tests across 12 microservices and 84 Playwright e2e tests covering end-to-end user journeys, all running against a real database",
   ]
 
   return (
@@ -443,7 +524,53 @@ export default async function DashboardPage() {
             icon={BarChart3}
             accent="#f59e0b"
           />
+          <StatCard
+            title="High-Churn Risk"
+            value={highChurnTotal}
+            description="Members with churn risk ≥ 60 — scored nightly by AI analytics."
+            icon={Brain}
+            accent="#dc2626"
+          />
+          <StatCard
+            title="Anomaly Alerts"
+            value={anomalyAlertCount}
+            description="Unresolved alert-severity anomaly flags — rule-based detection runs nightly."
+            icon={TrendingUp}
+            accent="#ea580c"
+          />
         </div>
+
+        {/* ── Booking trends ── */}
+        {dailyStats.length > 0 && (
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-md">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="text-sm font-semibold text-slate-900">Bookings — last 30 days</div>
+                <BarChart3 className="h-4 w-4 text-slate-400" />
+              </div>
+              <DashboardTrendChart
+                data={dailyStats}
+                valueKey="bookingCount"
+                color="#1857E0"
+                formatValue={(v) => v.toLocaleString("en-GB")}
+              />
+            </div>
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-md">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="text-sm font-semibold text-slate-900">Revenue — last 30 days</div>
+                <PoundSterling className="h-4 w-4 text-slate-400" />
+              </div>
+              <DashboardTrendChart
+                data={dailyStats}
+                valueKey="revenue"
+                color="#10b981"
+                formatValue={(v) =>
+                  `£${v.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                }
+              />
+            </div>
+          </div>
+        )}
 
         {/* ── Platform Coverage + Pilot Summary ── */}
         <SectionCard
@@ -473,6 +600,111 @@ export default async function DashboardPage() {
                 </Link>
               )
             })}
+          </div>
+        </SectionCard>
+
+        {/* ── Recent Platform Additions ── */}
+        <SectionCard
+          title="Recent Platform Additions"
+          description="Features shipped in the latest development phases — covering AI analytics, accounting integrations, competition operations, communications, support and platform quality."
+        >
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {[
+              {
+                title: "Communications Centre",
+                body: "Full email & SMS campaign system — rich text composer with toolbar, 10 system notification templates, suppression engine, guardian routing, saved audiences, draft saving, recipient preview and per-campaign analytics.",
+              },
+              {
+                title: "Advanced Audience Builder",
+                body: "AND/OR rule builder for targeting campaigns — filter by membership status, age range, tags, booking history, payment status and lifecycle stage. Save named audience definitions and reuse across campaigns.",
+              },
+              {
+                title: "Campaign Analytics",
+                body: "Per-campaign stats dashboard: sent count, delivery rate, open rate, click rate and bounce rate. Visual engagement funnel driven by the message log. Suppression breakdown included.",
+              },
+              {
+                title: "Split Payments on Bookings",
+                body: "Record multiple payers against a single booking — payer name, amount, method (card/cash/BACS) and status (unpaid/partial/paid/refunded). Running totals show amount collected vs booking value.",
+              },
+              {
+                title: "Seasonal Availability Configs",
+                body: "Link availability configs (opening hours, slot duration, new-day release time) directly to a seasonal schedule to override defaults during that period. Supports venue, resource group or specific resource scope, with optional day-of-week targeting.",
+              },
+              {
+                title: "Revenue & Bookings Trend Charts",
+                body: "30-day bar charts for daily booking volumes and daily revenue on the admin dashboard — built as pure SVG with no external charting library.",
+              },
+              {
+                title: "Full CRUD — Facilities",
+                body: "Create and edit flows for venues, resources, resource groups and bookable units. Human-readable names throughout the facilities explorer; unit parent shown by name, not UUID.",
+              },
+              {
+                title: "Parent-Child Unit Conflict Sync",
+                body: "When a parentUnitId is set or changed on a bookable unit, unit_conflicts rows are auto-created and cleared — no manual conflict management needed.",
+              },
+              {
+                title: "Competition Submissions",
+                body: "Athletes and clubs submit entries for competition review. Admins can approve or reject with reason. Full submission status lifecycle tracked per competition.",
+              },
+              {
+                title: "Competition Audit Trail & Messaging",
+                body: "Chronological log of all competition state changes and admin actions. Admin-to-participant messaging thread per competition surfaced in the customer portal.",
+              },
+              {
+                title: "Discipline Module & Work Cards",
+                body: "Disciplinary records against competitions with status tracking. Staff work cards for task management linked to competitions and operational workflows.",
+              },
+              {
+                title: "Rankings Leaderboard & Support Chat",
+                body: "Filterable leaderboard (sport, gender, age group) with ELO and Points Table ratings. AI-assisted support chat widget in both admin and customer portals, tenant-authenticated.",
+              },
+              {
+                title: "Integration Layer — API Keys",
+                body: `Issue scoped API credentials for third-party systems. Each key is HMAC-SHA256 hashed at rest — the \`cs_\` prefixed plaintext is shown once on creation and never stored. Scopes: bookings:read, members:read, competitions:read, teams:read, webhooks:manage. ${apiKeys.length} key${apiKeys.length !== 1 ? "s" : ""} issued, ${activeApiKeys.length} active.`,
+              },
+              {
+                title: "Integration Layer — Webhooks",
+                body: `Subscribe third-party endpoints to platform events. Each subscription carries a per-tenant HMAC signing secret for request verification via X-ClubSpark-Signature. A 30-second cron worker delivers events with a 5-attempt exponential retry schedule (30s → 2m → 10m → 1h → 4h). ${webhookSubs.length} subscription${webhookSubs.length !== 1 ? "s" : ""} configured, ${activeWebhookSubs.length} active.`,
+              },
+              {
+                title: "AI Insights — Churn Risk & LTV",
+                body: `Nightly batch scoring for all members: churn risk (0–100, band: low/medium/high) using booking recency, trend, membership status, email engagement; lifetime value in £/year using booking + membership + coaching revenue with a tenure-based retention multiplier (0.7–1.5×). ${highChurnTotal} member${highChurnTotal !== 1 ? "s" : ""} currently at high churn risk.`,
+              },
+              {
+                title: "AI Insights — Payment Default & Send Hour",
+                body: "Payment default risk (0–100) based on failed payment history, no-show rate, membership tenure and recent successful payments. Optimal send hour identifies the best time to contact each member from their email-open histogram, returned with a confidence score. All four scores visible per-member in the AI Insights panel on the person detail page.",
+              },
+              {
+                title: "ELO Draw Seeding",
+                body: "Before generating a competition draw, admins can auto-seed confirmed entries by ELO rating — highest-rated player becomes seed 1. Falls back to alphabetical order if no ELO ranking config exists for the competition's sport. One-click 'Seed by ELO' button on the draw panel with clear feedback on source.",
+              },
+              {
+                title: "Accounting Integration — Xero & QuickBooks",
+                body: "OAuth 2.0 connection flow for Xero and QuickBooks. Tokens encrypted at rest (AES-256-GCM) and auto-refreshed within 5 minutes of expiry. Real-time sync: payment.succeeded → invoice, refund → credit note, membership.activated → invoice. Nightly batch reconciliation for any missed events. Configurable invoice mode (DRAFT/AUTHORISED), revenue account and tax rate.",
+              },
+              {
+                title: "AI Anomaly Detection",
+                body: `Rule-based detection running nightly at 03:00 UTC. Four rules: dormant account spike (60+ days inactive → 5+ bookings in 24h, alert), payment failure spike (3+ failures in 24h, alert), court hoarding (same unit booked 7+ times in 7 days, warning), extreme booking duration (>6 hours, warning). Idempotent — skips re-flagging unresolved duplicates within 24h. ${anomalyAlertCount} unresolved alert${anomalyAlertCount !== 1 ? "s" : ""} flagged.`,
+              },
+              {
+                title: "Facility Utilisation Forecasting",
+                body: "7–14 day occupancy forecasting by bookable unit — rolling 4-week average occupancy by unit, day-of-week and hour. Dead slots (predicted <30%) identified from 3 days ahead and surfaced per-unit with lowest occupancy. 'Previous bookers' endpoint returns person IDs who previously used that slot — ready to wire to a targeted campaign. Computed nightly at 02:00 UTC.",
+              },
+              {
+                title: "Player Matching",
+                body: "Match players with similar skill levels for a sport. ELO proximity within ±200 points scores up to 60 points (closer = higher); activity bonus (last-60-day booking frequency) adds up to 40 points. Graceful fallback to activity-only matching when no ELO config exists. Returns top 15 ranked candidates. Accessible via the Player Matching panel on every person detail page.",
+              },
+            ].map(({ title, body }) => (
+              <div key={title} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 shadow-sm">
+                <div className="flex items-start gap-2">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#1857E0]" />
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">{title}</div>
+                    <div className="mt-1 text-sm leading-5 text-slate-500">{body}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </SectionCard>
 
@@ -713,14 +945,14 @@ export default async function DashboardPage() {
             </div>
           </SectionCard>
 
-          <SectionCard title="Teams, Coaching &amp; Competitions" description="Team sports management, coaching operations, competition lifecycle and ratings." actionHref="/teams" actionLabel="View Teams">
+          <SectionCard title="Teams, Coaching &amp; Competitions" description="Team sports management, coaching operations, full competition lifecycle, rankings engine, discipline and work cards." actionHref="/teams" actionLabel="View Teams">
             <div className="space-y-4">
               {[
                 { label: "Active Teams", sub: "With rosters and fixture schedules", value: activeTeams.length },
                 { label: "Recurring Series", sub: "iCal RRULE recurring bookings", value: activeSeries.length },
                 { label: "Coaches", sub: "With lesson types and sessions", value: coaches.length },
-                { label: "Competitions", sub: `${activeCompetitions.length} active · ${openForEntry.length} open for entry`, value: rawCompetitions.length },
-                { label: "Rating Configs", sub: "ELO and Points Table across sports", value: rankingConfigs.length },
+                { label: "Competitions", sub: `${activeCompetitions.length} active · ${openForEntry.length} open · submissions, audit, messaging`, value: rawCompetitions.length },
+                { label: "Ranking Configs", sub: "ELO and Points Table across sports", value: rankingConfigs.length },
               ].map(({ label, sub, value }) => (
                 <div key={label} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm transition hover:shadow-md">
                   <div>
@@ -777,9 +1009,19 @@ export default async function DashboardPage() {
                 body: "Admin portal, multi-tenant white-label customer portal and branded Expo mobile app — all live and connected to the same service layer.",
               },
               {
+                icon: Zap,
+                title: "Integration Layer",
+                body: "API key issuance with scoped credentials for third-party consumers. Webhook subscriptions with HMAC-signed delivery to external endpoints. 30-second cron worker, 5-attempt exponential retry and dead-letter queue. Events forwarded from booking, membership and payment services automatically.",
+              },
+              {
+                icon: Brain,
+                title: "AI Analytics Layer",
+                body: "Nightly member scoring (churn, LTV, default risk, send hour) · rule-based anomaly detection with 4 detection rules · 7–14 day utilisation forecasting with dead-slot identification and previous-booker lookup · player matching by ELO proximity. Pure TypeScript, cross-schema SQL — no ML infrastructure required.",
+              },
+              {
                 icon: Layers,
                 title: "Production Architecture",
-                body: "Nine independent NestJS microservices with Prisma migrations, 349 integration tests, 62 Playwright e2e tests, Swagger docs and a clear Azure deployment path.",
+                body: "Twelve independent NestJS microservices with Prisma migrations, 733 service integration tests, 84 Playwright e2e tests (817 total), Swagger docs on every service and a clear Azure deployment path.",
               },
             ].map(({ icon: Icon, title, body }) => (
               <div key={title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">

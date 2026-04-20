@@ -8,9 +8,9 @@
     "services/*"
   ],
   "scripts": {
-    "build:services": "npm run build --workspace=services/venue-service && npm run build --workspace=services/booking-service && npm run build --workspace=services/people-service && npm run build --workspace=services/membership-service && npm run build --workspace=services/coaching-service && npm run build --workspace=services/team-service",
-    "start:services": "concurrently --names \"venue,booking,people,membership,coaching,team\" --prefix-colors \"blue,green,yellow,magenta,cyan,red\" \"node services/venue-service/dist/main.js\" \"node services/booking-service/dist/main.js\" \"node services/people-service/dist/main.js\" \"node services/membership-service/dist/main.js\" \"node services/coaching-service/dist/main.js\" \"node services/team-service/dist/main.js\"",
-    "start:all": "concurrently --names \"venue,booking,people,membership,coaching,team,portal\" --prefix-colors \"blue,green,yellow,magenta,cyan,red,white\" \"node services/venue-service/dist/main.js\" \"node services/booking-service/dist/main.js\" \"node services/people-service/dist/main.js\" \"node services/membership-service/dist/main.js\" \"node services/coaching-service/dist/main.js\" \"node services/team-service/dist/main.js\" \"npm run dev --workspace=admin-portal\"",
+    "build:services": "npm run build --workspace=services/venue-service && npm run build --workspace=services/booking-service && npm run build --workspace=services/people-service && npm run build --workspace=services/membership-service && npm run build --workspace=services/coaching-service && npm run build --workspace=services/team-service && npm run build --workspace=services/comms-service && npm run build --workspace=services/integration-service && npm run build --workspace=services/analytics-service",
+    "start:services": "concurrently --names \"venue,booking,people,membership,coaching,team,comms,integration,analytics\" --prefix-colors \"blue,green,yellow,magenta,cyan,red,white,bgCyan,bgGreen\" \"node services/venue-service/dist/main.js\" \"node services/booking-service/dist/main.js\" \"node services/people-service/dist/main.js\" \"node services/membership-service/dist/main.js\" \"node services/coaching-service/dist/main.js\" \"node services/team-service/dist/main.js\" \"node services/comms-service/dist/main.js\" \"node services/integration-service/dist/main.js\" \"node services/analytics-service/dist/main.js\"",
+    "start:all": "concurrently --names \"venue,booking,people,membership,coaching,team,comms,integration,analytics,portal\" --prefix-colors \"blue,green,yellow,magenta,cyan,red,white,bgCyan,bgGreen,bgBlue\" \"node services/venue-service/dist/main.js\" \"node services/booking-service/dist/main.js\" \"node services/people-service/dist/main.js\" \"node services/membership-service/dist/main.js\" \"node services/coaching-service/dist/main.js\" \"node services/team-service/dist/main.js\" \"node services/comms-service/dist/main.js\" \"node services/integration-service/dist/main.js\" \"node services/analytics-service/dist/main.js\" \"npm run dev --workspace=admin-portal\"",
     "dev:portal": "npm run dev --workspace=admin-portal",
     "dev:booking": "npm run dev --workspace=services/booking-service",
     "dev:venue": "npm run dev --workspace=services/venue-service",
@@ -18,6 +18,9 @@
     "dev:membership": "npm run dev --workspace=services/membership-service",
     "dev:coaching": "npm run dev --workspace=services/coaching-service",
     "dev:team": "npm run dev --workspace=services/team-service",
+    "dev:comms": "npm run dev --workspace=services/comms-service",
+    "dev:integration": "npm run dev --workspace=services/integration-service",
+    "dev:analytics": "npm run dev --workspace=services/analytics-service",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
@@ -36,5 +39,8 @@
   "engines": {
     "node": ">=20.0.0",
     "npm": ">=10.0.0"
+  },
+  "dependencies": {
+    "@fastify/helmet": "^11.1.1"
   }
 }

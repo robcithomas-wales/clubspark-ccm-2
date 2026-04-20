@@ -1,11 +1,24 @@
 import { Suspense } from "react"
 import Link from "next/link"
 import { Plus, Upload } from "lucide-react"
-import { getCustomers } from "@/lib/api"
+import { getCustomers, getBulkScores } from "@/lib/api"
 import { PortalLayout } from "@/components/portal-layout"
 import { PaginationBar } from "@/components/pagination-bar"
 import { LifecycleBadge } from "@/components/lifecycle-panel"
 import { PeopleSearchBar } from "@/components/people-search-bar"
+
+function ChurnRiskBadge({ band }: { band: "low" | "medium" | "high" | undefined }) {
+  if (!band || band === "low") return null
+  const colours = {
+    medium: "bg-amber-50 text-amber-700 ring-amber-600/20",
+    high: "bg-red-50 text-red-700 ring-red-600/20",
+  }
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset capitalize ${colours[band]}`}>
+      {band} churn
+    </span>
+  )
+}
 
 type Person = {
   id: string
@@ -47,6 +60,9 @@ export default async function PeoplePage({
   })
   const people: Person[] = result.data ?? []
   const pagination = result.pagination
+
+  const personIds = people.map((p) => p.id)
+  const scores = await getBulkScores(personIds).catch(() => ({} as Record<string, { churnBand: "low" | "medium" | "high" }>))
 
   const activeCount = people.filter((p) => p.lifecycleState === "active").length
   const withEmail = people.filter((p) => !!p.email).length
@@ -107,12 +123,13 @@ export default async function PeoplePage({
             <div className="px-6 py-10 text-sm text-slate-500">No people found.</div>
           ) : (
             <>
-              <div className="hidden grid-cols-5 gap-4 border-b border-slate-200 bg-slate-100 px-6 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 lg:grid">
+              <div className="hidden grid-cols-6 gap-4 border-b border-slate-200 bg-slate-100 px-6 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 lg:grid">
                 <div>Name</div>
                 <div>Email</div>
                 <div>Phone</div>
                 <div>Status</div>
                 <div>Tags</div>
+                <div>AI Risk</div>
               </div>
 
               <div className="divide-y divide-slate-200">
@@ -122,7 +139,7 @@ export default async function PeoplePage({
                     href={`/people/${person.id}`}
                     className="block px-6 py-5 transition hover:bg-blue-50/40"
                   >
-                    <div className="grid gap-4 lg:grid-cols-5 lg:items-center">
+                    <div className="grid gap-4 lg:grid-cols-6 lg:items-center">
                       <div className="min-w-0">
                         <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400 lg:hidden">Name</div>
                         <div className="truncate font-semibold text-slate-900">{getPersonName(person)}</div>
@@ -146,6 +163,10 @@ export default async function PeoplePage({
                             ? `${person.personTags.length} tag${person.personTags.length !== 1 ? "s" : ""}`
                             : "—"}
                         </div>
+                      </div>
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400 lg:hidden">AI Risk</div>
+                        <ChurnRiskBadge band={scores[person.id]?.churnBand} />
                       </div>
                     </div>
                   </Link>

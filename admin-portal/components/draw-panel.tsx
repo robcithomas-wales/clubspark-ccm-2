@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Shuffle, Trash2, RefreshCw } from "lucide-react"
+import { Shuffle, Trash2, RefreshCw, Sparkles } from "lucide-react"
 import Link from "next/link"
 
 interface Props {
@@ -32,11 +32,35 @@ export function DrawPanel({ competitionId, competition, division, initialMatches
   const [matches, setMatches] = useState<any[]>(initialMatches)
   const [generating, setGenerating] = useState(false)
   const [resetting, setResetting] = useState(false)
+  const [seeding, setSeeding] = useState(false)
+  const [seedResult, setSeedResult] = useState<{ seeded: number; source: "elo" | "fallback" } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const confirmedEntries = entries.filter(e => e.status === "CONFIRMED")
   const drawExists = matches.length > 0
   const rounds = [...new Set(matches.map(m => m.round))].sort((a, b) => a - b)
+
+  async function seedByElo() {
+    if (!division) return
+    setSeeding(true)
+    setSeedResult(null)
+    setError(null)
+    try {
+      const res = await fetch(`/api/competitions/${competitionId}/draw/seed?divisionId=${division.id}`, {
+        method: "POST",
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error ?? "Failed to seed entries")
+      }
+      const data = await res.json()
+      setSeedResult(data)
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setSeeding(false)
+    }
+  }
 
   async function generateDraw() {
     if (!division) return
@@ -86,6 +110,14 @@ export function DrawPanel({ competitionId, competition, division, initialMatches
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
       )}
 
+      {seedResult && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          {seedResult.seeded} entries seeded{" "}
+          {seedResult.source === "elo" ? "by ELO rating" : "alphabetically (no ELO config found)"}.
+          You can now generate the draw.
+        </div>
+      )}
+
       {/* Division selector */}
       {competition.divisions?.length > 1 && (
         <div className="flex gap-2">
@@ -118,6 +150,16 @@ export function DrawPanel({ competitionId, competition, division, initialMatches
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {!drawExists && confirmedEntries.length >= 2 && (
+              <button
+                onClick={seedByElo}
+                disabled={seeding}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
+              >
+                <Sparkles className="h-4 w-4 text-[#1857E0]" />
+                {seeding ? "Seeding…" : "Seed by ELO"}
+              </button>
+            )}
             {drawExists ? (
               <button
                 onClick={resetDraw}

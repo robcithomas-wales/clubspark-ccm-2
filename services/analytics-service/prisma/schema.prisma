@@ -1,0 +1,82 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["analytics"]
+}
+
+model MemberScore {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  personId      String   @map("person_id") @db.Uuid
+
+  // Churn risk: 0 (low) – 100 (high)
+  churnRisk     Int      @default(0) @map("churn_risk")
+  churnBand     String   @default("low") @map("churn_band")   // low | medium | high
+  churnFactors  Json     @default("{}") @map("churn_factors")
+
+  // Estimated annual value in pence
+  ltvScore      Int      @default(0) @map("ltv_score")
+  ltvFactors    Json     @default("{}") @map("ltv_factors")
+
+  // Payment default risk: 0 (low) – 100 (high)
+  defaultRisk   Int      @default(0) @map("default_risk")
+  defaultBand   String   @default("low") @map("default_band") // low | medium | high
+  defaultFactors Json    @default("{}") @map("default_factors")
+
+  // Optimal comms send hour (0-23 UTC), null = insufficient data
+  optimalSendHour    Int?   @map("optimal_send_hour")
+  sendHourConfidence Float? @map("send_hour_confidence")
+
+  computedAt    DateTime @map("computed_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, personId])
+  @@index([tenantId, churnRisk])
+  @@index([tenantId, defaultRisk])
+  @@schema("analytics")
+  @@map("member_scores")
+}
+
+model ForecastSlot {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String   @map("tenant_id") @db.Uuid
+  unitId             String   @map("unit_id") @db.Uuid
+  forecastDate       DateTime @map("forecast_date") @db.Date
+  hourSlot           Int      @map("hour_slot")
+  predictedOccupancy Float    @map("predicted_occupancy")
+  historicalWeeks    Int      @default(0) @map("historical_weeks")
+  isDeadSlot         Boolean  @default(false) @map("is_dead_slot")
+  computedAt         DateTime @default(now()) @map("computed_at")
+
+  @@unique([tenantId, unitId, forecastDate, hourSlot])
+  @@index([tenantId, forecastDate, isDeadSlot])
+  @@schema("analytics")
+  @@map("forecast_slots")
+}
+
+model AnomalyFlag {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  personId    String?   @map("person_id") @db.Uuid
+  entityType  String    @map("entity_type")
+  entityId    String    @map("entity_id")
+  ruleId      String    @map("rule_id")
+  severity    String
+  description String
+  metadata    Json      @default("{}")
+  resolvedAt  DateTime? @map("resolved_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([tenantId, resolvedAt])
+  @@index([tenantId, personId])
+  @@index([tenantId, ruleId])
+  @@schema("analytics")
+  @@map("anomaly_flags")
+}

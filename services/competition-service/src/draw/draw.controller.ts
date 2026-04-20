@@ -19,6 +19,17 @@ export class DrawController {
     return this.service.generateDraw(req.tenantContext.tenantId, competitionId, divisionId)
   }
 
+  @Post('seed')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Seed confirmed entries by ELO rating (highest ELO = seed 1). Falls back to alphabetical if no ELO config exists.' })
+  seedByElo(
+    @Request() req: FastifyRequest & { tenantContext: { tenantId: string } },
+    @Param('competitionId') competitionId: string,
+    @Param('divisionId') divisionId: string,
+  ) {
+    return this.service.seedEntriesByElo(req.tenantContext.tenantId, competitionId, divisionId)
+  }
+
   @Post('next-round')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Generate next Swiss round pairings' })

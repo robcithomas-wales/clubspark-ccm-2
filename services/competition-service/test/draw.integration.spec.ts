@@ -62,4 +62,93 @@ describe.runIf(DB_AVAILABLE)('Draw — integration', () => {
     const res = await request.post(`/competitions/${compId}/divisions/${divId}/draw`).set(HEADERS)
     expect(res.status).toBe(400)
   })
+
+  // ── ELO seeding ────────────────────────────────────────────────────────────
+
+  describe('POST .../draw/seed', () => {
+    it('falls back to alphabetical when no ELO ranking config exists', async () => {
+      const { compId, divId } = await createCompetitionWithEntries(request, 'KNOCKOUT', 'tennis', 4)
+      const res = await request.post(`/competitions/${compId}/divisions/${divId}/draw/seed`).set(HEADERS)
+      expect(res.status).toBe(200)
+      expect(res.body.seeded).toBe(4)
+      expect(res.body.source).toBe('fallback')
+      // Verify seed numbers were written — Player 1..4 sorted alphabetically
+      const entries = await prisma.entry.findMany({ where: { divisionId: divId }, orderBy: { seed: 'asc' } })
+      expect(entries.every(e => e.seed !== null)).toBe(true)
+      expect(entries.map(e => e.seed)).toEqual([1, 2, 3, 4])
+    })
+
+    it('seeds by ELO desc when a matching ranking config exists', async () => {
+      // Create competition with tennis entries using fixed person IDs
+      const comp = await request.post('/competitions').set(JSON_HEADERS).send({ name: 'ELO Test', sport: 'tennis', format: 'KNOCKOUT', entryType: 'INDIVIDUAL' })
+      const compId = comp.body.data.id
+      const divId = comp.body.data.divisions[0].id
+
+      const personIds = [
+        'aa000000-0000-4000-8000-000000000001',
+        'aa000000-0000-4000-8000-000000000002',
+        'aa000000-0000-4000-8000-000000000003',
+      ]
+      const displayNames = ['Charlie', 'Alice', 'Bob']
+
+      for (let i = 0; i < 3; i++) {
+        const e = await request.post(`/competitions/${compId}/entries`).set(JSON_HEADERS).send({
+          displayName: displayNames[i], personId: personIds[i],
+        })
+        await request.patch(`/competitions/${compId}/entries/${e.body.data.id}`).set(JSON_HEADERS).send({ status: 'CONFIRMED', divisionId: divId })
+      }
+
+      // Create ELO ranking config and set ratings: Alice=1200, Bob=1100, Charlie=1050
+      const configRes = await request.post('/rankings/configs').set(JSON_HEADERS).send({
+        sport: 'tennis', scope: 'ALL_TIME', algorithm: 'ELO',
+      })
+      const configId = configRes.body.data.id
+      const eloRatings: Record<string, number> = {
+        'aa000000-0000-4000-8000-000000000001': 1050, // Charlie
+        'aa000000-0000-4000-8000-000000000002': 1200, // Alice — highest
+        'aa000000-0000-4000-8000-000000000003': 1100, // Bob
+      }
+      await prisma.$transaction(
+        personIds.map(pid =>
+          prisma.rankingEntry.create({
+            data: { tenantId: TEST_TENANT_ID, configId, personId: pid, eloRating: eloRatings[pid] ?? 1000, position: 1 },
+          })
+        )
+      )
+
+      const res = await request.post(`/competitions/${compId}/divisions/${divId}/draw/seed`).set(HEADERS)
+      expect(res.status).toBe(200)
+      expect(res.body.seeded).toBe(3)
+      expect(res.body.source).toBe('elo')
+
+      // Alice (1200) → seed 1, Bob (1100) → seed 2, Charlie (1050) → seed 3
+      const alice = await prisma.entry.findFirst({ where: { divisionId: divId, personId: 'aa000000-0000-4000-8000-000000000002' } })
+      const bob   = await prisma.entry.findFirst({ where: { divisionId: divId, personId: 'aa000000-0000-4000-8000-000000000003' } })
+      const charlie = await prisma.entry.findFirst({ where: { divisionId: divId, personId: 'aa000000-0000-4000-8000-000000000001' } })
+      expect(alice?.seed).toBe(1)
+      expect(bob?.seed).toBe(2)
+      expect(charlie?.seed).toBe(3)
+
+      // Cleanup ranking data
+      await prisma.rankingEntry.deleteMany({ where: { tenantId: TEST_TENANT_ID } })
+      await prisma.rankingConfig.deleteMany({ where: { tenantId: TEST_TENANT_ID } })
+    })
+
+    it('returns 400 when no confirmed entries to seed', async () => {
+      const comp = await request.post('/competitions').set(JSON_HEADERS).send({ name: 'Empty', sport: 'tennis', format: 'KNOCKOUT', entryType: 'INDIVIDUAL' })
+      const compId = comp.body.data.id
+      const divId = comp.body.data.divisions[0].id
+      const res = await request.post(`/competitions/${compId}/divisions/${divId}/draw/seed`).set(HEADERS)
+      expect(res.status).toBe(400)
+    })
+
+    it('seed writes do not depend on prior seed values', async () => {
+      // Entries already have seed=1..4 set in createCompetitionWithEntries — seeding should overwrite
+      const { compId, divId } = await createCompetitionWithEntries(request, 'KNOCKOUT', 'tennis', 3)
+      const res = await request.post(`/competitions/${compId}/divisions/${divId}/draw/seed`).set(HEADERS)
+      expect(res.status).toBe(200)
+      const seeds = (await prisma.entry.findMany({ where: { divisionId: divId }, orderBy: { seed: 'asc' } })).map(e => e.seed)
+      expect(seeds).toEqual([1, 2, 3])
+    })
+  })
 })

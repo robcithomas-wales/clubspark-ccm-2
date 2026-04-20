@@ -5,8 +5,10 @@ import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
 import {
+  AlertTriangle,
   Bell,
   BarChart2,
+  Brain,
   CalendarDays,
   CalendarClock,
   CalendarOff,
@@ -16,19 +18,25 @@ import {
   Layers,
   LayoutGrid,
   LogOut,
+  Mail,
   MapPin,
   Newspaper,
   Search,
   Settings,
   ShieldCheck,
   ShoppingBag,
+  UserCheck,
   Users,
   Building2,
   Globe,
-  Repeat2,
   GraduationCap,
   Shield,
   Trophy,
+  TrendingUp,
+  Zap,
+  Filter,
+  Leaf,
+  RefreshCw,
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { PrintButton } from "@/components/reports/print-button"
@@ -42,8 +50,28 @@ const navSections = [
     ],
   },
   {
-    label: "Venue Setup",
+    label: "Operations",
     items: [
+      {
+        label: "Bookings",
+        icon: CalendarDays,
+        children: [
+          { label: "All Bookings", href: "/bookings" },
+          { label: "Pending Approvals", href: "/bookings/pending" },
+          { label: "Calendar", href: "/bookings/calendar" },
+          { label: "Recurring Series", href: "/booking-series" },
+          { label: "Open Sessions", href: "/sessions" },
+        ],
+      },
+      { label: "Availability", href: "/availability", icon: CalendarClock },
+      { label: "Customers", href: "/customers", icon: UserCheck },
+      { label: "People", href: "/people", icon: Users },
+    ],
+  },
+  {
+    label: "Facilities",
+    items: [
+      { label: "Facilities", href: "/facilities", icon: Building2 },
       { label: "Venues", href: "/venues", icon: MapPin },
       {
         label: "Resources",
@@ -58,26 +86,36 @@ const navSections = [
     ],
   },
   {
-    label: "Operations",
+    label: "Scheduling & Rules",
     items: [
-      { label: "Facilities", href: "/facilities", icon: Building2 },
-      {
-        label: "Bookings",
-        icon: CalendarDays,
-        children: [
-          { label: "All Bookings", href: "/bookings" },
-          { label: "Pending Approvals", href: "/bookings/pending" },
-          { label: "Calendar", href: "/bookings/calendar" },
-          { label: "Recurring Series", href: "/booking-series" },
-        ],
-      },
-      { label: "Availability", href: "/availability", icon: CalendarClock },
-      { label: "People", href: "/people", icon: Users },
+      { label: "Availability Configs", href: "/availability-configs", icon: CalendarClock },
+      { label: "Blackout Dates", href: "/blackout-dates", icon: CalendarOff },
+      { label: "Booking Rules", href: "/booking-rules", icon: ShieldCheck },
+      { label: "Pricing Rules", href: "/pricing-rules", icon: Zap },
+      { label: "Refund Policies", href: "/refund-policies", icon: RefreshCw },
+      { label: "Seasons", href: "/seasons", icon: Leaf },
     ],
   },
   {
-    label: "Coaching",
+    label: "Membership",
     items: [
+      {
+        label: "Membership",
+        icon: CreditCard,
+        children: [
+          { label: "Schemes", href: "/membership/schemes" },
+          { label: "Plans", href: "/membership/plans" },
+          { label: "Policies", href: "/membership/policies" },
+          { label: "Members", href: "/membership/memberships" },
+          { label: "Segments", href: "/segments" },
+        ],
+      },
+    ],
+  },
+  {
+    label: "Sport",
+    items: [
+      { label: "Teams", href: "/teams", icon: Shield },
       {
         label: "Coaching",
         icon: GraduationCap,
@@ -87,24 +125,12 @@ const navSections = [
           { label: "Sessions", href: "/coaching/sessions" },
         ],
       },
-    ],
-  },
-  {
-    label: "Teams",
-    items: [
-      { label: "Teams", href: "/teams", icon: Shield },
-    ],
-  },
-  {
-    label: "Competitions",
-    items: [
       {
         label: "Competitions",
         icon: Trophy,
         children: [
           { label: "All Competitions", href: "/competitions" },
-          { label: "New Competition", href: "/competitions/new" },
-          { label: "Ratings", href: "/rankings" },
+          { label: "Rankings", href: "/rankings" },
           { label: "Work Cards", href: "/work-cards" },
           { label: "Discipline", href: "/discipline" },
         ],
@@ -112,20 +138,29 @@ const navSections = [
     ],
   },
   {
-    label: "Membership",
+    label: "Content & Comms",
     items: [
-      { label: "Schemes", href: "/membership/schemes", icon: CreditCard },
-      { label: "Plans", href: "/membership/plans", icon: Layers },
-      { label: "Policies", href: "/membership/policies", icon: ShieldCheck },
-      { label: "Memberships", href: "/membership/memberships", icon: Users },
-    ],
-  },
-  {
-    label: "Scheduling & Rules",
-    items: [
-      { label: "Availability Configs", href: "/availability-configs", icon: CalendarClock },
-      { label: "Blackout Dates", href: "/blackout-dates", icon: CalendarOff },
-      { label: "Booking Rules", href: "/booking-rules", icon: ShieldCheck },
+      {
+        label: "Website",
+        icon: Globe,
+        children: [
+          { label: "Design", href: "/website/design" },
+          { label: "Home page", href: "/website/home" },
+          { label: "News", href: "/website/news" },
+          { label: "Events", href: "/website/events" },
+        ],
+      },
+      {
+        label: "Communications",
+        icon: Mail,
+        children: [
+          { label: "Message Log", href: "/communications/log" },
+          { label: "Compose", href: "/communications/compose" },
+          { label: "Templates", href: "/communications/templates" },
+          { label: "Audiences", href: "/communications/audiences" },
+          { label: "Notifications", href: "/communications/notification-settings" },
+        ],
+      },
     ],
   },
   {
@@ -158,21 +193,18 @@ const navSections = [
           { label: "Competition Entries", href: "/reports/competition-entries" },
           { label: "Competition Results", href: "/reports/competition-results" },
           { label: "Ratings Leaderboard", href: "/reports/rankings-leaderboard" },
+          { label: "Utilisation Forecast", href: "/reports/utilisation-forecast" },
+          { label: "Anomaly Flags", href: "/reports/anomalies" },
         ],
       },
-    ],
-  },
-  {
-    label: "Website",
-    items: [
       {
-        label: "Website",
-        icon: Globe,
+        label: "AI Insights",
+        icon: Brain,
         children: [
-          { label: "Design", href: "/website/design" },
-          { label: "Home page", href: "/website/home" },
-          { label: "News", href: "/website/news" },
-          { label: "Events", href: "/website/events" },
+          { label: "Member Scores", href: "/people" },
+          { label: "Utilisation Forecast", href: "/reports/utilisation-forecast" },
+          { label: "Anomaly Flags", href: "/reports/anomalies" },
+          { label: "Player Matching", href: "/people" },
         ],
       },
     ],
@@ -180,12 +212,16 @@ const navSections = [
   {
     label: null,
     items: [
+      { label: "Plan & Billing", href: "/pricing", icon: Layers },
       {
         label: "Settings",
         icon: Settings,
         children: [
           { label: "Organisation", href: "/settings/organisation" },
           { label: "Admin Users", href: "/settings/admin-users" },
+          { label: "API Keys", href: "/settings/integrations/api-keys" },
+          { label: "Webhooks", href: "/settings/integrations/webhooks" },
+          { label: "Accounting", href: "/settings/integrations/accounting" },
         ],
       },
     ],
@@ -221,12 +257,46 @@ export function PortalLayout({
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(defaultOpen)
   const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [orgContext, setOrgContext] = useState<{ name: string; sub: string } | null>(null)
   const router = useRouter()
 
   useEffect(() => {
     const supabase = createClient()
     supabase.auth.getUser().then(({ data: { user } }) => {
       setUserEmail(user?.email ?? null)
+    })
+  }, [])
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) return
+      const headers = { Authorization: `Bearer ${session.access_token}` }
+      const base = process.env.NEXT_PUBLIC_FACILITY_SERVICE_URL ?? "http://127.0.0.1:4003"
+
+      const [orgRes, venuesRes] = await Promise.all([
+        fetch(`${base}/organisations/me`, { headers }),
+        fetch(`${base}/venues`, { headers }),
+      ])
+
+      const orgJson = orgRes.ok ? await orgRes.json() : null
+      const venuesJson = venuesRes.ok ? await venuesRes.json() : null
+
+      const org: { name: string } | null = orgJson?.data ?? orgJson ?? null
+      const venues: { name: string }[] = Array.isArray(venuesJson)
+        ? venuesJson
+        : (venuesJson?.data ?? [])
+
+      if (!org) return
+
+      if (venues.length === 1) {
+        setOrgContext({ name: venues[0].name, sub: org.name })
+      } else {
+        setOrgContext({
+          name: org.name,
+          sub: venues.length > 1 ? `${venues.length} venues` : "",
+        })
+      }
     })
   }, [])
 
@@ -333,10 +403,10 @@ export function PortalLayout({
                                   key={child.href}
                                   href={child.href}
                                   className={[
-                                    "block rounded-lg px-3 py-2 text-sm transition-all duration-150",
+                                    "block rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-150",
                                     childActive
                                       ? "bg-[#1857E0] text-white"
-                                      : "text-[#A9BDD5] hover:bg-white/10 hover:text-white",
+                                      : "text-white/80 hover:bg-white/10 hover:text-white",
                                   ].join(" ")}
                                 >
                                   {child.label}
@@ -402,15 +472,32 @@ export function PortalLayout({
               />
             </div>
 
-            <div className="hidden min-w-[240px] max-w-[440px] flex-1 items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 md:flex">
-              <Search className="h-4 w-4 text-slate-400" />
-              <input
-                className="h-10 w-full border-none bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
-                placeholder="Search facilities, bookings, customers..."
-              />
-            </div>
+            {orgContext && (
+              <div className="hidden shrink-0 items-center gap-2.5 rounded-2xl border border-slate-200 bg-white px-5 py-2 shadow-sm md:flex">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#1857E0]/10">
+                  <Building2 className="h-4 w-4 text-[#1857E0]" />
+                </div>
+                <div>
+                  <div className="whitespace-nowrap text-sm font-semibold leading-tight text-slate-900">
+                    {orgContext.name}
+                  </div>
+                  {orgContext.sub && (
+                    <div className="whitespace-nowrap text-xs leading-tight text-slate-500">
+                      {orgContext.sub}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="ml-auto flex items-center gap-3">
+              <div className="hidden min-w-[240px] max-w-[360px] items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 md:flex">
+                <Search className="h-4 w-4 text-slate-400" />
+                <input
+                  className="h-10 w-full border-none bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
+                  placeholder="Search facilities, bookings, customers..."
+                />
+              </div>
               <button className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:bg-slate-50">
                 <Bell className="h-5 w-5 text-slate-700" />
                 <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-[#5EE082]" />

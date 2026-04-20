@@ -3,7 +3,24 @@
 > **Document purpose:** Records all architectural decisions, the target platform design, and the phased implementation plan. Used as the reference for all development work.
 >
 > **Last updated:** April 2026
-> **Status:** Active — Phase 0 complete. Teams (Phase 1), Coaching (Phase 6), Competitions, Rankings, and Team Sport Website Pages live.
+> **Status:** Active — Phase 0 complete. Teams (Phase 1), Coaching (Phase 6), Competitions, Rankings, Team Sport Website Pages, Comms, Segments, Sessions, Pricing Rules, Refund Policies, Integration Layer, and AI Analytics (member scoring, anomaly detection, utilisation forecasting, player matching) live. 817 automated tests (733 integration + 84 e2e). Gaps 1, 2, 4, 8 resolved; Gap 3 (Supavisor) pending config change.
+
+---
+
+## Known Gaps & Live Risks
+
+> Identified April 2026. Ordered by severity.
+
+| # | Risk | Severity | Status |
+|---|---|---|---|
+| 1 | **Coaching sessions not conflict-checked against venue bookings** — `coaching.lesson_sessions` are invisible to the booking availability check. A coaching session in Court 1 at 10am does not block a regular booking for Court 1 at 10am. | 🔴 High | ✅ **Resolved** — `bookable_unit_id` added to `coaching.lesson_sessions`; `AvailabilityRepository.getCoachingSessionConflicts()` queries coaching sessions cross-schema; `BookingsService.create()` calls it before insert. 5 integration tests. |
+| 2 | **Pricing not evaluated at booking creation** — `booking.pricing_rules` CRUD API is live but not wired into the booking creation flow. Bookings are created with `null` `base_price`/`total_price`. | 🔴 High | ✅ **Resolved** — `PricingService.resolvePrice()` is called in `BookingsService.create()`; resolved total overwrites any caller-supplied price. 5 integration tests verify org/venue/resource-scoped rules and null fallback. |
+| 3 | **No connection pooling through Supavisor** — services connect directly to Postgres. Supabase session mode caps at ~60 concurrent connections across the whole project. Under real load this is a ceiling. | 🔴 High | ⚠️ **Pending** — Change each service's `DATABASE_URL` env var to the Supabase transaction-mode pooler endpoint (port 6543). No code change required. Must be done before public launch. |
+| 4 | **Booking access rules not evaluated** — `booking.booking_rules` CRUD exists but is not applied at booking time. Advance booking windows, max bookings per period, and time restrictions are not enforced for any live bookings. | 🟠 Medium | ✅ **Resolved** — `BookingRulesService.enforceRules()` is called in `BookingsService.create()` for all non-admin bookings. 17 integration tests covering CRUD + canBook/maxSlot/minSlot/advanceDays/org-scoped/admin-bypass. |
+| 5 | **No Redis / caching layer** — every availability check, pricing rule lookup, and membership entitlement check hits Postgres cold. | 🟠 Medium | Phase 0.5 TODO |
+| 6 | **No tenant isolation at DB level (RLS)** — tenant isolation is application-enforced only. A bug in tenant context extraction could leak cross-tenant data. | 🟠 Medium | Phase 0.5 TODO |
+| 7 | **No Docker / containerisation** — services run as bare Node processes. No Docker, no docker-compose for local dev parity. | 🟡 Low | Phase 0.5 TODO |
+| 8 | **No API gateway** — no centralised rate limiting, versioning, or auth enforcement. Fine for pilot; needed before NGB integrations. | 🟡 Low | ✅ **Resolved** — `integration-service` provides API key issuance (scoped credentials for NGB consumers), webhook delivery (push notifications), and full Xero/QuickBooks OAuth 2.0 accounting integration (real-time invoice/credit note sync + nightly batch reconciliation). Centralised rate limiting remains a production TODO. |
 
 ---
 
@@ -61,14 +78,17 @@ The existing platform runs on ASP.NET + SQL Server. Core issues:
 |---|---|---|---|
 | template-service | 4000 | NestJS / TypeScript / Fastify | ✅ Live — two-template system (Bold / Club) |
 | venue-service | 4003 | NestJS / TypeScript / Fastify | ✅ Live — venues, orgs, sponsors, affiliations |
-| people-service | 4004 | NestJS / TypeScript / Fastify | ✅ Live — persons, households, roles, tags, lifecycle |
-| booking-service | 4005 | NestJS / TypeScript / Fastify | ✅ Live — bookings, series, rules, approvals, stats |
+| people-service | 4004 | NestJS / TypeScript / Fastify | ✅ Live — persons, households, roles, tags, lifecycle, segments |
+| booking-service | 4005 | NestJS / TypeScript / Fastify | ✅ Live — bookings, series, rules, approvals, stats, sessions, pricing rules, refund policies, booking participants |
 | admin-service | 4006 | NestJS / TypeScript / Fastify | ✅ Live — admin users, RBAC |
 | coaching-service | 4007 | NestJS / TypeScript / Fastify | ✅ Live — coaches, lesson types, lesson sessions |
 | team-service | 4008 | NestJS / TypeScript / Fastify | ✅ Live — teams, rosters (roles + photos), fixtures, availability, charges, public API |
-| competition-service | 4009 | NestJS / TypeScript / Fastify | ✅ Live — competitions, divisions, entries, draws, matches, results, standings |
+| competition-service | 4009 | NestJS / TypeScript / Fastify | ✅ Live — competitions, divisions, entries, draws, matches, results, standings, rankings, submissions, work cards, discipline |
 | membership-service | 4010 | NestJS / TypeScript / Fastify | ✅ Live — schemes, plans, memberships, entitlements, renewals |
 | payment-service | 4011 | NestJS / TypeScript / Fastify | ✅ Live — gateway-agnostic (Stripe live, GoCardless ready) |
+| comms-service | 4012 | NestJS / TypeScript / Fastify | ✅ Live — campaigns, message log, system templates with tenant overrides |
+| integration-service | 4013 | NestJS / TypeScript / Fastify | ✅ Live — API key issuance (scoped, hashed), webhook subscriptions, delivery worker with 5-attempt retry, inbound event fan-out, Xero/QuickBooks OAuth 2.0, real-time accounting sync (payment.succeeded → invoice, refund → credit note, membership.activated → invoice), nightly batch reconciliation |
+| analytics-service | 4014 | NestJS / TypeScript / Fastify | ✅ Live — nightly member scoring: churn risk, LTV, payment default, optimal send hour; rule-based anomaly detection (4 rules, `@Cron` 03:00); utilisation forecasting with dead-slot identification (`@Cron` 02:00); player matching by ELO proximity; cross-schema raw SQL; ELO draw seeding in competition-service |
 | admin-portal | 3005 | Next.js / React | ✅ Live |
 | customer-portal | 3006 | Next.js / React | ✅ Live — multi-tenant via `/[slug]`, teams pages |
 | mobile-app | — | Expo / React Native | ✅ Live |
@@ -97,7 +117,18 @@ The existing platform runs on ASP.NET + SQL Server. Core issues:
 - [x] Admin portal extended — three competition report pages (overview, entries, results), revenue report enhanced with competition entry fee revenue stream, fee collection report enhanced, Save PDF button on all reports
 - [x] Customer portal extended — competition list, detail, and entry flow
 - [x] Mobile app extended — Competitions tab with live competition list
-- [x] 348 integration tests passing across 9 services; 92 Playwright e2e tests passing
+- [x] 563 integration tests passing across 10 services (34 spec files); 84 Playwright e2e tests passing (647 total)
+- [x] integration-service built — API key issuance (scoped, HMAC-hashed, `cs_` prefix plaintext shown once), webhook subscriptions (per-tenant HMAC signing secret), delivery worker (30s cron, 5-attempt exponential retry: 30s→2m→10m→1h→4h), inbound event fan-out endpoint; 31 integration tests (3 spec files)
+- [x] booking-service: group sessions with capacity management, join/cancel/complete lifecycle, per-session participants
+- [x] booking-service: pricing rules engine — scoped rules (org/venue/resource), rate per hour, time windows, days of week, lighting surcharge, member discount, priority
+- [x] booking-service: refund policies — percentage refund schedules keyed to hours before start; CRUD API
+- [x] booking-service: booking participants — named attendees attached to individual bookings
+- [x] people-service: segments — static (hand-curated member lists) and dynamic (condition-evaluated with rebuild endpoint)
+- [x] comms-service: system templates with per-tenant custom footer/reply-to overrides; 404 guard on unknown keys
+- [x] competition-service: match submissions (scorecard submit → acknowledge/reject flow)
+- [x] competition-service: work cards (per-person per-sport upsert, list, delete)
+- [x] competition-service: discipline cases (OPEN/CLOSED/APPEALED) with action log (WARNING, MATCH_BAN, etc.)
+- [x] competition-service: competition-scoped messages
 - [x] Create Venue page — full form, POST /venues endpoint, organisationId FK-safe create
 - [x] Edit Resource page — pre-populated form, PATCH /resources/:id
 - [x] Edit Resource Group page — pre-populated form, PATCH /resource-groups/:id
@@ -111,10 +142,15 @@ The existing platform runs on ASP.NET + SQL Server. Core issues:
 
 ```
 -- booking schema
-booking.bookings            — core booking records (series_id, booking_subject_type/id, pricing, approval fields)
-booking.booking_add_ons     — add-ons linked to bookings
-booking.booking_series      — recurring series (iCal RRULE, slot time, season dates)
-booking.booking_rules       — access/pricing rules (belongs in booking module, not membership)
+booking.bookings                — core booking records (series_id, booking_subject_type/id, pricing, approval fields)
+booking.booking_add_ons         — add-ons linked to bookings
+booking.booking_series          — recurring series (iCal RRULE, slot time, season dates)
+booking.booking_rules           — access/pricing rules (belongs in booking module, not membership)
+booking.booking_participants    — named participants attached to a booking
+booking.sessions                — group bookable sessions (open/full/cancelled/completed, capacity, price per participant)
+booking.session_participants    — individuals registered for a session
+booking.pricing_rules           — scoped pricing rules (rate per hour, days/times, surcharges, member discounts)
+booking.refund_policies         — refund percentage schedules based on hours before start
 
 -- venue schema
 venue.venues
@@ -139,6 +175,8 @@ people.person_tags          — segmentation tag assignments
 people.tags                 — tag definitions
 people.lifecycle_history    — status transition log
 people.person_relationships — arbitrary named relationships between persons
+people.segments             — audience segments (static hand-curated or dynamic condition-based)
+people.segment_members      — members of a segment (explicit for static; rebuilt automatically for dynamic)
 
 -- membership schema
 membership.membership_schemes
@@ -163,12 +201,21 @@ team.charge_runs            — fee collection runs per fixture
 team.charges                — individual charges per squad member per run
 
 -- competitions schema
-competitions.competitions   — competitions with sport, format, entry type, status, entry fee, date windows
-competitions.divisions      — one or more divisions per competition (can override parent format)
-competitions.entries        — competitor registrations: personId or teamId, displayName, status, payment status
-competitions.matches        — drawn fixtures: home/away entry, round, scheduled time, venue
-competitions.match_results  — score records with result status (SUBMITTED → VERIFIED / DISPUTED)
-competitions.standings      — auto-recalculated: wins, losses, draws, points, goal difference
+competitions.competitions      — competitions with sport, format, entry type, status, entry fee, date windows
+competitions.divisions         — one or more divisions per competition (can override parent format)
+competitions.entries           — competitor registrations: personId or teamId, displayName, status, payment status
+competitions.matches           — drawn fixtures: home/away entry, round, scheduled time, venue
+competitions.match_results     — score records with result status (SUBMITTED → VERIFIED / DISPUTED)
+competitions.standings         — auto-recalculated: wins, losses, draws, points, goal difference
+competitions.messages          — competition-scoped announcements/messages
+competitions.match_submissions — submitted match scorecards pending acknowledgement or rejection
+competitions.work_cards        — per-person, per-sport work/volunteer card records (upsert by person+sport)
+competitions.discipline_cases  — disciplinary cases with status (OPEN/CLOSED/APPEALED) and action log
+
+-- comms schema
+comms.templates     — system email/SMS templates (isSystem=true, tenantId=null) with per-tenant overrides
+comms.campaigns     — bulk send jobs (channel, audience, status, scheduled/sent times)
+comms.message_log   — individual send records per recipient per campaign
 
 -- admin schema
 admin.admin_users
@@ -176,6 +223,15 @@ admin.admin_users
 -- payment schema
 payment.provider_configs    — per-tenant gateway config (Stripe, GoCardless)
 payment.payments            — payment records with status and provider reference
+
+-- integration schema
+integration.api_keys            — long-lived credentials (hashed, never plaintext); scopes: bookings:read, members:read, competitions:read, teams:read, webhooks:manage
+integration.api_key_usage       — per-request audit log (endpoint, response code, timestamp)
+integration.webhook_subscriptions — subscriber endpoints per tenant with per-subscription HMAC signing secret
+integration.webhook_deliveries  — delivery queue with status (pending/delivered/failed/dead), attempt counter, retry schedule
+integration.oauth_connections   — Xero/QuickBooks OAuth 2.0 tokens (AES-256-GCM encrypted at rest), provider tenant ID, expiry; auto-refresh within 5 min of expiry
+integration.accounting_settings — per-tenant config: provider, revenue account code, tax rate, invoice mode (DRAFT/AUTHORISED), currency
+integration.accounting_sync_log — audit trail of all accounting sync attempts: event type, source ID, provider reference, status (pending/synced/failed/dead), retry schedule
 ```
 
 ---
@@ -280,9 +336,11 @@ See [Section 8](#8-infrastructure--supabase--azure) for full details.
    │                  Azure Container Apps Environment                      │
    │                        (Private VNet)                                  │
    │                                                                        │
-   │   booking-service    venue-service      pricing-service                │
-   │   access-rules-service                 identity-service                │
-   │   membership-service                                                   │
+   │   booking-service    venue-service      people-service                 │
+   │   coaching-service   team-service       competition-service             │
+   │   membership-service comms-service      payment-service                 │
+   │   admin-service      template-service                                   │
+   │   [access-rules-service — Phase 4, not started]                        │
    └──────┬──────────────────────┬──────────────────────┬──────────────────┘
           │                      │                      │
 ┌─────────▼───────────┐ ┌───────▼──────────┐ ┌────────▼──────────────┐
@@ -305,15 +363,16 @@ Azure DevOps              — CI/CD pipelines (familiar from .NET)
 |---|---|---|
 | **template-service** | Portal template system (Bold top-nav / Club sidebar-nav) | ✅ Built |
 | **venue-service** | Venues, resources, bookable units, add-on catalogue, availability configs, blackout dates, resource groups, organisations (incl. `hasTeams` flag), affiliations, sponsors | ✅ Built |
-| **people-service** | Persons, households, roles, tags, lifecycle history, relationships | ✅ Built |
-| **booking-service** | Bookings, series, add-ons, availability checking, booking rules, approvals, stats, auto-expiry | ✅ Built |
+| **people-service** | Persons, households, roles, tags, lifecycle history, relationships, segments (static + dynamic with condition-based rebuild) | ✅ Built |
+| **booking-service** | Bookings, series, add-ons, availability checking, booking rules, approvals, stats, auto-expiry, group sessions, booking participants, pricing rules engine, refund policies | ✅ Built |
 | **admin-service** | Admin users, RBAC | ✅ Built |
 | **membership-service** | Membership schemes, plans, memberships, entitlement policies, renewal automation | ✅ Built |
 | **coaching-service** | Coaches, lesson types, coach availability, lesson sessions | ✅ Built |
 | **team-service** | Teams (incl. `fixturesUrl`, `isPublic`), rosters (incl. `role`, `photoUrl`), fixtures, player availability, squad selection, charge runs, public read API for customer portal | ✅ Built |
-| **competition-service** | Competitions, divisions, entries, draw generation, matches, results, standings | ✅ Built |
+| **competition-service** | Competitions, divisions, entries, draw generation, matches, results, standings, rankings (ELO + points table), match submissions, work cards, discipline cases | ✅ Built |
 | **payment-service** | Gateway-agnostic payment processing — Stripe live, GoCardless ready | ✅ Built |
-| **pricing-service** | Price calculation at booking time — applies pricing rules, surcharges, discounts | Phase 2 — not started |
+| **comms-service** | Campaigns (bulk email/SMS sends), message log, system templates with per-tenant customisation (footer, reply-to) | ✅ Built |
+| **pricing-service** | Price calculation at booking time — applies pricing rules, surcharges, discounts | Superseded — pricing rules now live in booking-service |
 | **access-rules-service** | Who can book what, when, advance windows, booking limits — independent of membership | Phase 4 — not started |
 | **admin-portal** | Next.js admin interface — all domains | ✅ Built |
 | **customer-portal** | Multi-tenant Next.js customer-facing portal | ✅ Built |
@@ -382,66 +441,29 @@ This means a club using booking without membership can still configure rules. A 
 
 ## 6. Target Database Schemas
 
-### people schema (extended — was: customer schema)
+### people schema (live)
 
-> Note: `customer-service` has been renamed to `people-service`. Schema uses `people.*` namespace going forward. The models below represent the target; households/roles/tags/lifecycle are built; clubs/teams are Phase 1.
+> `customer-service` renamed to `people-service`. Schema uses `people.*` namespace. Persons, households, roles, tags, lifecycle history, segments, and relationships are all live.
 
 ```sql
--- Existing
-people.customers (
-  id uuid primary key,
-  tenant_id uuid not null,
-  first_name text,
-  last_name text,
-  email text,
-  phone text,
-  created_at timestamptz default now()
-)
+people.persons              — core person records (firstName, lastName, email, phone, lifecycleState)
+people.households           — parent/child, guardian relationships
+people.household_members    — household membership links
+people.person_roles         — roles within an org (context, date range, status)
+people.person_tags          — tag assignments
+people.tags                 — tag definitions (name, colour, tenantId)
+people.lifecycle_history    — state transition log (active/inactive/suspended/deceased)
+people.person_relationships — arbitrary named relationships between persons
+people.segments             — audience segments: static (hand-curated) or dynamic (condition-evaluated)
+people.segment_members      — static: explicit; dynamic: rebuilt via POST /segments/:id/rebuild
 
--- Phase 1: clubs
-people.clubs (
-  id uuid primary key default gen_random_uuid(),
-  tenant_id uuid not null,
-  organisation_id uuid not null,
-  name text not null,
-  sport text,                        -- null = multi-sport club
-  status text not null default 'active',
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
-)
-
--- Phase 1: teams
-people.teams (
-  id uuid primary key default gen_random_uuid(),
-  tenant_id uuid not null,
-  organisation_id uuid not null,
-  club_id uuid references customer.clubs(id),
-  name text not null,
-  sport text not null,
-  age_group text,                    -- 'senior', 'u18', 'u16', 'u14' etc.
-  status text not null default 'active',
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
-)
-
--- Phase 1: team membership roster
-people.team_members (
-  id uuid primary key default gen_random_uuid(),
-  team_id uuid not null references people.teams(id),
-  customer_id uuid not null references people.customers(id),
-  role text not null,                -- 'captain' | 'manager' | 'player' | 'coach'
-  joined_at timestamptz default now(),
-  left_at timestamptz,
-  unique (team_id, customer_id)
-)
-
--- Indexes
-CREATE INDEX customers_tenant_email_idx ON people.customers (tenant_id, lower(email));
-CREATE INDEX customers_tenant_name_idx ON people.customers (tenant_id, last_name, first_name);
-CREATE INDEX teams_tenant_idx ON people.teams (tenant_id, organisation_id);
-CREATE INDEX team_members_team_idx ON people.team_members (team_id, customer_id) WHERE left_at IS NULL;
-CREATE INDEX team_members_customer_idx ON people.team_members (customer_id);
+-- Indexes (live)
+CREATE INDEX persons_tenant_email_idx ON people.persons (tenant_id, lower(email));
+CREATE INDEX persons_tenant_name_idx ON people.persons (tenant_id, last_name, first_name);
+CREATE INDEX persons_lifecycle_idx ON people.persons (tenant_id, lifecycle_state);
 ```
+
+> **Teams schema note:** Teams are implemented in the separate `team.*` schema via team-service (live, port 4008), not in `people.*`. The Phase 1 plan in this section previously described a `people.clubs/people.teams` model — that approach has been superseded by the dedicated team-service. Phase 1 now means wiring team bookings into the booking system (see Phase 1 below).
 
 ### venue schema (extended)
 
@@ -913,7 +935,7 @@ pg_restore --no-owner -d $AZURE_POSTGRES_URL clubspark_$(date +%Y%m%d).dump
 - [x] Admin portal: coaches list/detail/create, lesson types, sessions list/detail/create
 - [x] Customer portal: multi-step coaching booking wizard (coach → lesson type → date → slot → confirm)
 - [x] Mobile app: coaching tab with identical booking wizard
-- [x] 45 integration tests passing
+- [x] 45 integration tests passing (coaches, lesson types, sessions — 3 spec files)
 
 #### 0.8 — Team service ✅
 
@@ -927,7 +949,7 @@ pg_restore --no-owner -d $AZURE_POSTGRES_URL clubspark_$(date +%Y%m%d).dump
 - [x] Admin portal: teams, roster, fixtures, availability, squad selection, charge runs
 - [x] Mobile app: teams tab with fixture list and inline availability response
 - [x] Reports: Teams Overview, Match Results, Fee Collection, Player Availability, Player Participation, Fixtures Summary
-- [x] 38 integration tests passing
+- [x] 38 integration tests passing (teams, roster, fixtures-availability, selection-charges — 4 spec files)
 
 #### 0.9 — Payment service ✅
 
@@ -935,7 +957,7 @@ pg_restore --no-owner -d $AZURE_POSTGRES_URL clubspark_$(date +%Y%m%d).dump
 - [x] Stripe integration live: checkout, payment intent, webhook handling
 - [x] GoCardless provider config ready (not yet wired)
 - [x] Idempotent payment creation with per-tenant provider routing
-- [x] 27 integration tests passing
+- [x] 27 integration tests passing (payments, provider-configs — 2 spec files)
 
 #### 0.10 — People platform extended ✅
 
@@ -948,6 +970,49 @@ pg_restore --no-owner -d $AZURE_POSTGRES_URL clubspark_$(date +%Y%m%d).dump
 
 - [x] Renewal automation endpoint: `POST /memberships/process-renewals?withinDays=N`
 - [x] Admin portal: process renewals button on renewals report
+
+#### 0.12 — Integration layer ✅
+
+- [x] `integration-service` scaffolded (port 4013, NestJS + Fastify, Prisma `integration` schema)
+- [x] `integration.api_keys` — long-lived credentials with HMAC-SHA256 hash storage; `cs_` prefixed plaintext shown once on create; scopes: `bookings:read`, `members:read`, `competitions:read`, `teams:read`, `webhooks:manage`
+- [x] `integration.api_key_usage` — per-request audit log written by `ApiKeyUsageInterceptor`
+- [x] `integration.webhook_subscriptions` — per-tenant subscriber endpoints with HMAC signing secret (secret hash stored, plaintext shown once)
+- [x] `integration.webhook_deliveries` — delivery queue with `pending/delivered/failed/dead` status; 30-second cron worker; 5-attempt exponential retry (30s → 2m → 10m → 1h → 4h)
+- [x] `POST /v1/events/inbound` — event fan-out: creates delivery rows for all matching active subscriptions; signed posts with `X-ClubSpark-Signature: sha256=<hmac>`
+- [x] EventBusService updated in booking-service, membership-service, payment-service to forward events to integration-service
+- [x] Admin portal: API Keys and Webhooks pages under Settings; proxy route at `/api/proxy/integration/[...path]`
+- [x] 31 integration tests (api-keys, webhook-subscriptions, webhook-deliveries — 3 spec files)
+- [x] `integration.oauth_connections` — Xero/QuickBooks OAuth 2.0 tokens encrypted at rest (AES-256-GCM); auto-refresh within 5 min of expiry; upsert on re-connect; soft-disconnect via `disconnected_at`
+- [x] `integration.accounting_settings` — per-tenant config: provider, revenue account code, tax rate ID, invoice mode (DRAFT/AUTHORISED), currency code
+- [x] `integration.accounting_sync_log` — audit trail with `pending/synced/failed/dead` status, retry schedule, provider reference (Xero invoice ID / QBO invoice ID)
+- [x] `XeroClientService` — contact upsert, ACCREC invoice creation, credit note creation, account codes + tax rates lookup
+- [x] `QuickBooksClientService` — customer upsert, invoice creation, credit memo creation, income accounts + tax codes lookup (sandbox + production URLs)
+- [x] `AccountingSyncService` — real-time handlers for `payment.succeeded` → invoice, `payment.refund_issued` → credit note, `membership.activated` → invoice; nightly `@Cron(EVERY_DAY_AT_2AM)` batch reconciliation for `pending/failed` log rows
+- [x] `OAuthConnectionsService` — Xero and QuickBooks authorisation redirect, callback token exchange, token refresh, disconnect
+- [x] `POST /v1/events/inbound` updated to fire accounting sync alongside webhook dispatch (fire-and-forget)
+- [x] Admin portal: Accounting page under Settings (provider connection cards, settings form, sync log table with pagination)
+- [x] 16 accounting integration tests (oauth-connections, accounting-settings, sync-log — 1 spec file)
+- [x] Total integration tests: 47 (4 spec files)
+
+#### 0.13 — AI analytics layer ✅
+
+- [x] `analytics-service` scaffolded (port 4014, NestJS + Fastify, Prisma `analytics` schema)
+- [x] `analytics.member_scores` — per-tenant, per-person score record; unique on `(tenant_id, person_id)`
+- [x] **Churn risk** — 0–100 score (band: low/medium/high); factors: booking recency, booking trend, membership status, auto-renew off, renewal imminence, email engagement; computed via cross-schema raw SQL aggregation
+- [x] **LTV score** — estimated annual value in pence; booking + membership + coaching revenue × retention multiplier (0.7–1.5 by tenure)
+- [x] **Payment default risk** — 0–100 score; factors: failed payment history, no-show rate, membership tenure, recent successful payment
+- [x] **Optimal send hour** — histogram of email-open hours; returns mode + confidence; null if <3 data points
+- [x] `ScoringRepository.fetchPersonData` — single cross-schema raw SQL query spanning booking, membership, payment, comms, coaching, people schemas
+- [x] `@Cron('30 1 * * *')` nightly batch scoring for all active tenants
+- [x] REST API: `GET /v1/scores`, `GET /v1/scores/:personId`, `POST /v1/scores/bulk`, `POST /v1/scores/compute`
+- [x] Admin portal: AI Insights panel on person detail page (churn risk, LTV, payment default, optimal send hour; client-side recompute)
+- [x] Admin portal: Churn risk badges on people list (medium/high only; fetched via bulk scores endpoint)
+- [x] Admin portal: proxy route at `/api/proxy/analytics/[...path]`
+- [x] **ELO draw seeding** in competition-service: `POST /competitions/:id/divisions/:divisionId/draw/seed` — ranks confirmed entries by `RankingEntry.eloRating` desc, falls back to alphabetical; admin portal "Seed by ELO" button on draw panel
+- [x] **Anomaly detection** — `analytics.anomaly_flags` table; 4 rules: `dormant_spike` (60d inactive → 5+ bookings/24h, alert), `payment_failure_spike` (3+ failures/24h, alert), `court_hoarding` (7+ same-unit bookings/7d, warning), `booking_duration_extreme` (>6h, warning); idempotent upsert (skips re-flagging within 24h); `@Cron('0 3 * * *')` nightly; REST: `GET /v1/anomalies`, `POST /v1/anomalies/detect`, `PATCH /v1/anomalies/:id/resolve`; admin portal: Anomaly Flags report page with severity filter, one-click resolve and rules legend
+- [x] **Utilisation forecasting** — `analytics.forecast_slots` table; rolling 4-week average occupancy by (unit, day-of-week, hour); dead slot = predicted <30% and ≥3 days ahead; `@Cron('0 2 * * *')` nightly; REST: `GET /v1/forecasts`, `GET /v1/forecasts/dead-slots`, `GET /v1/forecasts/dead-slots/:unitId/bookers`, `POST /v1/forecasts/compute`; admin portal: Utilisation Forecast report page with per-unit dead slot cards, compute button and previous-bookers lookup
+- [x] **Player matching** — cross-schema SQL joins `people.customers + competitions.ranking_configs + competitions.ranking_entries + booking.bookings`; ELO proximity score (0–60) within ±200 window + activity bonus (0–40, last-60d bookings); graceful fallback to activity-only when no ELO config; returns top 15; REST: `GET /v1/match/:personId?sport=`; admin portal: Player Matching panel on every person detail page
+- [x] 85 analytics tests total (12 forecasting algorithm + 6 anomaly rule unit + 9 forecasting API + 10 anomaly API + 9 matching API = 46 new + 39 prior = 85 analytics service tests; 6 draw seeding tests in competition-service)
 
 ---
 
@@ -962,14 +1027,17 @@ pg_restore --no-owner -d $AZURE_POSTGRES_URL clubspark_$(date +%Y%m%d).dump
 
 ---
 
-### Phase 2 — Pricing rules engine
+### Phase 2 — Pricing rules engine (partially live)
 
-- [ ] Add `venue.pricing_rules` table and migration
-- [ ] Implement pricing evaluation service in NestJS
-- [ ] Integrate pricing into booking creation flow (calculate `base_price`, `total_price`, `price_breakdown`)
+- [x] `booking.pricing_rules` table and migration (in booking-service, not venue-service)
+- [x] Pricing rule CRUD API — scoped rules by organisation / venue / resource group / resource / bookable unit
+- [x] Rules support: days of week, time windows, rate per hour, lighting surcharge, member discount override, priority
+- [x] `booking.refund_policies` table with CRUD API — percentage refund schedules keyed to hours before start
+- [ ] Integrate pricing evaluation into booking creation flow (calculate `base_price`, `total_price`, `price_breakdown`)
 - [ ] Handle lighting / floodlight surcharges as pricing rules (remove from add-ons model)
 - [ ] Add Redis caching for pricing rules
 - [ ] Admin UI: pricing rules management (create, edit, prioritise rules)
+- [ ] Admin UI: refund policy management
 - [ ] Admin UI: booking confirmation shows price breakdown
 
 ---
@@ -1019,6 +1087,7 @@ pg_restore --no-owner -d $AZURE_POSTGRES_URL clubspark_$(date +%Y%m%d).dump
 - [x] Admin portal: complete coaching management UI
 - [x] Customer portal: coaching booking wizard
 - [x] Mobile app: coaching booking wizard
+- [ ] **Wire coaching sessions into venue availability check** — currently `coaching.lesson_sessions` are invisible to `booking.bookings` conflict detection; a coaching session does not block a court booking for the same slot (Gap #1 in risks table)
 - [ ] Group capacity + waitlisting (future)
 - [ ] Programme / course model — series of sessions with registration (future)
 
