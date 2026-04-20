@@ -24,6 +24,7 @@ describe.runIf(DB_AVAILABLE)('Customer service — integration', () => {
   let request: ReturnType<typeof supertest>
 
   beforeAll(async () => {
+    await prisma.$connect()
     const app = await getApp()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     request = supertest(app.getHttpServer() as any)
