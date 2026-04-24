@@ -1,10 +1,7 @@
-// ClubSpark — Venue Service Prisma Schema
-// Owns the venue schema: venues, resources, resource_groups, bookable_units, unit_conflicts, add_ons, availability_configs
-
 generator client {
   provider        = "prisma-client-js"
-  previewFeatures = ["multiSchema"]
   output          = "../src/generated/prisma"
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
@@ -13,134 +10,107 @@ datasource db {
   schemas  = ["venue"]
 }
 
-// Tier 1 = enterprise (NGB, large governing body)
-// Tier 2 = operator  (local authority, multi-site operator)
-// Tier 3 = club      (single self-serve club — org + venue collapsed)
-enum TenantType {
-  enterprise
-  operator
-  club
-
-  @@schema("venue")
-}
-
-// Affiliation status lifecycle
-enum AffiliationStatus {
-  pending
-  active
-  suspended
-  ended
-
-  @@schema("venue")
-}
-
 model Venue {
-  id             String  @id @db.Uuid
-  tenantId       String  @map("tenant_id") @db.Uuid
-  organisationId String? @map("organisation_id") @db.Uuid
+  id             String          @id @db.Uuid
+  tenantId       String          @map("tenant_id") @db.Uuid
+  organisationId String?         @map("organisation_id") @db.Uuid
   name           String
-  timezone       String  @default("Europe/London")
+  timezone       String          @default("Europe/London")
   city           String?
-  country        String  @default("GB")
-
-  organisation   Organisation? @relation(fields: [organisationId], references: [id])
-  resources      Resource[]
+  country        String          @default("GB")
+  blackoutDates  BlackoutDate[]
   units          BookableUnit[]
   resourceGroups ResourceGroup[]
-  blackoutDates  BlackoutDate[]
+  resources      Resource[]
   settings       VenueSetting?
+  organisation   Organisation?   @relation(fields: [organisationId], references: [id])
 
-  @@map("venues")
-  @@schema("venue")
   @@index([tenantId])
   @@index([organisationId])
+  @@map("venues")
+  @@schema("venue")
 }
 
 model ResourceGroup {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId    String   @map("tenant_id") @db.Uuid
-  venueId     String   @map("venue_id") @db.Uuid
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String     @map("tenant_id") @db.Uuid
+  venueId     String     @map("venue_id") @db.Uuid
   name        String
   sport       String?
   description String?
   colour      String?
-  sortOrder   Int      @default(0) @map("sort_order")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  sortOrder   Int        @default(0) @map("sort_order")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  venue       Venue      @relation(fields: [venueId], references: [id])
+  resources   Resource[]
 
-  venue     Venue      @relation(fields: [venueId], references: [id])
-  resources Resource[]
-
-  @@map("resource_groups")
-  @@schema("venue")
   @@index([tenantId])
   @@index([venueId])
+  @@map("resource_groups")
+  @@schema("venue")
 }
 
 model Resource {
-  id               String   @id @db.Uuid
-  tenantId         String   @map("tenant_id") @db.Uuid
-  venueId          String   @map("venue_id") @db.Uuid
-  groupId          String?  @map("group_id") @db.Uuid
-  name             String
-  resourceType     String   @map("resource_type")
-  sport            String?
-  surface          String?
-  isIndoor         Boolean? @map("is_indoor")
-  hasLighting      Boolean? @map("has_lighting")
-  bookingPurposes  String[] @default([]) @map("booking_purposes")
-  description      String?
-  colour           String?
-  publicAttributes   Json     @default("{}") @map("public_attributes")
-  visibleAttributes  String[] @default(["surface", "isIndoor", "hasLighting", "description", "sport"]) @map("visible_attributes")
-  isActive           Boolean  @default(true) @map("is_active")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  id                String         @id @db.Uuid
+  tenantId          String         @map("tenant_id") @db.Uuid
+  venueId           String         @map("venue_id") @db.Uuid
+  groupId           String?        @map("group_id") @db.Uuid
+  name              String
+  resourceType      String         @map("resource_type")
+  sport             String?
+  surface           String?
+  isIndoor          Boolean?       @map("is_indoor")
+  hasLighting       Boolean?       @map("has_lighting")
+  bookingPurposes   String[]       @default([]) @map("booking_purposes")
+  description       String?
+  colour            String?
+  publicAttributes  Json           @default("{}") @map("public_attributes")
+  visibleAttributes String[]       @default(["surface", "isIndoor", "hasLighting", "description", "sport"]) @map("visible_attributes")
+  isActive          Boolean        @default(true) @map("is_active")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+  blackoutDates     BlackoutDate[]
+  units             BookableUnit[]
+  group             ResourceGroup? @relation(fields: [groupId], references: [id])
+  venue             Venue          @relation(fields: [venueId], references: [id])
 
-  venue         Venue          @relation(fields: [venueId], references: [id])
-  group         ResourceGroup? @relation(fields: [groupId], references: [id])
-  units         BookableUnit[]
-  blackoutDates BlackoutDate[]
-
-  @@map("resources")
-  @@schema("venue")
   @@index([tenantId])
   @@index([venueId])
   @@index([groupId])
+  @@map("resources")
+  @@schema("venue")
 }
 
 model BookableUnit {
-  id              String  @id @db.Uuid
-  tenantId        String  @map("tenant_id") @db.Uuid
-  venueId         String  @map("venue_id") @db.Uuid
-  resourceId      String  @map("resource_id") @db.Uuid
-  parentUnitId    String? @map("parent_unit_id") @db.Uuid
-  name            String
-  unitType        String  @map("unit_type")
-  sortOrder       Int     @default(0) @map("sort_order")
-  capacity        Int?
-  isActive        Boolean @default(true) @map("is_active")
-  isOptionalExtra Boolean @default(false) @map("is_optional_extra")
-
-  venue    Venue    @relation(fields: [venueId], references: [id])
-  resource Resource @relation(fields: [resourceId], references: [id])
-
-  conflictsAsUnit        UnitConflict[] @relation("UnitConflicts")
+  id                     String         @id @db.Uuid
+  tenantId               String         @map("tenant_id") @db.Uuid
+  venueId                String         @map("venue_id") @db.Uuid
+  resourceId             String         @map("resource_id") @db.Uuid
+  parentUnitId           String?        @map("parent_unit_id") @db.Uuid
+  name                   String
+  unitType               String         @map("unit_type")
+  sortOrder              Int            @default(0) @map("sort_order")
+  capacity               Int?
+  isActive               Boolean        @default(true) @map("is_active")
+  isOptionalExtra        Boolean        @default(false) @map("is_optional_extra")
+  resource               Resource       @relation(fields: [resourceId], references: [id])
+  venue                  Venue          @relation(fields: [venueId], references: [id])
   conflictsAsConflicting UnitConflict[] @relation("ConflictingUnit")
+  conflictsAsUnit        UnitConflict[] @relation("UnitConflicts")
 
-  @@map("bookable_units")
-  @@schema("venue")
   @@index([tenantId])
   @@index([venueId])
   @@index([resourceId])
+  @@map("bookable_units")
+  @@schema("venue")
 }
 
 model UnitConflict {
-  unitId            String @map("unit_id") @db.Uuid
-  conflictingUnitId String @map("conflicting_unit_id") @db.Uuid
-
-  unit            BookableUnit @relation("UnitConflicts", fields: [unitId], references: [id])
-  conflictingUnit BookableUnit @relation("ConflictingUnit", fields: [conflictingUnitId], references: [id])
+  unitId            String       @map("unit_id") @db.Uuid
+  conflictingUnitId String       @map("conflicting_unit_id") @db.Uuid
+  conflictingUnit   BookableUnit @relation("ConflictingUnit", fields: [conflictingUnitId], references: [id])
+  unit              BookableUnit @relation("UnitConflicts", fields: [unitId], references: [id])
 
   @@id([unitId, conflictingUnitId])
   @@map("unit_conflicts")
@@ -166,155 +136,212 @@ model AddOn {
   updatedAt            DateTime @updatedAt @map("updated_at")
 
   @@unique([tenantId, code])
-  @@map("add_ons")
-  @@schema("venue")
   @@index([tenantId])
   @@index([tenantId, venueId])
   @@index([tenantId, status])
+  @@map("add_ons")
+  @@schema("venue")
 }
 
 model VenueSetting {
-  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  venueId            String   @unique @map("venue_id") @db.Uuid
-  openBookings       Boolean  @default(false) @map("open_bookings")
-  addOnsEnabled      Boolean  @default(true) @map("add_ons_enabled")
-  pendingApprovals   Boolean  @default(false) @map("pending_approvals")
-  splitPayments      Boolean  @default(false) @map("split_payments")
-  publicBookingView  String   @default("none") @map("public_booking_view")
-  // Mobile app branding
-  clubCode           String?  @unique @map("club_code")
-  primaryColour      String   @default("#1857E0") @map("primary_colour")
-  logoUrl            String?  @map("logo_url")
-  appName            String?  @map("app_name")
-  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
-
-  venue Venue @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  venueId           String   @unique @map("venue_id") @db.Uuid
+  openBookings      Boolean  @default(false) @map("open_bookings")
+  addOnsEnabled     Boolean  @default(true) @map("add_ons_enabled")
+  pendingApprovals  Boolean  @default(false) @map("pending_approvals")
+  splitPayments     Boolean  @default(false) @map("split_payments")
+  publicBookingView String   @default("none") @map("public_booking_view")
+  clubCode          String?  @unique @map("club_code")
+  primaryColour     String   @default("#1857E0") @map("primary_colour")
+  logoUrl           String?  @map("logo_url")
+  appName           String?  @map("app_name")
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at")
+  venue             Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
 
   @@map("venue_settings")
   @@schema("venue")
 }
 
 model BlackoutDate {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId       String   @map("tenant_id") @db.Uuid
-  venueId        String   @map("venue_id") @db.Uuid
-  resourceId     String?  @map("resource_id") @db.Uuid
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  venueId        String    @map("venue_id") @db.Uuid
+  resourceId     String?   @map("resource_id") @db.Uuid
   name           String
-  startDate      DateTime @map("start_date") @db.Date
-  endDate        DateTime @map("end_date") @db.Date
-  recurrenceRule String?  @map("recurrence_rule")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  startDate      DateTime  @map("start_date") @db.Date
+  endDate        DateTime  @map("end_date") @db.Date
+  recurrenceRule String?   @map("recurrence_rule")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  resource       Resource? @relation(fields: [resourceId], references: [id])
+  venue          Venue     @relation(fields: [venueId], references: [id])
 
-  venue    Venue     @relation(fields: [venueId], references: [id])
-  resource Resource? @relation(fields: [resourceId], references: [id])
-
-  @@map("blackout_dates")
-  @@schema("venue")
   @@index([tenantId])
   @@index([tenantId, venueId])
+  @@map("blackout_dates")
+  @@schema("venue")
 }
+
+// ─── Organisation domain ──────────────────────────────────────────────────────
+// Logically belongs to the organisation domain, not the venue/place domain.
+// Target state: dedicated organisation-service. Kept here during consolidation.
+// Cross-schema relations to Venue are supported via Prisma multiSchema.
 
 model Organisation {
-  id             String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId       String     @unique @map("tenant_id") @db.Uuid
-  tenantType     TenantType @default(club) @map("tenant_type")
-  name           String
-  slug           String     @unique
-  customDomain   String?    @unique @map("custom_domain")
-  primaryColour  String     @default("#1857E0") @map("primary_colour")
-  logoUrl        String?    @map("logo_url")
-  about          String?
-  address        String?
-  phone          String?
-  email          String?
-  mapsEmbedUrl   String?    @map("maps_embed_url")
-  isPublished    Boolean    @default(false) @map("is_published")
-  appName         String?   @map("app_name")
-  clubCode        String?   @unique @map("club_code")
-  secondaryColour String?   @map("secondary_colour")
-  headingFont     String?   @map("heading_font")
-  bodyFont        String?   @map("body_font")
-  navLayout       String    @default("dark-inline") @map("nav_layout")
-  faviconUrl      String?   @map("favicon_url")
-  portalTemplate  String    @default("bold") @map("portal_template")
-  homePageContent Json?     @map("home_page_content")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String        @unique @map("tenant_id") @db.Uuid
+  tenantType      TenantType    @default(club) @map("tenant_type")
+  name            String
+  slug            String        @unique
+  customDomain    String?       @unique @map("custom_domain")
+  primaryColour   String        @default("#1857E0") @map("primary_colour")
+  logoUrl         String?       @map("logo_url")
+  about           String?
+  address         String?
+  phone           String?
+  email           String?
+  mapsEmbedUrl    String?       @map("maps_embed_url")
+  isPublished     Boolean       @default(false) @map("is_published")
+  appName         String?       @map("app_name")
+  clubCode        String?       @unique @map("club_code")
+  secondaryColour String?       @map("secondary_colour")
+  headingFont     String?       @map("heading_font")
+  bodyFont        String?       @map("body_font")
+  navLayout       String        @default("dark-inline") @map("nav_layout")
+  faviconUrl      String?       @map("favicon_url")
+  portalTemplate  String        @default("bold") @map("portal_template")
+  homePageContent Json?         @map("home_page_content")
+  hasTeams        Boolean       @default(false) @map("has_teams")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  affiliations    Affiliation[] @relation("MemberOrg")
+  sponsors        Sponsor[]
+  venues          Venue[]
 
-  venues       Venue[]
-  affiliations Affiliation[] @relation("MemberOrg")
-
-  @@map("organisations")
-  @@schema("venue")
   @@index([tenantId])
   @@index([slug])
+  @@map("organisations")
+  @@schema("venue")
 }
 
-// Placeholder for NGB/enterprise affiliation relationships.
-// Status and profile fields will be populated when the governance
-// layer is built against a real NGB partner requirement.
 model Affiliation {
-  id                  String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  // The tenant affiliating (the club or operator)
-  tenantId            String            @map("tenant_id") @db.Uuid
-  organisationId      String            @map("organisation_id") @db.Uuid
-  // The governing tenant (the NGB or enterprise)
-  governingTenantId   String            @map("governing_tenant_id") @db.Uuid
-  status              AffiliationStatus @default(pending)
-  // Reserved for future policy / governance layer
-  policyPackId        String?           @map("policy_pack_id") @db.Uuid
-  effectiveFrom       DateTime?         @map("effective_from") @db.Date
-  effectiveTo         DateTime?         @map("effective_to") @db.Date
-  notes               String?
-  createdAt           DateTime          @default(now()) @map("created_at")
-  updatedAt           DateTime          @updatedAt @map("updated_at")
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String            @map("tenant_id") @db.Uuid
+  organisationId    String            @map("organisation_id") @db.Uuid
+  governingTenantId String            @map("governing_tenant_id") @db.Uuid
+  status            AffiliationStatus @default(pending)
+  policyPackId      String?           @map("policy_pack_id") @db.Uuid
+  effectiveFrom     DateTime?         @map("effective_from") @db.Date
+  effectiveTo       DateTime?         @map("effective_to") @db.Date
+  notes             String?
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  organisation      Organisation      @relation("MemberOrg", fields: [organisationId], references: [id])
 
-  organisation Organisation @relation("MemberOrg", fields: [organisationId], references: [id])
-
-  @@map("affiliations")
-  @@schema("venue")
   @@index([tenantId])
   @@index([governingTenantId])
   @@index([organisationId])
+  @@map("affiliations")
+  @@schema("venue")
 }
 
 model NewsPost {
-  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId       String    @map("tenant_id") @db.Uuid
-  title          String
-  slug           String
-  body           String?
-  coverImageUrl  String?   @map("cover_image_url")
-  published      Boolean   @default(false)
-  publishedAt    DateTime? @map("published_at")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  title         String
+  slug          String
+  body          String?
+  coverImageUrl String?   @map("cover_image_url")
+  published     Boolean   @default(false)
+  publishedAt   DateTime? @map("published_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
 
   @@unique([tenantId, slug])
-  @@map("news_posts")
-  @@schema("venue")
   @@index([tenantId])
   @@index([tenantId, published])
+  @@map("news_posts")
+  @@schema("venue")
+}
+
+model Sponsor {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String       @map("tenant_id") @db.Uuid
+  organisationId String       @map("organisation_id") @db.Uuid
+  name           String
+  logoUrl        String       @map("logo_url")
+  websiteUrl     String?      @map("website_url")
+  displayOrder   Int          @default(0) @map("display_order")
+  isActive       Boolean      @default(true) @map("is_active")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([organisationId, isActive, displayOrder])
+  @@map("sponsors")
+  @@schema("venue")
+}
+
+model SeasonalSchedule {
+  id                  String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId            String               @map("tenant_id") @db.Uuid
+  venueId             String               @map("venue_id") @db.Uuid
+  name                String
+  status              String               @default("draft")  // draft | active | ended
+  startDate           DateTime             @map("start_date") @db.Date
+  endDate             DateTime             @map("end_date") @db.Date
+  notes               String?
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+  availabilityConfigs AvailabilityConfig[]
+
+  @@index([tenantId])
+  @@index([tenantId, venueId])
+  @@index([tenantId, status])
+  @@map("seasonal_schedules")
+  @@schema("venue")
 }
 
 model AvailabilityConfig {
-  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId               String   @map("tenant_id") @db.Uuid
-  scopeType              String   @map("scope_type")
-  scopeId                String   @map("scope_id") @db.Uuid
-  dayOfWeek              Int?     @map("day_of_week")
-  opensAt                String?  @map("opens_at")
-  closesAt               String?  @map("closes_at")
-  slotDurationMinutes    Int?     @map("slot_duration_minutes")
-  bookingIntervalMinutes Int?     @map("booking_interval_minutes")
-  newDayReleaseTime      String?  @map("new_day_release_time")
-  isActive               Boolean  @default(true) @map("is_active")
-  createdAt              DateTime @default(now()) @map("created_at")
-  updatedAt              DateTime @updatedAt @map("updated_at")
+  id                     String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId               String            @map("tenant_id") @db.Uuid
+  seasonalScheduleId     String?           @map("seasonal_schedule_id") @db.Uuid
+  scopeType              String            @map("scope_type")
+  scopeId                String            @map("scope_id") @db.Uuid
+  dayOfWeek              Int?              @map("day_of_week")
+  opensAt                String?           @map("opens_at")
+  closesAt               String?           @map("closes_at")
+  slotDurationMinutes    Int?              @map("slot_duration_minutes")
+  bookingIntervalMinutes Int?              @map("booking_interval_minutes")
+  newDayReleaseTime      String?           @map("new_day_release_time")
+  isActive               Boolean           @default(true) @map("is_active")
+  createdAt              DateTime          @default(now()) @map("created_at")
+  updatedAt              DateTime          @updatedAt @map("updated_at")
+  seasonalSchedule       SeasonalSchedule? @relation(fields: [seasonalScheduleId], references: [id], onDelete: SetNull)
 
-  @@map("availability_configs")
-  @@schema("venue")
   @@index([tenantId])
   @@index([tenantId, scopeType, scopeId])
+  @@index([tenantId, seasonalScheduleId])
+  @@map("availability_configs")
+  @@schema("venue")
+}
+
+
+
+enum TenantType {
+  enterprise
+  operator
+  club
+
+  @@schema("venue")
+}
+
+enum AffiliationStatus {
+  pending
+  active
+  suspended
+  ended
+
+  @@schema("venue")
 }

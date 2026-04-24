@@ -40,7 +40,7 @@ export class MatchingRepository {
         TRIM(CONCAT(p.first_name, ' ', p.last_name)) AS display_name,
         er.elo_rating,
         COALESCE(rb.booking_count, 0)::int AS recent_booking_count
-      FROM people.customers p
+      FROM people.persons p
       LEFT JOIN recent_bookings rb ON rb.customer_id = p.id
       LEFT JOIN elo_ratings er ON er.person_id = p.id
       WHERE p.tenant_id = '${tenantId}'
@@ -88,13 +88,13 @@ export class MatchingRepository {
         TRIM(CONCAT(p.first_name, ' ', p.last_name)) AS display_name,
         (SELECT elo_rating FROM elo_rating),
         (SELECT booking_count FROM recent_bookings)::int AS recent_booking_count
-      FROM people.customers p
+      FROM people.persons p
       WHERE p.id = '${personId}' AND p.tenant_id = '${tenantId}'
       LIMIT 1
     `)
 
     if (rows.length === 0) return null
-    const r = rows[0]
+    const r = rows[0]!
     return {
       personId: r['person_id'] as string,
       displayName: (r['display_name'] as string) || 'Unknown',

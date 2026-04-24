@@ -84,19 +84,21 @@ export class PaymentsService {
 
   async findAll(
     tenantId: string,
-    page = 1,
-    limit = 25,
+    page?: number,
+    limit?: number,
     subjectType?: string,
     subjectId?: string,
   ) {
-    const { data, total } = await this.repo.findAll(tenantId, { page, limit, subjectType, subjectId })
+    const safePage = Number.isFinite(page) && (page as number) >= 1 ? (page as number) : 1
+    const safeLimit = Number.isFinite(limit) && (limit as number) >= 1 ? Math.min(limit as number, 100) : 25
+    const { data, total } = await this.repo.findAll(tenantId, { page: safePage, limit: safeLimit, subjectType, subjectId })
     return {
       data,
       pagination: {
         total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
+        page: safePage,
+        limit: safeLimit,
+        totalPages: Math.ceil(total / safeLimit),
       },
     }
   }

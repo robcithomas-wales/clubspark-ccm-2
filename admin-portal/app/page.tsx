@@ -20,6 +20,7 @@ import {
   Shield,
   ShieldCheck,
   Smartphone,
+  Tag,
   Trophy,
   TrendingUp,
   Users,
@@ -55,6 +56,7 @@ import {
   getWebhookSubscriptions,
   getHighChurnMembers,
   getAnomalyFlags,
+  getProducts,
 } from "@/lib/api"
 
 function StatCard({
@@ -155,6 +157,7 @@ export default async function DashboardPage() {
     webhookSubsResult,
     highChurnResult,
     anomalyAlertsResult,
+    productsResult,
   ] = await Promise.allSettled([
     getVenues(),
     getResources(),
@@ -181,7 +184,8 @@ export default async function DashboardPage() {
     getApiKeys(),
     getWebhookSubscriptions(),
     getHighChurnMembers(60, 1),
-    getAnomalyFlags(1, 50, { unresolvedOnly: true, severity: "alert" }),
+    getAnomalyFlags({ page: 1, unresolvedOnly: true, severity: "alert" }),
+    getProducts(1, 200),
   ])
 
   const venuesResponse = venuesResult.status === "fulfilled" ? venuesResult.value : null
@@ -212,6 +216,7 @@ export default async function DashboardPage() {
   const webhookSubs: any[] = webhookSubsResult.status === "fulfilled" ? ((webhookSubsResult.value as any)?.data ?? []) : []
   const highChurnTotal: number = highChurnResult.status === "fulfilled" ? ((highChurnResult.value as any)?.pagination?.total ?? 0) : 0
   const anomalyAlertCount: number = anomalyAlertsResult.status === "fulfilled" ? ((anomalyAlertsResult.value as any)?.pagination?.total ?? 0) : 0
+  const productsResponse = productsResult.status === "fulfilled" ? productsResult.value : null
 
   function extractData(r: any): any[] {
     if (!r) return []
@@ -233,6 +238,8 @@ export default async function DashboardPage() {
   const teams = extractData(teamsResponse)
   const series = extractData(seriesResponse)
   const coaches = extractData(coachesResponse)
+  const products = extractData(productsResponse)
+  const activeProducts = products.filter((p: any) => p.isActive !== false)
 
   const activeBookings = bookings.filter((b: any) => b.status === "active")
   const activeMemberships = memberships.filter((m: any) => m.status === "active")
@@ -410,6 +417,12 @@ export default async function DashboardPage() {
       icon: Brain,
       summary: `Churn/LTV/default scoring · ${highChurnTotal} high-churn member${highChurnTotal !== 1 ? "s" : ""} flagged · ${anomalyAlertCount} unresolved anomaly alert${anomalyAlertCount !== 1 ? "s" : ""} · utilisation forecasting with dead-slot detection · player matching by ELO · ELO draw seeding`,
     },
+    {
+      title: "Products & Pricing",
+      href: "/products",
+      icon: Tag,
+      summary: `${activeProducts.length} active product${activeProducts.length !== 1 ? "s" : ""} · purchasable items and pricing tiers for clubs and members`,
+    },
   ]
 
   const pilotSummaryItems = [
@@ -454,6 +467,10 @@ export default async function DashboardPage() {
     "ELO draw seeding — competition draws auto-seeded by ELO rating before generation; alphabetical fallback when no rating config exists",
     "Microservice architecture ready to scale to production on Azure",
     "817-test automated regression suite — 733 service integration tests across 12 microservices and 84 Playwright e2e tests covering end-to-end user journeys, all running against a real database",
+    "Products & Pricing module — purchasable product catalogue with categories, pricing and active/inactive status",
+    "ClubSpark Internal Staff Portal — separate staff-only portal with org dashboard, feature flag management, impersonation and platform audit trail",
+    "Organisation registry — central registry of all tenant orgs auto-synced from venue-service, with plan, status, region and admin email tracking",
+    "Staff impersonation with full audit trail — time-limited impersonation sessions, every action written to audit log and surfaced in real-time on the internal portal",
   ]
 
   return (
@@ -693,6 +710,30 @@ export default async function DashboardPage() {
               {
                 title: "Player Matching",
                 body: "Match players with similar skill levels for a sport. ELO proximity within ±200 points scores up to 60 points (closer = higher); activity bonus (last-60-day booking frequency) adds up to 40 points. Graceful fallback to activity-only matching when no ELO config exists. Returns top 15 ranked candidates. Accessible via the Player Matching panel on every person detail page.",
+              },
+              {
+                title: "Products & Pricing Module",
+                body: `Purchasable product catalogue with pricing, categories and active/inactive status. ${activeProducts.length} active product${activeProducts.length !== 1 ? "s" : ""} currently in the system. Products can be attached to bookings, memberships and sessions for flexible commercial packages.`,
+              },
+              {
+                title: "ClubSpark Internal Staff Portal",
+                body: "Separate internal portal (port 3010) for ClubSpark staff only. Dashboard with live KPI cards (total accounts, active, impersonation sessions, feature flags in use), plan and status breakdowns, flag adoption chart, recent audit feed and active impersonation warning banner.",
+              },
+              {
+                title: "Feature Flag Management",
+                body: "Per-organisation feature flags managed through the internal staff portal. Staff can toggle flags per org from the Flags page — controls which platform features are visible to each tenant without requiring a deployment.",
+              },
+              {
+                title: "Staff Impersonation System",
+                body: "ClubSpark staff can create time-limited impersonation sessions to act as any admin user within a tenant org. Full audit trail of all impersonation events. Active sessions surfaced with a red warning banner in the internal portal dashboard.",
+              },
+              {
+                title: "Platform Audit Trail",
+                body: "All admin actions performed through the internal staff portal are written to a tamper-evident audit log — recording who did what, when and against which resource. Displayed in real-time on the internal portal dashboard.",
+              },
+              {
+                title: "Organisation Registry",
+                body: "Central registry of all tenant organisations maintained in the admin-service. Auto-synced from venue-service on every org upsert via a fire-and-forget hook. Tracks plan, status, region, sport and admin email per org — no manual data entry required.",
               },
             ].map(({ title, body }) => (
               <div key={title} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 shadow-sm">
@@ -1017,6 +1058,11 @@ export default async function DashboardPage() {
                 icon: Brain,
                 title: "AI Analytics Layer",
                 body: "Nightly member scoring (churn, LTV, default risk, send hour) · rule-based anomaly detection with 4 detection rules · 7–14 day utilisation forecasting with dead-slot identification and previous-booker lookup · player matching by ELO proximity. Pure TypeScript, cross-schema SQL — no ML infrastructure required.",
+              },
+              {
+                icon: Key,
+                title: "Internal Operations",
+                body: "ClubSpark staff portal with org registry, feature flag management, time-limited impersonation and a tamper-evident audit trail — all independent of the tenant-facing admin portal.",
               },
               {
                 icon: Layers,

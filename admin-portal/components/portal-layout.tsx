@@ -110,6 +110,7 @@ const navSections = [
           { label: "Segments", href: "/segments" },
         ],
       },
+      { label: "Products", href: "/products", icon: ShoppingBag },
     ],
   },
   {
@@ -123,6 +124,7 @@ const navSections = [
           { label: "Coaches", href: "/coaching/coaches" },
           { label: "Lesson Types", href: "/coaching/lesson-types" },
           { label: "Sessions", href: "/coaching/sessions" },
+          { label: "Programmes", href: "/coaching/programmes" },
         ],
       },
       {
@@ -446,7 +448,7 @@ export function PortalLayout({
           ))}
         </div>
 
-        <div className="mt-auto px-4 pb-4">
+        <div className="mt-auto px-4 pb-4 space-y-2">
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
             <div className="mb-2 flex items-center gap-2 text-white">
               <ShieldCheck className="h-5 w-5 text-[#5EE082]" />
@@ -456,6 +458,15 @@ export function PortalLayout({
               Modern multi sport operations portal built on separate services.
             </p>
           </div>
+          <a
+            href="http://localhost:3010"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[#A9BDD5] transition hover:bg-white/10 hover:text-white"
+          >
+            <ShieldCheck className="h-4 w-4 shrink-0 text-[#5EE082]" />
+            <span>ClubSpark Staff Portal</span>
+          </a>
         </div>
       </aside>
 

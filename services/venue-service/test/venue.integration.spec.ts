@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest'
 import supertest from 'supertest'
 import { getApp, closeApp } from './helpers/app.js'
 import { prisma, seedFixtures, teardownFixtures, checkDbAvailable } from './helpers/db.js'
@@ -786,6 +786,14 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('Venues — Create', () => {
+    afterEach(async () => {
+      // Remove any venues created during these tests (keep the seeded fixture)
+      await prisma.$executeRaw`
+        DELETE FROM venue.venues
+        WHERE tenant_id = ${TEST_TENANT_ID}::uuid AND id != ${TEST_VENUE_ID}::uuid
+      `
+    })
+
     it('creates a venue and returns 201', async () => {
       const res = await request
         .post('/venues')

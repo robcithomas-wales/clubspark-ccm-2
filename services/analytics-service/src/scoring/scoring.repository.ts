@@ -109,15 +109,15 @@ export class ScoringRepository {
       ),
       no_show_stats AS (
         SELECT
-          b.customer_id                                                           AS person_id,
+          sp.customer_id                                                          AS person_id,
           COUNT(CASE WHEN sp.status = 'no_show' THEN 1 END)                      AS no_shows,
           COUNT(sp.id)                                                            AS total_sessions
-        FROM booking.bookings b
-        JOIN booking.session_participants sp ON sp.booking_id = b.id
-        WHERE b.tenant_id = '${tenantId}'
-          AND b.starts_at >= NOW() - INTERVAL '90 days'
-          AND b.customer_id IS NOT NULL
-        GROUP BY b.customer_id
+        FROM booking.session_participants sp
+        JOIN booking.sessions s ON s.id = sp.session_id
+        WHERE s.tenant_id = '${tenantId}'
+          AND s.starts_at >= NOW() - INTERVAL '90 days'
+          AND sp.customer_id IS NOT NULL
+        GROUP BY sp.customer_id
       )
       SELECT
         p.id                                                                      AS person_id,
@@ -142,7 +142,7 @@ export class ScoringRepository {
         ps.days_since_last_success,
         COALESCE(ns.no_shows, 0)                                                  AS no_show_count_90d,
         COALESCE(ns.total_sessions, 0)                                            AS total_sessions_90d
-      FROM people.customers p
+      FROM people.persons p
       LEFT JOIN booking_stats    bs ON bs.person_id = p.id
       LEFT JOIN membership_stats ms ON ms.person_id = p.id
       LEFT JOIN payment_stats    ps ON ps.person_id = p.id
@@ -251,7 +251,7 @@ export class ScoringRepository {
 
   async getActiveTenantIds(): Promise<string[]> {
     const rows = await this.prisma.write.$queryRawUnsafe<Array<{ tenant_id: string }>>(
-      `SELECT DISTINCT tenant_id FROM people.customers WHERE lifecycle_state IN ('active','suspended') LIMIT 200`
+      `SELECT DISTINCT tenant_id FROM people.persons WHERE lifecycle_state IN ('active','suspended') LIMIT 200`
     )
     return rows.map((r) => r.tenant_id)
   }

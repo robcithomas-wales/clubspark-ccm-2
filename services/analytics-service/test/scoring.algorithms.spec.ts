@@ -151,8 +151,9 @@ describe('computeChurnRisk', () => {
   })
 
   it('reduces risk for strong upward booking trend', () => {
+    // daysSinceLastBooking=20 adds 5pts base so the -12 trend bonus has room to move the score
     const flat = computeChurnRisk({
-      daysSinceLastBooking: 10,
+      daysSinceLastBooking: 20,
       bookingsLast30Days: 5,
       bookingsPrev30Days: 5,
       membershipStatus: 'active',
@@ -162,7 +163,7 @@ describe('computeChurnRisk', () => {
       emailsOpened90Days: 0,
     })
     const trending = computeChurnRisk({
-      daysSinceLastBooking: 10,
+      daysSinceLastBooking: 20,
       bookingsLast30Days: 8,
       bookingsPrev30Days: 5,
       membershipStatus: 'active',

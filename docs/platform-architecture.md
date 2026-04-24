@@ -3,7 +3,7 @@
 > **Document purpose:** Records all architectural decisions, the target platform design, and the phased implementation plan. Used as the reference for all development work.
 >
 > **Last updated:** April 2026
-> **Status:** Active — Phase 0 complete. Teams (Phase 1), Coaching (Phase 6), Competitions, Rankings, Team Sport Website Pages, Comms, Segments, Sessions, Pricing Rules, Refund Policies, Integration Layer, and AI Analytics (member scoring, anomaly detection, utilisation forecasting, player matching) live. 817 automated tests (733 integration + 84 e2e). Gaps 1, 2, 4, 8 resolved; Gap 3 (Supavisor) pending config change.
+> **Status:** Active — Phase 0 complete. 15 microservices live across all domains. Teams, Coaching, Competitions, Rankings, Team Sport Website Pages, Comms, Integration Layer (API keys, webhooks, Xero/QuickBooks), AI Analytics (member scoring, anomaly detection, utilisation forecasting, player matching), Products & Pricing, and ClubSpark Internal Staff Portal (org registry, feature flags, impersonation, audit trail) all live. 817 automated tests (733 integration + 84 e2e). Gaps 1, 2, 4, 8 resolved; Gap 3 (Supavisor) pending config change.
 
 ---
 

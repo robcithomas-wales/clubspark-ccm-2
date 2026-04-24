@@ -1,6 +1,6 @@
 # Club & Coach Platform — Feature Overview
 
-> **Version:** Phase 0 complete (April 2026) — Team Sport Website Pages, Sponsors, and Rankings added
+> **Version:** Phase 0 complete (April 2026) — Internal Staff Portal, Products & Pricing, AI Analytics, Integration Layer, Accounting Integration, Comms Centre, Anomaly Detection, Utilisation Forecasting, Player Matching added
 > **Audience:** Internal — product, engineering, commercial teams
 
 ---
@@ -15,10 +15,11 @@ Club & Coach is a multi-sport SaaS platform for sports clubs and leisure venues.
 
 | Layer | Technology | Purpose |
 |---|---|---|
-| Admin Portal | Next.js 15 (App Router) | Staff-facing management interface |
+| Admin Portal | Next.js 15 (App Router) | Tenant staff-facing management interface |
 | Customer Portal | Next.js 15 (App Router) | White-label public booking & account portal |
+| Internal Staff Portal | Next.js 15 (App Router) | ClubSpark staff-only org management & oversight |
 | Mobile App | React Native / Expo | Branded member app |
-| Backend Services | NestJS + Fastify | 9 independent microservices |
+| Backend Services | NestJS + Fastify | 15 independent microservices |
 | Database | PostgreSQL (Supabase → Azure) | Isolated schema per domain |
 | Auth | Supabase | JWT-based, multi-tenant |
 | Infrastructure target | Azure | Cloud deployment |
@@ -44,7 +45,7 @@ Manages the physical infrastructure of a venue.
 
 ---
 
-### 2. Booking Service (port 4005)
+### 2. Booking Service (port 4017)
 Handles all booking activity — creation, management, and series.
 
 - **Bookings** — create, view, approve, reject, reschedule, and cancel individual bookings; records customer, resource, time slot, price, and source
@@ -115,10 +116,67 @@ Full team sports management for clubs with competitive fixtures.
 ---
 
 ### 7. Admin Service (port 4006)
-Platform and tenant management.
+Platform and tenant management — serves the ClubSpark Internal Staff Portal.
 
 - **Admin Users** — manage staff access to the admin portal with role-based permissions
 - **RBAC** — role-based access control across portal functions
+- **Organisation Registry** — central record of all tenant orgs; auto-synced from venue-service on every org upsert via fire-and-forget hook; tracks name, slug, plan, status, region, sport and admin email
+- **Feature Flags** — per-organisation flags that control which platform features are visible to each tenant; managed by ClubSpark staff through the internal portal
+- **Staff Impersonation** — time-limited impersonation sessions allowing ClubSpark staff to act as any admin user within a tenant; full status lifecycle (active → ended)
+- **Audit Log** — tamper-evident log of all admin actions performed via the internal portal; records actor, action, entity type and entity ID
+- **Platform Stats** — aggregated KPIs: total organisations, breakdown by plan and status, feature flag adoption, active impersonation sessions, recent audit entries
+
+---
+
+### 8a. Order Service / Products (port 4015)
+Purchasable product catalogue for clubs and members.
+
+- **Products** — define purchasable items with name, description, price, product type, category, currency, and active/inactive status
+- **Product filtering** — query by type, category and active status
+- Full CRUD behind tenant auth
+
+---
+
+### 8b. Analytics Service (port 4014)
+AI-powered analytics running nightly batch jobs.
+
+- **Member Scoring** — nightly scores for every member: churn risk (0–100, band: low/medium/high), lifetime value (£/year), payment default risk (0–100), optimal send hour with confidence; visible per-member in the AI Insights panel on the person detail page
+- **Anomaly Detection** — rule-based detection running nightly at 03:00 UTC across four rules: dormant account spike (inactive 60+ days then 5+ bookings in 24h, alert), payment failure spike (3+ failures in 24h, alert), court hoarding (same unit booked 7+ times in 7 days, warning), extreme booking duration (>6 hours, warning); idempotent — skips re-flagging unresolved duplicates within 24h
+- **Utilisation Forecasting** — 7–14 day occupancy forecast by bookable unit using rolling 4-week average by unit, day-of-week and hour; dead slot detection (predicted <30% occupancy from 3 days ahead); previous-booker lookup ready for targeted campaign wiring; computed nightly at 02:00 UTC
+- **Player Matching** — match players with similar skill levels for a sport; ELO proximity within ±200 points scores up to 60 points; activity bonus (last-60-day bookings) adds up to 40 points; graceful fallback to activity-only when no ELO config exists; returns top 15 candidates; accessible via the Player Matching panel on every person detail page
+
+---
+
+### 8c. Integration Service (port 4016)
+Third-party integration layer.
+
+- **API Keys** — issue scoped credentials for NGB/third-party consumers; HMAC-SHA256 hashed at rest; `cs_` prefixed plaintext shown once on creation; scopes: bookings:read, members:read, competitions:read, teams:read, webhooks:manage
+- **Webhook Subscriptions** — subscribe external endpoints to platform events; per-subscription HMAC signing secret for request verification via `X-ClubSpark-Signature`; 30-second cron delivery worker with 5-attempt exponential retry (30s → 2m → 10m → 1h → 4h) and dead-letter status
+- **Event Fan-out** — booking-service, membership-service and payment-service all forward domain events to integration-service for delivery to registered endpoints
+- **Xero Integration** — OAuth 2.0 connection with AES-256-GCM token encryption; real-time payment.succeeded → invoice, refund → credit note, membership.activated → invoice; nightly batch reconciliation for missed events; configurable invoice mode, revenue account and tax rate
+- **QuickBooks Integration** — same OAuth/encryption/sync pattern as Xero; parallel implementation ready to activate
+
+---
+
+### 8d. Comms Service (port 4012)
+Email and SMS campaign management.
+
+- **Campaigns** — create, schedule and send email/SMS campaigns; rich text composer; draft saving; recipient preview
+- **System Notification Templates** — 10 templates: booking confirmed/cancelled/reminder, membership activated/renewal/expired, payment success/failure/refund, fixture reminder; Azure Communication Services ready
+- **Audience Builder** — AND/OR rule builder: filter by membership status, age range, tags, booking history, payment status and lifecycle stage; save named audience definitions
+- **Suppression Engine** — opt-out and suppression list management
+- **Guardian Routing** — messages about minors routed to guardian contact
+- **Message Log** — per-message delivery events powering campaign analytics
+- **Campaign Analytics** — per-campaign: sent count, delivery rate, open rate, click rate, bounce rate; visual engagement funnel; suppression breakdown
+
+---
+
+### 8e. Entitlement Service (port 4013)
+Platform plan and subscription management.
+
+- **SaaS Plans** — Core, Growth, Pro and Enterprise tiers with feature entitlements
+- **Org Subscriptions** — track active plan subscription per tenant org
+- **Add-on entitlements** — feature flag gating aligned to subscription tier
 
 ---
 
@@ -151,11 +209,12 @@ Gateway-agnostic payment processing.
 The admin portal is the primary management interface for club/venue staff. It uses a sidebar navigation layout and adapts to the organisation's brand colour and logo.
 
 ### Dashboard
-- **8 KPI cards** — Total Revenue, Active Bookings, Active Members, Utilisation %, People, Teams, Coaches, Participants
+- **11 KPI cards** — Total Revenue, Active Bookings, Active Members, Utilisation %, People, Teams, Coaches, Competitions, Participants, High-Churn Risk (AI-scored), Anomaly Alerts
 - **Operational alerts** — renewals due within 30 days, active memberships with outstanding payment
 - **Activity charts** — add-on revenue (30 days), booked hours (30 days), bookings volume over time
-- **Platform coverage grid** — quick-links to all domains with live summary stats
+- **Platform coverage grid** — quick-links to all 20 domains with live summary stats
 - **Pilot summary** — complete feature checklist across all platform capabilities
+- **Recent Platform Additions** — detailed cards for every feature shipped since Phase 0 completion
 - Recent bookings table and membership snapshot
 
 ### Facilities
@@ -365,6 +424,38 @@ A React Native (Expo) mobile app fully themed to the organisation's brand colour
 
 ---
 
+## Internal Staff Portal
+
+A separate Next.js portal (`http://localhost:3010` in development) for ClubSpark staff only. Protected by Supabase auth + `x-internal-secret` header to admin-service.
+
+### Dashboard
+- **4 KPI cards** — Total Accounts, Active Accounts, Active Impersonation Sessions, Feature Flags In Use
+- **Plan breakdown** — count of organisations per SaaS plan (trial / core / growth / pro / enterprise)
+- **Status breakdown** — count by org status (active / suspended / churned)
+- **Feature flag adoption** — most-used flags sorted by activation count
+- **Active impersonation warning banner** — red alert banner when any impersonation session is currently active
+- **Recent audit feed** — latest 8 audit log entries with actor, action, entity and timestamp
+
+### Accounts (Organisation Registry)
+- List all tenant organisations with name, slug, plan, status, region and admin email
+- Create new org record manually
+- Per-org detail with feature flags and audit history
+
+### Feature Flags
+- List all feature flags across all orgs with enabled/disabled status
+- Toggle flags per org directly from the flags page
+
+### Impersonation
+- List all impersonation sessions with status, start time and org context
+- Create new impersonation sessions for a specific org / admin user
+- End active sessions with one click
+
+### Audit Trail
+- Full chronological audit log of all internal admin actions
+- Filter by actor, entity type and date range
+
+---
+
 ## Multi-Tenancy
 
 The platform is fully multi-tenant from day one:
@@ -389,12 +480,16 @@ The platform is fully multi-tenant from day one:
 | team-service integration | 38 | Passing |
 | admin-service integration | 18 | Passing |
 | competition-service integration | 28 | Passing |
-| **Total integration** | **348** | **All passing** |
-| Playwright e2e (admin portal) | 92 | All passing |
-| **Grand total** | **440** | |
+| payment-service integration | 22 | Passing |
+| comms-service integration | 31 | Passing |
+| integration-service integration | 19 | Passing |
+| analytics-service integration | 313 | Passing |
+| **Total integration** | **733** | **All passing** |
+| Playwright e2e (admin portal) | 84 | All passing |
+| **Grand total** | **817** | |
 
 All integration tests run against a real PostgreSQL database and use `describe.runIf(DB_AVAILABLE)` to gracefully skip when the database is unreachable.
 
 ---
 
-*Document updated April 2026. Reflects Phase 0 complete feature set plus Competitions, Rankings, and Team Sport Website Pages (Sponsors, public Teams/Squad pages).*
+*Document updated April 2026. Reflects Phase 0 complete feature set plus: Competitions, Rankings, Team Sport Website Pages (Sponsors, public Teams/Squad pages), AI Analytics (member scoring, anomaly detection, utilisation forecasting, player matching), Integration Layer (API keys, webhooks, Xero/QuickBooks), Communications Centre, Internal Staff Portal (org registry, feature flags, impersonation, audit trail), Products & Pricing module, and 817 automated tests.*

@@ -111,7 +111,7 @@ describe.runIf(DB_AVAILABLE)('Draw — integration', () => {
       await prisma.$transaction(
         personIds.map(pid =>
           prisma.rankingEntry.create({
-            data: { tenantId: TEST_TENANT_ID, configId, personId: pid, eloRating: eloRatings[pid] ?? 1000, position: 1 },
+            data: { tenantId: TEST_TENANT_ID, configId, personId: pid, displayName: 'Test Player', sport: 'tennis', eloRating: eloRatings[pid] ?? 1000 },
           })
         )
       )

@@ -30,7 +30,6 @@ enum EntryType {
 
 enum CompetitionStatus {
   DRAFT
-  AWAITING_APPROVAL
   REGISTRATION_OPEN
   IN_PROGRESS
   COMPLETED
@@ -77,34 +76,6 @@ enum ResultStatus {
   @@schema("competitions")
 }
 
-enum DisciplineOutcome {
-  WARNING
-  FINE
-  MATCH_BAN
-  COMPETITION_BAN
-  SUSPENSION
-  DISQUALIFICATION
-  NO_ACTION
-  @@schema("competitions")
-}
-
-enum DisciplineCaseStatus {
-  OPEN
-  UNDER_REVIEW
-  RESOLVED
-  APPEALED
-  CLOSED
-  @@schema("competitions")
-}
-
-enum SubmissionStatus {
-  DRAFT
-  SUBMITTED
-  ACKNOWLEDGED
-  REJECTED
-  @@schema("competitions")
-}
-
 enum MessageAudience {
   ALL_ENTRANTS
   CONFIRMED_ENTRANTS
@@ -147,8 +118,6 @@ model Competition {
   divisions    Division[]
   entries      Entry[]
   matches      Match[]
-  discipline   DisciplineCase[]
-  submissions  TournamentSubmission[]
   messages     CompetitionMessage[]
 
   @@map("competitions")
@@ -376,8 +345,64 @@ model AuditLog {
   @@index([tenantId, createdAt(sort: Desc)])
 }
 
-// ── Discipline ─────────────────────────────────────────────────────────────────
+// ── Competition Messages ───────────────────────────────────────────────────────
 
+model CompetitionMessage {
+  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String          @map("tenant_id") @db.Uuid
+  competitionId  String          @map("competition_id") @db.Uuid
+  subject        String
+  body           String          @db.Text
+  audience       MessageAudience @default(ALL_ENTRANTS)
+  divisionId     String?         @map("division_id") @db.Uuid
+  sentBy         String?         @map("sent_by") @db.Uuid
+  sentAt         DateTime        @default(now()) @map("sent_at")
+  recipientCount Int             @default(0) @map("recipient_count")
+
+  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+
+  @@map("competition_messages")
+  @@schema("competitions")
+  @@index([tenantId])
+  @@index([competitionId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Governance schema
+// NGB-specific models that do not belong in the recreational competition domain.
+// Kept in this service for now; target state is a dedicated governance-service.
+// These models use cross-service UUID references — no hard FK to competitions.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum DisciplineOutcome {
+  WARNING
+  FINE
+  MATCH_BAN
+  COMPETITION_BAN
+  SUSPENSION
+  DISQUALIFICATION
+  NO_ACTION
+  @@schema("competitions")
+}
+
+enum DisciplineCaseStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  APPEALED
+  CLOSED
+  @@schema("competitions")
+}
+
+enum SubmissionStatus {
+  DRAFT
+  SUBMITTED
+  ACKNOWLEDGED
+  REJECTED
+  @@schema("competitions")
+}
+
+// NGB discipline case. competitionId is a cross-service reference — no hard FK.
 model DisciplineCase {
   id            String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId      String               @map("tenant_id") @db.Uuid
@@ -394,8 +419,7 @@ model DisciplineCase {
   createdAt     DateTime             @default(now()) @map("created_at")
   updatedAt     DateTime             @default(now()) @updatedAt @map("updated_at")
 
-  competition Competition?      @relation(fields: [competitionId], references: [id])
-  actions     DisciplineAction[]
+  actions DisciplineAction[]
 
   @@map("discipline_cases")
   @@schema("competitions")
@@ -422,8 +446,7 @@ model DisciplineAction {
   @@index([caseId])
 }
 
-// ── Work Cards ─────────────────────────────────────────────────────────────────
-
+// NGB player registration/grading card.
 model WorkCard {
   id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId     String    @map("tenant_id") @db.Uuid
@@ -449,8 +472,7 @@ model WorkCard {
   @@index([personId])
 }
 
-// ── Tournament Submissions ─────────────────────────────────────────────────────
-
+// NGB tournament submission record. competitionId is a cross-service reference.
 model TournamentSubmission {
   id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId        String           @map("tenant_id") @db.Uuid
@@ -468,31 +490,7 @@ model TournamentSubmission {
   createdAt       DateTime         @default(now()) @map("created_at")
   updatedAt       DateTime         @default(now()) @updatedAt @map("updated_at")
 
-  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
-
   @@map("tournament_submissions")
-  @@schema("competitions")
-  @@index([tenantId])
-  @@index([competitionId])
-}
-
-// ── Competition Messages ───────────────────────────────────────────────────────
-
-model CompetitionMessage {
-  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId       String          @map("tenant_id") @db.Uuid
-  competitionId  String          @map("competition_id") @db.Uuid
-  subject        String
-  body           String          @db.Text
-  audience       MessageAudience @default(ALL_ENTRANTS)
-  divisionId     String?         @map("division_id") @db.Uuid
-  sentBy         String?         @map("sent_by") @db.Uuid
-  sentAt         DateTime        @default(now()) @map("sent_at")
-  recipientCount Int             @default(0) @map("recipient_count")
-
-  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
-
-  @@map("competition_messages")
   @@schema("competitions")
   @@index([tenantId])
   @@index([competitionId])
