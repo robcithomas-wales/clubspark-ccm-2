@@ -1,5 +1,5 @@
 export const configuration = () => ({
-  port: parseInt(process.env['PORT'] ?? '4013', 10),
+  port: parseInt(process.env['PORT'] ?? '4016', 10),
   nodeEnv: process.env['NODE_ENV'] ?? 'development',
 
   database: {

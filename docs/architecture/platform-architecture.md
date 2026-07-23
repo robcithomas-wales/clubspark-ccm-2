@@ -87,7 +87,7 @@ The existing platform runs on ASP.NET + SQL Server. Core issues:
 | membership-service | 4010 | NestJS / TypeScript / Fastify | ✅ Live — schemes, plans, memberships, entitlements, renewals |
 | payment-service | 4011 | NestJS / TypeScript / Fastify | ✅ Live — gateway-agnostic (Stripe live, GoCardless ready) |
 | comms-service | 4012 | NestJS / TypeScript / Fastify | ✅ Live — campaigns, message log, system templates with tenant overrides |
-| integration-service | 4013 | NestJS / TypeScript / Fastify | ✅ Live — API key issuance (scoped, hashed), webhook subscriptions, delivery worker with 5-attempt retry, inbound event fan-out, Xero/QuickBooks OAuth 2.0, real-time accounting sync (payment.succeeded → invoice, refund → credit note, membership.activated → invoice), nightly batch reconciliation |
+| integration-service | 4016 | NestJS / TypeScript / Fastify | ✅ Live — API key issuance (scoped, hashed), webhook subscriptions, delivery worker with 5-attempt retry, inbound event fan-out, Xero/QuickBooks OAuth 2.0, real-time accounting sync (payment.succeeded → invoice, refund → credit note, membership.activated → invoice), nightly batch reconciliation |
 | analytics-service | 4014 | NestJS / TypeScript / Fastify | ✅ Live — nightly member scoring: churn risk, LTV, payment default, optimal send hour; rule-based anomaly detection (4 rules, `@Cron` 03:00); utilisation forecasting with dead-slot identification (`@Cron` 02:00); player matching by ELO proximity; cross-schema raw SQL; ELO draw seeding in competition-service |
 | admin-portal | 3005 | Next.js / React | ✅ Live |
 | customer-portal | 3006 | Next.js / React | ✅ Live — multi-tenant via `/[slug]`, teams pages |
@@ -973,7 +973,7 @@ pg_restore --no-owner -d $AZURE_POSTGRES_URL clubspark_$(date +%Y%m%d).dump
 
 #### 0.12 — Integration layer ✅
 
-- [x] `integration-service` scaffolded (port 4013, NestJS + Fastify, Prisma `integration` schema)
+- [x] `integration-service` scaffolded (port 4016, NestJS + Fastify, Prisma `integration` schema)
 - [x] `integration.api_keys` — long-lived credentials with HMAC-SHA256 hash storage; `cs_` prefixed plaintext shown once on create; scopes: `bookings:read`, `members:read`, `competitions:read`, `teams:read`, `webhooks:manage`
 - [x] `integration.api_key_usage` — per-request audit log written by `ApiKeyUsageInterceptor`
 - [x] `integration.webhook_subscriptions` — per-tenant subscriber endpoints with HMAC signing secret (secret hash stored, plaintext shown once)

@@ -44,14 +44,10 @@ Prisma schema lives in each service's `prisma/schema.prisma`.
 | membership-service | 4010 |
 | payment-service | 4011 |
 | comms-service | 4012 |
-| entitlement-service | 4013 ⚠️ |
-| integration-service | 4013 ⚠️ |
+| entitlement-service | 4013 |
 | analytics-service | 4014 |
 | order-service | 4015 |
-
-> ⚠️ **Known port collision:** `entitlement-service` and `integration-service` both
-> default to `4013`. They cannot both start on defaults — set `PORT` explicitly for one
-> when running both locally.
+| integration-service | 4016 |
 
 ## Common commands
 

@@ -11,8 +11,7 @@ Bootstrap this checkout (or fresh worktree) so services can run and tests can pa
    must fill in — do **not** invent secrets:
    - `DATABASE_URL` → the Supabase Postgres connection string
    - `SUPABASE_JWT_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
-   - Confirm each service's `PORT` matches the port table in `CLAUDE.md` (note the known
-     `entitlement`/`integration` 4013 collision).
+   - Confirm each service's `PORT` matches the port table in `CLAUDE.md`.
 3. **Prisma** — run `npm run prisma:generate --workspace=services/<name>` for services whose
    generated client is missing (clients are git-ignored under `**/prisma/generated/`).
 4. **Smoke check** — build one service (`npm run build --workspace=services/booking-service`)

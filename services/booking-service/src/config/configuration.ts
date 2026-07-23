@@ -26,7 +26,7 @@ export const configuration = () => ({
   },
 
   integrationService: {
-    url: process.env['INTEGRATION_SERVICE_URL'] ?? 'http://localhost:4013',
+    url: process.env['INTEGRATION_SERVICE_URL'] ?? 'http://localhost:4016',
   },
 })
 
