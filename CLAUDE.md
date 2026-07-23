@@ -9,8 +9,9 @@ Keep it accurate — if you change how something works, update this file in the 
 `clubspark-platform` — a multi-sport SaaS platform (bookings, people, membership,
 coaching, teams, competitions, payments, comms, analytics). Monorepo managed with
 **npm workspaces**. Backend is **NestJS on Fastify**; data is **PostgreSQL via Prisma**;
-front-ends are **Next.js**. Multi-tenant: requests carry `x-tenant-id` and
-`x-organisation-id` headers.
+front-ends are **Next.js**. Auth is **Supabase (JWT)** — services validate a Supabase
+JWT and read tenant context from it. Multi-tenant: tenant/organisation context comes from
+the JWT and/or `x-tenant-id` / `x-organisation-id` headers for service-to-service calls.
 
 ## Repository layout
 
@@ -22,7 +23,7 @@ front-ends are **Next.js**. Multi-tenant: requests carry `x-tenant-id` and
 | `internal-portal/` | Next.js internal/staff app |
 | `mobile-app/` | Mobile app |
 | `e2e/` | Playwright end-to-end suites |
-| `docker/` | Local infra (Postgres, etc.) |
+| `docker/` | Per-service `*.Dockerfile` for building images (⚠️ not a compose stack — see Local setup) |
 | `docs/` | Architecture, specs, reference, migration docs — start at `docs/README.md` |
 
 ## Services and local ports
@@ -88,18 +89,38 @@ npm run prisma:migrate:dev --workspace=services/booking-service
 npm run --workspace=e2e test   # Playwright
 ```
 
-Local infra (Postgres etc.) lives in `docker/` — bring it up before running services
-that need a database.
+## Local setup / environment
+
+There is **no local database and no docker-compose.** The database is **Supabase-hosted
+PostgreSQL** and auth is **Supabase JWT**. Both local dev and the test suites connect to
+Supabase over the network.
+
+- Each service is configured by its own `services/<name>/.env` (git-ignored). Copy the
+  service's `.env.example` to `.env` and fill in real values. Key vars:
+  - `DATABASE_URL` — the Supabase Postgres connection string
+    (`postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres`).
+    Some `.env.example` files still show a `localhost:5432` placeholder — that is stale;
+    the real target is Supabase.
+  - `SUPABASE_JWT_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — auth.
+  - `PORT` — see the port table above.
+  - `<OTHER>_SERVICE_URL` — service-to-service base URLs (e.g. `PEOPLE_SERVICE_URL`).
+- Because tests hit **remote Supabase** (not a local DB), connections are pooled through
+  pgbouncer with a low `connection_limit`. This is why running services must be killed
+  before a push — otherwise the shared connection pool is exhausted and tests fail.
+- Never commit a real `.env`. Only `.env.example` is tracked.
 
 ## Conventions (follow these)
 
 - **DTO validation:** use `@IsString()` + `@IsNotEmpty()` for id fields — **do not** use
   `@IsUUID()`. Ids are validated as non-empty strings across this codebase.
 - **Before `git push`:** kill running services first
-  (`pkill -f "nest start"` / `pkill -f "node dist/main.js"`) — pre-push tests spin up DB
-  connections and running services exhaust the connection pool.
-- **Multi-tenancy:** service calls expect `x-tenant-id` and `x-organisation-id` headers.
-  When testing endpoints locally use the seed tenant/org ids from the service's seed data.
+  (`pkill -f "nest start"` / `pkill -f "node dist/main.js"`) — the pre-push hook runs
+  service tests against **remote Supabase**, and running services exhaust the pooled
+  connection limit. (`/safe-push` handles this for you.)
+- **Auth & multi-tenancy:** requests carry a **Supabase JWT**; tenant/organisation context
+  is read from the JWT and/or `x-tenant-id` / `x-organisation-id` headers for
+  service-to-service calls. When testing endpoints locally use the seed tenant/org ids
+  from the service's seed data.
 - **Prisma client is generated** (git-ignored under `**/prisma/generated/` and
   `**/src/generated/`) — run `prisma:generate` after install or schema changes.
 - **TypeScript ESM:** services import with explicit `.js` extensions (e.g.
