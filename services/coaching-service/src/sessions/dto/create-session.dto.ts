@@ -38,4 +38,14 @@ export class CreateSessionDto {
   @IsNumber()
   @IsPositive()
   priceCharged?: number
+
+  /**
+   * Optional link to a venue bookable unit.
+   * When provided, the booking-service availability check will include this
+   * coaching session in its conflict detection, preventing double-bookings
+   * of the same court slot.
+   */
+  @IsOptional()
+  @IsString()
+  bookableUnitId?: string
 }

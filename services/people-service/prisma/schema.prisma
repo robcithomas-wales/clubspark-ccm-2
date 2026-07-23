@@ -192,3 +192,71 @@ model PersonRelationship {
   @@index([toCustomerId])
   @@index([tenantId])
 }
+
+// ─── Activity Timeline ────────────────────────────────────────────────────────
+
+model PersonActivity {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  personId   String   @map("person_id") @db.Uuid
+
+  // Domain event type that created this activity: 'booking.confirmed', 'membership.activated', etc.
+  eventType  String   @map("event_type")
+
+  title      String
+  // Additional structured data (booking ref, amount, etc.)
+  meta       Json     @default("{}")
+
+  // Reference back to the source record in another service (no hard FK)
+  sourceId   String?  @map("source_id")
+  occurredAt DateTime @map("occurred_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("person_activities")
+  @@schema("people")
+  @@index([tenantId, personId, occurredAt(sort: Desc)])
+  @@index([tenantId, eventType])
+}
+
+// ─── Segments ────────────────────────────────────────────────────────────────
+
+model Segment {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  name        String
+  description String?
+  // 'static' | 'dynamic'
+  type        String   @default("static")
+  // For dynamic segments: array of condition objects { field, op, value }
+  conditions  Json     @default("[]")
+  // Cached count for display — updated by rebuild task
+  memberCount Int      @default(0) @map("member_count")
+  lastBuiltAt DateTime? @map("last_built_at")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+
+  memberships SegmentMembership[]
+
+  @@map("segments")
+  @@schema("people")
+  @@index([tenantId])
+  @@index([tenantId, type])
+}
+
+model SegmentMembership {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  segmentId String   @map("segment_id") @db.Uuid
+  personId  String   @map("person_id") @db.Uuid
+  addedAt   DateTime @default(now()) @map("added_at")
+  addedBy   String?  @map("added_by") // 'system' (dynamic rebuild) | admin id
+
+  segment Segment @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+
+  @@unique([segmentId, personId])
+  @@map("segment_memberships")
+  @@schema("people")
+  @@index([segmentId])
+  @@index([tenantId, personId])
+}

@@ -34,4 +34,8 @@ export class UpdateBookingDto {
   @IsOptional()
   @IsBoolean()
   adminOverride?: boolean
+
+  @IsOptional()
+  @IsString()
+  bookedForPersonId?: string | null
 }

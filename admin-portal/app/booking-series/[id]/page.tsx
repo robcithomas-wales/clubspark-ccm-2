@@ -96,6 +96,8 @@ export default async function BookingSeriesDetailPage({
             { label: "Occurrences", value: String(bookings.length) },
             ...(series.minSessions != null ? [{ label: "Min sessions", value: String(series.minSessions) }] : []),
             ...(series.maxSessions != null ? [{ label: "Max sessions", value: String(series.maxSessions) }] : []),
+            ...(series.pricePerSession != null ? [{ label: "Price / session", value: `${series.currency ?? "GBP"} ${Number(series.pricePerSession).toFixed(2)}` }] : []),
+            ...(series.discountPct != null ? [{ label: "Series discount", value: `${Number(series.discountPct)}%` }] : []),
           ].map(({ label, value }) => (
             <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4">
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">

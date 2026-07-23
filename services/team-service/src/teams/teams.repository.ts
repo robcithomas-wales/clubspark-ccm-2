@@ -19,11 +19,45 @@ export class TeamsRepository {
     })
   }
 
+  async listPublic(tenantId: string) {
+    return this.prisma.team.findMany({
+      where: { tenantId, isActive: true, isPublic: true },
+      include: { _count: { select: { members: { where: { isActive: true } } } } },
+      orderBy: [{ sport: 'asc' }, { name: 'asc' }],
+    })
+  }
+
   async findById(tenantId: string, id: string) {
     return this.prisma.team.findFirst({
       where: { tenantId, id },
       include: {
         _count: { select: { members: { where: { isActive: true } }, fixtures: true } },
+      },
+    })
+  }
+
+  async findByIdPublic(tenantId: string, id: string) {
+    return this.prisma.team.findFirst({
+      where: { tenantId, id, isActive: true, isPublic: true },
+      include: {
+        members: {
+          where: { isActive: true },
+          select: {
+            id: true, displayName: true, role: true, photoUrl: true,
+            position: true, shirtNumber: true,
+          },
+          orderBy: [{ role: 'asc' }, { shirtNumber: 'asc' }, { displayName: 'asc' }],
+        },
+        fixtures: {
+          where: { status: { not: 'cancelled' } },
+          select: {
+            id: true, opponent: true, homeAway: true, venue: true,
+            kickoffAt: true, matchType: true, status: true,
+            homeScore: true, awayScore: true,
+          },
+          orderBy: { kickoffAt: 'asc' },
+          take: 10,
+        },
       },
     })
   }
@@ -41,6 +75,8 @@ export class TeamsRepository {
         juniorMatchFee: dto.juniorMatchFee ?? null,
         substituteMatchFee: dto.substituteMatchFee ?? null,
         chargeRule: dto.chargeRule ?? 'selected',
+        fixturesUrl: dto.fixturesUrl ?? null,
+        isPublic: dto.isPublic ?? true,
         isActive: dto.isActive ?? true,
       },
     })
@@ -57,9 +93,15 @@ export class TeamsRepository {
     if (dto.juniorMatchFee !== undefined) data.juniorMatchFee = dto.juniorMatchFee ?? null
     if (dto.substituteMatchFee !== undefined) data.substituteMatchFee = dto.substituteMatchFee ?? null
     if (dto.chargeRule !== undefined) data.chargeRule = dto.chargeRule
+    if (dto.fixturesUrl !== undefined) data.fixturesUrl = dto.fixturesUrl ?? null
+    if (dto.isPublic !== undefined) data.isPublic = dto.isPublic
     if (dto.isActive !== undefined) data.isActive = dto.isActive
 
     await this.prisma.team.updateMany({ where: { tenantId, id }, data })
     return this.findById(tenantId, id)
+  }
+
+  async deactivate(tenantId: string, id: string) {
+    await this.prisma.team.updateMany({ where: { tenantId, id }, data: { isActive: false } })
   }
 }

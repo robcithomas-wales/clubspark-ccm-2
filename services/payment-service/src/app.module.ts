@@ -11,11 +11,13 @@ import { GatewayModule } from './gateways/gateway.module.js'
 import { ProviderConfigsModule } from './provider-configs/provider-configs.module.js'
 import { PaymentsModule } from './payments/payments.module.js'
 import { WebhooksModule } from './webhooks/webhooks.module.js'
+import { EventBusModule } from './event-bus/event-bus.module.js'
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
     PrismaModule,
+    EventBusModule,
     HealthModule,
     GatewayModule,
     ProviderConfigsModule,

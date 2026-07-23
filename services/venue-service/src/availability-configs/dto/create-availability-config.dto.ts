@@ -53,4 +53,9 @@ export class CreateAvailabilityConfigDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  seasonalScheduleId?: string
 }

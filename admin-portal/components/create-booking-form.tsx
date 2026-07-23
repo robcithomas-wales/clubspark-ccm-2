@@ -133,6 +133,8 @@ export function CreateBookingForm({ units, addOns = [] }: CreateBookingFormProps
   const [rrule, setRrule] = React.useState("FREQ=WEEKLY;COUNT=10")
   const [minSessions, setMinSessions] = React.useState("")
   const [maxSessions, setMaxSessions] = React.useState("")
+  const [discountPct, setDiscountPct] = React.useState("")
+  const [pricePerSession, setPricePerSession] = React.useState("")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [isLoadingCustomers, setIsLoadingCustomers] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
@@ -276,6 +278,8 @@ export function CreateBookingForm({ units, addOns = [] }: CreateBookingFormProps
             rrule,
             ...(minSessions ? { minSessions: Number(minSessions) } : {}),
             ...(maxSessions ? { maxSessions: Number(maxSessions) } : {}),
+            ...(discountPct ? { discountPct: Number(discountPct) } : {}),
+            ...(pricePerSession ? { pricePerSession: Number(pricePerSession) } : {}),
           }),
         })
         const result = await response.json().catch(() => null)
@@ -764,6 +768,39 @@ export function CreateBookingForm({ units, addOns = [] }: CreateBookingFormProps
                   min={1}
                   value={maxSessions}
                   onChange={(e) => setMaxSessions(e.target.value)}
+                  placeholder="e.g. 10"
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none"
+                />
+              </div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label htmlFor="pricePerSession" className="mb-2 block text-sm font-medium text-slate-700">
+                  Price per session <span className="text-slate-400 font-normal">(optional, £)</span>
+                </label>
+                <input
+                  id="pricePerSession"
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={pricePerSession}
+                  onChange={(e) => setPricePerSession(e.target.value)}
+                  placeholder="e.g. 15.00"
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none"
+                />
+              </div>
+              <div>
+                <label htmlFor="discountPct" className="mb-2 block text-sm font-medium text-slate-700">
+                  Series discount <span className="text-slate-400 font-normal">(optional, %)</span>
+                </label>
+                <input
+                  id="discountPct"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={discountPct}
+                  onChange={(e) => setDiscountPct(e.target.value)}
                   placeholder="e.g. 10"
                   className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none"
                 />

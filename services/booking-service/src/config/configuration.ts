@@ -16,6 +16,18 @@ export const configuration = () => ({
   membershipService: {
     url: process.env['MEMBERSHIP_SERVICE_URL'] ?? 'http://localhost:4010',
   },
+
+  commsService: {
+    url: process.env['COMMS_SERVICE_URL'] ?? 'http://localhost:4012',
+  },
+
+  peopleService: {
+    url: process.env['PEOPLE_SERVICE_URL'] ?? 'http://localhost:4004',
+  },
+
+  integrationService: {
+    url: process.env['INTEGRATION_SERVICE_URL'] ?? 'http://localhost:4013',
+  },
 })
 
 export type AppConfig = ReturnType<typeof configuration>

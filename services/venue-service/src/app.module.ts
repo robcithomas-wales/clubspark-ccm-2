@@ -17,6 +17,8 @@ import { BlackoutDatesModule } from './blackout-dates/blackout-dates.module.js'
 import { OrganisationsModule } from './organisations/organisations.module.js'
 import { NewsPostsModule } from './news-posts/news-posts.module.js'
 import { AffiliationsModule } from './affiliations/affiliations.module.js'
+import { SponsorsModule } from './sponsors/sponsors.module.js'
+import { SeasonalSchedulesModule } from './seasonal-schedules/seasonal-schedules.module.js'
 
 @Module({
   imports: [
@@ -33,6 +35,8 @@ import { AffiliationsModule } from './affiliations/affiliations.module.js'
     OrganisationsModule,
     NewsPostsModule,
     AffiliationsModule,
+    SponsorsModule,
+    SeasonalSchedulesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: TenantContextGuard },

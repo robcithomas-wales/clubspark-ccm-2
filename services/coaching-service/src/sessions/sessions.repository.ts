@@ -66,6 +66,7 @@ export class SessionsRepository {
         coachId: dto.coachId,
         lessonTypeId: dto.lessonTypeId,
         customerId: dto.customerId ?? null,
+        bookableUnitId: dto.bookableUnitId ?? null,
         startsAt: new Date(dto.startsAt),
         endsAt: new Date(dto.endsAt),
         notes: dto.notes ?? null,

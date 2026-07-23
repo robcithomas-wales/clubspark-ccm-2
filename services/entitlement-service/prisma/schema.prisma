@@ -1,0 +1,146 @@
+// ClubSpark — Entitlement Service Prisma Schema
+// Owns the entitlements schema: plans, features, org subscriptions, add-ons, overrides.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+  output          = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["entitlements"]
+}
+
+// ─── Plan catalog ────────────────────────────────────────────────────────────
+// Seeded once from spec. Not tenant-specific — the catalog is global;
+// org-level pricing differences go in OrgPlanOverride.
+
+model Plan {
+  id                    String   @id                   // 'core' | 'growth' | 'pro' | 'enterprise'
+  name                  String
+  priceMonthly          Decimal? @map("price_monthly") @db.Decimal(10, 2)
+  priceAnnually         Decimal? @map("price_annually") @db.Decimal(10, 2)
+  transactionFeePercent Decimal? @map("transaction_fee_percent") @db.Decimal(5, 2)
+  includedSites         Int      @default(0) @map("included_sites")
+  isCustom              Boolean  @default(false) @map("is_custom")
+  sortOrder             Int      @default(0) @map("sort_order")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @default(now()) @updatedAt @map("updated_at")
+
+  planFeatures     PlanFeature[]
+  orgSubscriptions OrgSubscription[]
+
+  @@map("plans")
+  @@schema("entitlements")
+}
+
+// ─── Feature catalog ─────────────────────────────────────────────────────────
+// Seeded from spec. Feature keys are stable identifiers used by other services
+// when calling the entitlement check endpoint.
+
+model Feature {
+  id          String  @id                   // e.g. 'multisite', 'reporting_advanced'
+  name        String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  planFeatures PlanFeature[]
+
+  @@map("features")
+  @@schema("entitlements")
+}
+
+// ─── Plan ↔ Feature join ─────────────────────────────────────────────────────
+
+model PlanFeature {
+  planId    String  @map("plan_id")
+  featureId String  @map("feature_id")
+
+  plan    Plan    @relation(fields: [planId], references: [id], onDelete: Cascade)
+  feature Feature @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  @@id([planId, featureId])
+  @@map("plan_features")
+  @@schema("entitlements")
+}
+
+// ─── Org subscription ────────────────────────────────────────────────────────
+// One row per org. Status drives entitlement resolution.
+// Phase 1: assigned manually via admin portal. Phase 4: synced from Maxio.
+
+model OrgSubscription {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId      String    @unique @map("organisation_id")
+  tenantId            String    @map("tenant_id") @db.Uuid
+  planId              String    @map("plan_id")
+  billingCycle        String    @default("monthly") @map("billing_cycle") // 'monthly' | 'annual'
+  status              String    @default("active") @map("status")         // 'active' | 'trial' | 'past_due' | 'cancelled'
+  trialEndsAt         DateTime? @map("trial_ends_at")
+  currentPeriodEnd    DateTime? @map("current_period_end")
+  maxioSubscriptionId String?   @map("maxio_subscription_id")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  plan Plan @relation(fields: [planId], references: [id])
+
+  @@map("org_subscriptions")
+  @@schema("entitlements")
+  @@index([tenantId])
+}
+
+// ─── Org plan override ───────────────────────────────────────────────────────
+// Enterprise discounts, custom transaction fees. One row per org max.
+
+model OrgPlanOverride {
+  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId         String   @unique @map("organisation_id")
+  tenantId               String   @map("tenant_id") @db.Uuid
+  priceOverride          Decimal? @map("price_override") @db.Decimal(10, 2)
+  transactionFeeOverride Decimal? @map("transaction_fee_override") @db.Decimal(5, 2)
+  notes                  String?
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("org_plan_overrides")
+  @@schema("entitlements")
+  @@index([tenantId])
+}
+
+// ─── Add-on catalog ──────────────────────────────────────────────────────────
+// Seeded from spec. featureId links to a Feature that this add-on unlocks.
+
+model AddOn {
+  id        String   @id                               // 'branded_app', 'ai_insights', etc.
+  name      String
+  price     Decimal  @db.Decimal(10, 2)
+  interval  String                                     // 'monthly' | 'yearly'
+  featureId String?  @map("feature_id")               // Feature this add-on unlocks (nullable)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  orgAddOns OrgAddOn[]
+
+  @@map("add_ons")
+  @@schema("entitlements")
+}
+
+// ─── Org ↔ Add-on ────────────────────────────────────────────────────────────
+
+model OrgAddOn {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId   String   @map("organisation_id")
+  tenantId         String   @map("tenant_id") @db.Uuid
+  addOnId          String   @map("add_on_id")
+  status           String   @default("active") @map("status") // 'active' | 'cancelled'
+  maxioComponentId String?  @map("maxio_component_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at")
+
+  addOn AddOn @relation(fields: [addOnId], references: [id])
+
+  @@unique([organisationId, addOnId])
+  @@map("org_add_ons")
+  @@schema("entitlements")
+  @@index([tenantId])
+}

@@ -10,7 +10,9 @@ async function getAuthHeaders() {
   }
 }
 
-const BASE = "http://127.0.0.1:4005/booking-series"
+const BOOKING_SERVICE =
+  process.env.NEXT_PUBLIC_BOOKING_SERVICE_URL || "http://127.0.0.1:4005"
+const BASE = `${BOOKING_SERVICE}/booking-series`
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

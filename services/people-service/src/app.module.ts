@@ -12,6 +12,8 @@ import { LifecycleModule } from './lifecycle/lifecycle.module.js'
 import { TagsModule } from './tags/tags.module.js'
 import { RolesModule } from './roles/roles.module.js'
 import { HouseholdsModule } from './households/households.module.js'
+import { ActivitiesModule } from './activities/activities.module.js'
+import { SegmentsModule } from './segments/segments.module.js'
 
 @Module({
   imports: [
@@ -23,6 +25,8 @@ import { HouseholdsModule } from './households/households.module.js'
     TagsModule,
     RolesModule,
     HouseholdsModule,
+    ActivitiesModule,
+    SegmentsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: TenantContextGuard },

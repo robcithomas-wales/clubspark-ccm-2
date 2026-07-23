@@ -1,0 +1,114 @@
+import { Injectable, ConflictException } from '@nestjs/common'
+import { PrismaService } from '../prisma/prisma.service.js'
+import type { Order, OrderItem, OrderStatus, Prisma } from '../generated/prisma/index.js'
+import type { CreateOrderDto } from './dto/create-order.dto.js'
+
+@Injectable()
+export class OrdersRepository {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async create(
+    tenantId: string,
+    organisationId: string | undefined,
+    dto: CreateOrderDto,
+  ): Promise<Order & { items: OrderItem[] }> {
+    // Idempotency: return existing order if key already used
+    if (dto.idempotencyKey) {
+      const existing = await this.prisma.read.order.findUnique({
+        where: { idempotencyKey: dto.idempotencyKey },
+        include: { items: true },
+      })
+      if (existing) {
+        if (existing.tenantId !== tenantId) throw new ConflictException('Idempotency key conflict')
+        return existing
+      }
+    }
+
+    const currency = dto.currency ?? 'GBP'
+    const items = dto.items.map((item) => ({
+      tenantId,
+      productType: item.productType,
+      productId: item.productId,
+      description: item.description,
+      unitAmount: item.unitAmount,
+      quantity: item.quantity ?? 1,
+      totalAmount: item.unitAmount * (item.quantity ?? 1),
+      metadata: item.metadata as Prisma.InputJsonValue | undefined,
+    }))
+
+    const totalAmount = items.reduce((sum, i) => sum + i.totalAmount, 0)
+
+    return this.prisma.write.order.create({
+      data: {
+        tenantId,
+        organisationId,
+        personId: dto.personId,
+        currency,
+        totalAmount,
+        subjectType: dto.subjectType,
+        subjectId: dto.subjectId,
+        idempotencyKey: dto.idempotencyKey,
+        metadata: dto.metadata as Prisma.InputJsonValue | undefined,
+        items: { create: items },
+      },
+      include: { items: true },
+    })
+  }
+
+  async findById(
+    tenantId: string,
+    id: string,
+  ): Promise<(Order & { items: OrderItem[] }) | null> {
+    return this.prisma.read.order.findFirst({
+      where: { id, tenantId },
+      include: { items: true },
+    })
+  }
+
+  async findMany(
+    tenantId: string,
+    opts: {
+      personId?: string
+      organisationId?: string
+      subjectType?: string
+      subjectId?: string
+      status?: string
+      limit?: number
+      offset?: number
+    },
+  ): Promise<{ data: (Order & { items: OrderItem[] })[]; total: number }> {
+    const where: Prisma.OrderWhereInput = {
+      tenantId,
+      ...(opts.personId ? { personId: opts.personId } : {}),
+      ...(opts.organisationId ? { organisationId: opts.organisationId } : {}),
+      ...(opts.subjectType ? { subjectType: opts.subjectType } : {}),
+      ...(opts.subjectId ? { subjectId: opts.subjectId } : {}),
+      ...(opts.status ? { status: opts.status as OrderStatus } : {}),
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.read.order.findMany({
+        where,
+        include: { items: true },
+        orderBy: { createdAt: 'desc' },
+        take: opts.limit ?? 50,
+        skip: opts.offset ?? 0,
+      }),
+      this.prisma.read.order.count({ where }),
+    ])
+
+    return { data, total }
+  }
+
+  async updateStatus(
+    tenantId: string,
+    id: string,
+    status: OrderStatus,
+  ): Promise<Order & { items: OrderItem[] }> {
+    return this.prisma.write.order.update({
+      where: { id },
+      data: { status },
+      include: { items: true },
+    })
+  }
+}

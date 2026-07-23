@@ -25,6 +25,8 @@ export class RosterRepository {
         teamId,
         personId: dto.personId ?? null,
         displayName: dto.displayName,
+        role: (dto.role as any) ?? 'player',
+        photoUrl: dto.photoUrl ?? null,
         email: dto.email ?? null,
         phone: dto.phone ?? null,
         position: dto.position ?? null,
@@ -43,6 +45,8 @@ export class RosterRepository {
   async update(tenantId: string, teamId: string, id: string, dto: UpdateMemberDto) {
     const data: Record<string, unknown> = {}
     if (dto.displayName !== undefined) data.displayName = dto.displayName
+    if (dto.role !== undefined) data.role = dto.role
+    if (dto.photoUrl !== undefined) data.photoUrl = dto.photoUrl ?? null
     if (dto.email !== undefined) data.email = dto.email ?? null
     if (dto.phone !== undefined) data.phone = dto.phone ?? null
     if (dto.position !== undefined) data.position = dto.position ?? null

@@ -38,6 +38,14 @@ export class CreateTeamDto {
   @IsOptional() @IsIn(['per_game', 'season', 'none'])
   chargeRule?: string
 
+  @ApiPropertyOptional({ description: 'External fixtures URL, e.g. FA Full-Time or ECB Play-Cricket' })
+  @IsOptional() @IsString()
+  fixturesUrl?: string
+
+  @ApiPropertyOptional({ default: true })
+  @IsOptional() @IsBoolean()
+  isPublic?: boolean
+
   @ApiPropertyOptional()
   @IsOptional() @IsBoolean()
   isActive?: boolean

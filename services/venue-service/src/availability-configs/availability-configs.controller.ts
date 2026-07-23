@@ -24,8 +24,9 @@ export class AvailabilityConfigsController {
     @TenantCtx() ctx: TenantContext,
     @Query('scopeType') scopeType?: string,
     @Query('scopeId') scopeId?: string,
+    @Query('scheduleId') scheduleId?: string,
   ) {
-    return this.service.list(ctx.tenantId, scopeType, scopeId)
+    return this.service.list(ctx.tenantId, scopeType, scopeId, scheduleId)
   }
 
   /**

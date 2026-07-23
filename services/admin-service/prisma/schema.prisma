@@ -1,5 +1,6 @@
 // ClubSpark — Admin Service Prisma Schema
-// Owns the admin schema: admin_users (portal RBAC)
+// Owns the admin schema: admin_users, organisations, feature_flags, audit_logs,
+//                        impersonation_sessions (internal staff tooling)
 
 generator client {
   provider        = "prisma-client-js"
@@ -27,4 +28,105 @@ model AdminUser {
   @@schema("admin")
   @@index([tenantId])
   @@index([userId])
+}
+
+// ── Internal staff tooling ────────────────────────────────────────────────────
+
+// Cross-tenant registry of all club/coach organisations on the platform.
+// One row per tenant — populated at sign-up and kept up to date by the platform.
+model Organisation {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String   @unique @map("tenant_id") @db.Uuid
+  name             String
+  slug             String?  @unique
+  sport            String?
+  region           String?
+  // trial | starter | pro | enterprise
+  plan             String   @default("trial")
+  // active | suspended | churned
+  status           String   @default("active")
+  paymentConnected Boolean  @default(false) @map("payment_connected")
+  // 0-100 completion of the onboarding checklist
+  onboardingPct    Int      @default(0) @map("onboarding_pct")
+  adminEmail       String?  @map("admin_email")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at")
+
+  featureFlags         FeatureFlag[]
+  impersonationSessions ImpersonationSession[]
+
+  @@map("organisations")
+  @@schema("admin")
+  @@index([status])
+  @@index([plan])
+  @@index([region])
+}
+
+// Per-tenant feature flag overrides. Flags not present here fall back to global defaults.
+model FeatureFlag {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  // e.g. "coaching", "competitions", "smart_access", "analytics_ai"
+  flag           String
+  enabled        Boolean  @default(false)
+  overrideReason String?  @map("override_reason")
+  // Clubspark staff user ID who set this
+  setBy          String?  @map("set_by")
+  setByEmail     String?  @map("set_by_email")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
+
+  organisation Organisation @relation(fields: [tenantId], references: [tenantId])
+
+  @@unique([tenantId, flag])
+  @@map("feature_flags")
+  @@schema("admin")
+  @@index([tenantId])
+  @@index([flag])
+}
+
+// Immutable audit trail of all Clubspark internal staff actions.
+model AuditLog {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  staffId    String   @map("staff_id")
+  staffEmail String?  @map("staff_email")
+  // Nullable for system-level events not scoped to a single tenant
+  tenantId   String?  @map("tenant_id") @db.Uuid
+  // Dot-namespaced: organisation.viewed | flag.enabled | flag.disabled |
+  // impersonation.started | impersonation.ended | account.suspended
+  action     String
+  targetType String?  @map("target_type")
+  targetId   String?  @map("target_id")
+  meta       Json     @default("{}")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("audit_logs")
+  @@schema("admin")
+  @@index([staffId, createdAt(sort: Desc)])
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([action])
+  @@index([createdAt(sort: Desc)])
+}
+
+// Active and historical impersonation sessions. Every session is logged.
+model ImpersonationSession {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  staffId      String    @map("staff_id")
+  staffEmail   String?   @map("staff_email")
+  tenantId     String    @map("tenant_id") @db.Uuid
+  targetUserId String    @map("target_user_id")
+  targetEmail  String?   @map("target_email")
+  reason       String
+  startedAt    DateTime  @default(now()) @map("started_at")
+  endedAt      DateTime? @map("ended_at")
+  // active | ended
+  status       String    @default("active")
+
+  organisation Organisation @relation(fields: [tenantId], references: [tenantId])
+
+  @@map("impersonation_sessions")
+  @@schema("admin")
+  @@index([staffId, startedAt(sort: Desc)])
+  @@index([tenantId])
+  @@index([status])
 }

@@ -10,7 +10,9 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   readonly read: PrismaClient
 
   constructor() {
-    const url = `${process.env.DATABASE_URL ?? ''}?connection_limit=2&pool_timeout=10`
+    const databaseUrl = process.env.DATABASE_URL ?? ''
+    const separator = databaseUrl.includes('?') ? '&' : '?'
+    const url = `${databaseUrl}${separator}pgbouncer=true&connection_limit=1&pool_timeout=10`
     this._client = new PrismaClient({ datasourceUrl: url })
     this.write = this._client
     this.read = this._client

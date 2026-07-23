@@ -4,8 +4,6 @@ import { type NestFastifyApplication, FastifyAdapter } from '@nestjs/platform-fa
 import { ValidationPipe, Logger, VersioningType } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
-import compression from '@fastify/compress'
-import helmet from '@fastify/helmet'
 import { AppModule } from './app.module.js'
 import type { AppConfig } from './config/configuration.js'
 
@@ -24,14 +22,6 @@ async function bootstrap(): Promise<void> {
   const config = app.get(ConfigService<AppConfig, true>)
   const port = config.get('port', { infer: true })
   const nodeEnv = config.get('nodeEnv', { infer: true })
-
-  // ─── Security headers ──────────────────────────────────────────────────────
-  await app.register(helmet, {
-    contentSecurityPolicy: false, // API service — no CSP needed
-  })
-
-  // ─── Response compression ──────────────────────────────────────────────────
-  await app.register(compression, { encodings: ['gzip', 'br'] })
 
   // ─── Global validation pipe ────────────────────────────────────────────────
   // Validates all incoming DTOs using class-validator decorators

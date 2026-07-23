@@ -10,10 +10,15 @@ import { BookingsRepository } from './bookings.repository.js'
 import { AvailabilityRepository } from '../availability/availability.repository.js'
 import { BookingRulesService } from '../booking-rules/booking-rules.service.js'
 import { MembershipClient } from '../membership/membership.client.js'
+import { PricingService } from '../pricing/pricing.service.js'
+import { EventBusService } from '../event-bus/event-bus.service.js'
+import { RefundPoliciesRepository } from '../refund-policies/refund-policies.repository.js'
+import { OrderClient } from '../order-client/order.client.js'
 import type { CreateBookingDto } from './dto/create-booking.dto.js'
 import type { CreateBookingAddOnDto } from './dto/create-booking-add-on.dto.js'
 import type { UpdatePaymentStatusDto } from './dto/update-payment-status.dto.js'
 import type { UpdateBookingDto } from './dto/update-booking.dto.js'
+import type { CreatePaymentSplitDto } from './dto/create-payment-split.dto.js'
 import type { TenantContext } from '../common/decorators/tenant-context.decorator.js'
 
 @Injectable()
@@ -25,6 +30,10 @@ export class BookingsService {
     private readonly availabilityRepo: AvailabilityRepository,
     private readonly rulesService: BookingRulesService,
     private readonly membershipClient: MembershipClient,
+    private readonly pricingService: PricingService,
+    private readonly eventBus: EventBusService,
+    private readonly refundPolicies: RefundPoliciesRepository,
+    private readonly orderClient: OrderClient,
   ) {}
 
   async list(
@@ -72,16 +81,54 @@ export class BookingsService {
     const conflictMap = await this.availabilityRepo.getConflictMapForUnits([dto.bookableUnitId])
     const unitIds = conflictMap.get(dto.bookableUnitId) ?? [dto.bookableUnitId]
 
-    // Apply member pricing discount (Option A — percentage off rack rate)
+    // Gap 1 fix: coaching sessions with a bookable_unit_id block the same slot.
+    // This cross-schema check makes coaching sessions visible to the booking
+    // availability guard without requiring inter-service HTTP calls.
+    const coachingConflicts = await this.availabilityRepo.getCoachingSessionConflicts(
+      ctx.tenantId,
+      unitIds,
+      dto.startsAt,
+      dto.endsAt,
+    )
+    if (coachingConflicts.length > 0) {
+      throw new ConflictException('Time slot is occupied by an existing coaching session')
+    }
+
+    // Resolve price via pricing engine.
+    // If dto.price is explicitly provided by the caller (e.g. admin override), use it as-is
+    // but still apply member discount. If no price is provided, resolve from pricing rules.
     let resolvedDto = dto
-    if (dto.customerId && dto.price != null) {
+    const priceBreakdown = await this.pricingService.resolvePrice(ctx.tenantId, {
+      venueId: dto.venueId,
+      resourceId: dto.resourceId,
+      bookableUnitId: dto.bookableUnitId,
+      startsAt: new Date(dto.startsAt),
+      endsAt: new Date(dto.endsAt),
+      customerId: dto.customerId,
+    })
+
+    if (priceBreakdown) {
+      // Pricing rule found — use the resolved total (includes lighting surcharge + member discount)
+      resolvedDto = { ...dto, price: priceBreakdown.total }
+      this.logger.log(
+        {
+          rule: priceBreakdown.appliedRule?.name,
+          gross: priceBreakdown.gross,
+          lightingSurcharge: priceBreakdown.lightingSurcharge,
+          memberDiscount: priceBreakdown.memberDiscount,
+          total: priceBreakdown.total,
+        },
+        'Pricing engine resolved price',
+      )
+    } else if (dto.customerId && dto.price != null) {
+      // No pricing rule — fall back to applying member discount against the provided price
       const discountPct = await this.membershipClient.resolveMemberDiscount(ctx.tenantId, dto.customerId)
       if (discountPct != null && discountPct > 0) {
         const discountedPrice = parseFloat((dto.price * (1 - discountPct / 100)).toFixed(2))
         resolvedDto = { ...dto, price: discountedPrice }
         this.logger.log(
           { customerId: dto.customerId, discountPct, original: dto.price, discounted: discountedPrice },
-          'Member discount applied',
+          'Member discount applied (no pricing rule — fallback)',
         )
       }
     }
@@ -98,6 +145,52 @@ export class BookingsService {
       unitIds,
       resolvedDto,
     )
+
+    // Create order record in the shared commerce layer
+    if (booking) {
+      const pricePence = booking.price != null ? Math.round(Number(booking.price) * 100) : 0
+      void this.orderClient.createOrder({
+        tenantId: ctx.tenantId,
+        organisationId: ctx.organisationId,
+        personId: booking.customerId ?? undefined,
+        subjectType: 'booking',
+        subjectId: booking.id,
+        idempotencyKey: `booking:${booking.id}`,
+        currency: booking.currency,
+        items: [
+          {
+            productType: 'booking_slot',
+            description: `Booking ${booking.bookingReference}`,
+            unitAmount: pricePence,
+          },
+        ],
+      })
+    }
+
+    // Publish domain event — comms-service sends confirmation email
+    // NOTE: bookerEmail and name are not stored on the booking record itself;
+    // they are passed in from the caller (admin portal / customer portal).
+    // TODO: once people-service lookup is wired, fetch from there by customerId.
+    if (booking) {
+      void this.eventBus.publish({
+        type: 'booking.confirmed',
+        tenantId: ctx.tenantId,
+        occurredAt: new Date().toISOString(),
+        bookingId: booking.id,
+        bookingReference: booking.bookingReference,
+        bookerPersonId: booking.customerId ?? '',
+        bookerEmail: (resolvedDto as { bookerEmail?: string }).bookerEmail ?? '',
+        bookerFirstName: (resolvedDto as { bookerFirstName?: string }).bookerFirstName ?? '',
+        venueId: booking.venueId,
+        venueName: (resolvedDto as { venueName?: string }).venueName ?? '',
+        resourceName: (resolvedDto as { resourceName?: string }).resourceName ?? '',
+        bookableUnitName: (resolvedDto as { bookableUnitName?: string }).bookableUnitName ?? '',
+        startsAt: booking.startsAt.toISOString(),
+        endsAt: booking.endsAt.toISOString(),
+        price: booking.price ? Number(booking.price) : undefined,
+        currency: booking.currency,
+      })
+    }
 
     return booking
   }
@@ -165,6 +258,46 @@ export class BookingsService {
 
     if (cancelled) {
       this.logger.log({ id, organisationId: ctx.organisationId }, 'Booking cancelled')
+
+      // Apply refund policy if one exists for this venue/notice period
+      const hoursUntilStart = (new Date(cancelled.startsAt).getTime() - Date.now()) / (1000 * 60 * 60)
+      const policy = await this.refundPolicies.findApplicablePolicy(
+        ctx.tenantId,
+        cancelled.venueId,
+        Math.max(0, hoursUntilStart),
+      )
+      if (policy) {
+        const pricePence = cancelled.price != null ? Number(cancelled.price) : null
+        const refundAmount = pricePence != null
+          ? Number((pricePence * policy.refundPct / 100).toFixed(2))
+          : null
+        void this.refundPolicies.applyRefundToBooking(
+          ctx.tenantId,
+          cancelled.id,
+          Number(policy.refundPct),
+          refundAmount,
+        )
+        this.logger.log(
+          { bookingId: id, refundPct: policy.refundPct, refundAmount },
+          'Auto-refund computed from policy',
+        )
+      }
+
+      // Publish domain event — comms-service sends cancellation email
+      void this.eventBus.publish({
+        type: 'booking.cancelled',
+        tenantId: ctx.tenantId,
+        occurredAt: new Date().toISOString(),
+        bookingId: cancelled.id,
+        bookingReference: cancelled.bookingReference,
+        bookerPersonId: cancelled.customerId ?? '',
+        bookerEmail: '',  // TODO: fetch from people-service by customerId
+        bookerFirstName: '',
+        venueName: '',    // TODO: fetch from venue-service by venueId
+        resourceName: '',
+        startsAt: cancelled.startsAt.toISOString(),
+      })
+
       return cancelled
     }
 
@@ -237,6 +370,55 @@ export class BookingsService {
 
   async getUnitBusyTimes(tenantId: string, unitIds: string[], date: string) {
     return this.repo.getUnitBusyTimes(tenantId, unitIds, date)
+  }
+
+  // ─── Participants ────────────────────────────────────────────────────────────
+
+  async listParticipants(ctx: TenantContext, bookingId: string) {
+    const booking = await this.repo.findById(ctx.tenantId, bookingId)
+    if (!booking) throw new NotFoundException('Booking not found')
+    return this.repo.listParticipants(ctx.tenantId, bookingId)
+  }
+
+  async addParticipant(
+    ctx: TenantContext,
+    bookingId: string,
+    dto: { name: string; email?: string; phone?: string; personId?: string; notes?: string },
+  ) {
+    const booking = await this.repo.findById(ctx.tenantId, bookingId)
+    if (!booking) throw new NotFoundException('Booking not found')
+    if (booking.status === 'cancelled') {
+      throw new BadRequestException('Cannot add participants to a cancelled booking')
+    }
+    return this.repo.addParticipant(ctx.tenantId, bookingId, dto)
+  }
+
+  async removeParticipant(ctx: TenantContext, bookingId: string, participantId: string) {
+    const booking = await this.repo.findById(ctx.tenantId, bookingId)
+    if (!booking) throw new NotFoundException('Booking not found')
+    const deleted = await this.repo.removeParticipant(ctx.tenantId, bookingId, participantId)
+    if (!deleted) throw new NotFoundException('Participant not found')
+  }
+
+  // ─── Payment splits ──────────────────────────────────────────────────────────
+
+  async listPaymentSplits(ctx: TenantContext, bookingId: string) {
+    const booking = await this.repo.findById(ctx.tenantId, bookingId)
+    if (!booking) throw new NotFoundException('Booking not found')
+    return this.repo.listPaymentSplits(ctx.tenantId, bookingId)
+  }
+
+  async addPaymentSplit(ctx: TenantContext, bookingId: string, dto: CreatePaymentSplitDto) {
+    const booking = await this.repo.findById(ctx.tenantId, bookingId)
+    if (!booking) throw new NotFoundException('Booking not found')
+    return this.repo.addPaymentSplit(ctx.tenantId, bookingId, dto)
+  }
+
+  async removePaymentSplit(ctx: TenantContext, bookingId: string, splitId: string) {
+    const booking = await this.repo.findById(ctx.tenantId, bookingId)
+    if (!booking) throw new NotFoundException('Booking not found')
+    const deleted = await this.repo.removePaymentSplit(ctx.tenantId, bookingId, splitId)
+    if (!deleted) throw new NotFoundException('Payment split not found')
   }
 
 }

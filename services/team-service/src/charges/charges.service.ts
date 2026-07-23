@@ -3,6 +3,7 @@ import { ChargesRepository } from './charges.repository.js'
 import { FixturesRepository } from '../fixtures/fixtures.repository.js'
 import { SelectionRepository } from '../selection/selection.repository.js'
 import { TeamsRepository } from '../teams/teams.repository.js'
+import { OrderClient } from '../order-client/order.client.js'
 import type { CreateChargeRunDto } from './dto/create-charge-run.dto.js'
 
 @Injectable()
@@ -12,6 +13,7 @@ export class ChargesService {
     private readonly fixturesRepo: FixturesRepository,
     private readonly selectionRepo: SelectionRepository,
     private readonly teamsRepo: TeamsRepository,
+    private readonly orderClient: OrderClient,
   ) {}
 
   async getRunsForFixture(tenantId: string, teamId: string, fixtureId: string) {
@@ -72,6 +74,20 @@ export class ChargesService {
     })
 
     const run = await this.repo.createRun(tenantId, fixtureId, initiatedBy, dto.notes, charges)
+
+    // Create order record in the shared commerce layer — one order per charge run,
+    // one line item per player charged
+    void this.orderClient.createOrder({
+      tenantId,
+      subjectType: 'charge_run',
+      subjectId: run.id,
+      idempotencyKey: `charge_run:${run.id}`,
+      items: charges.map((c) => ({
+        productType: 'match_fee',
+        description: `Match fee — player ${c.teamMemberId}`,
+        unitAmount: Math.round(c.amount * 100), // pence
+      })),
+    })
 
     // Recalculate fixture status (now has an active charge run)
     await this.fixturesRepo.recalculateStatus(tenantId, teamId, fixtureId)

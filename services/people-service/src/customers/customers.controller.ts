@@ -67,6 +67,15 @@ export class CustomersController {
     return this.service.bulkImport(req.tenantContext.tenantId, body.rows)
   }
 
+  @Get(':id/financial-profile')
+  @ApiOperation({ summary: 'Get computed financial profile for a person' })
+  financialProfile(
+    @Request() req: FastifyRequest & { tenantContext: { tenantId: string } },
+    @Param('id') id: string,
+  ) {
+    return this.service.getFinancialProfile(req.tenantContext.tenantId, id)
+  }
+
   @Patch(':id')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update a customer' })

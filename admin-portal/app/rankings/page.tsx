@@ -50,7 +50,7 @@ export default async function RankingsPage({
   const sports = Array.from(new Set(configs.map((c: any) => c.sport))) as string[]
 
   return (
-    <PortalLayout title="Rankings" description="Player and team rankings derived from verified match results.">
+    <PortalLayout title="Ratings" description="Player and team ratings derived from verified match results.">
       <div className="space-y-6">
 
         {/* Top bar: config picker + create link */}
@@ -70,7 +70,7 @@ export default async function RankingsPage({
               </Link>
             ))}
             {configs.length === 0 && (
-              <p className="text-sm text-slate-500">No ranking configs yet. Create one to get started.</p>
+              <p className="text-sm text-slate-500">No rating configs yet. Create one to get started.</p>
             )}
           </div>
           <Link
@@ -106,7 +106,7 @@ export default async function RankingsPage({
               </div>
             )}
             <div>
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Ranked entries</div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Rated entries</div>
               <div className="mt-0.5 font-semibold text-slate-900">{leaderboardData?.total ?? 0}</div>
             </div>
           </div>
@@ -117,7 +117,7 @@ export default async function RankingsPage({
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-100 px-6 py-4">
               <h2 className="text-base font-semibold text-slate-900">
-                {selectedConfig.sport.charAt(0).toUpperCase() + selectedConfig.sport.slice(1)} Rankings
+                {selectedConfig.sport.charAt(0).toUpperCase() + selectedConfig.sport.slice(1)} Ratings
               </h2>
             </div>
             <div className="overflow-x-auto">
@@ -155,7 +155,7 @@ export default async function RankingsPage({
                   {entries.length === 0 ? (
                     <tr>
                       <td colSpan={isElo ? 9 : 10} className="px-4 py-8 text-center text-sm text-slate-400">
-                        No entries yet. Rankings update automatically when match results are verified.
+                        No entries yet. Ratings update automatically when match results are verified.
                       </td>
                     </tr>
                   ) : (
@@ -212,23 +212,23 @@ export default async function RankingsPage({
         ) : (
           <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center shadow-sm">
             <Trophy className="mx-auto mb-4 h-12 w-12 text-slate-300" />
-            <h3 className="text-base font-semibold text-slate-700">No ranking configs yet</h3>
+            <h3 className="text-base font-semibold text-slate-700">No rating configs yet</h3>
             <p className="mt-2 text-sm text-slate-500">
-              Create a ranking config to start tracking player and team ratings across competitions.
+              Create a rating config to start tracking player and team ratings across competitions.
             </p>
             <Link
               href="/rankings/new"
               className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-[#1857E0] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1245b5]"
             >
               <Plus className="h-4 w-4" />
-              Create your first ranking config
+              Create your first rating config
             </Link>
           </div>
         )}
 
         {/* How it works */}
         <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-6">
-          <h3 className="mb-3 text-sm font-semibold text-slate-700">How rankings work</h3>
+          <h3 className="mb-3 text-sm font-semibold text-slate-700">How ratings work</h3>
           <div className="grid gap-3 text-xs text-slate-600 sm:grid-cols-2">
             <div>
               <span className="font-semibold text-slate-800">ELO Rating</span> — Used for individual sports (tennis, squash, padel). Ratings update after every verified result. Win against a higher-rated opponent = bigger gain. Starting rating is 1,000. Entries with fewer than 5 matches are marked provisional.

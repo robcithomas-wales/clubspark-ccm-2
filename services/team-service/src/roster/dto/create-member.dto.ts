@@ -1,10 +1,18 @@
-import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsInt, IsEmail, IsDateString } from 'class-validator'
+import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsInt, IsEmail, IsDateString, IsIn } from 'class-validator'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 
 export class CreateMemberDto {
   @ApiProperty()
   @IsString() @IsNotEmpty()
   displayName!: string
+
+  @ApiPropertyOptional({ enum: ['player', 'coach', 'manager'], default: 'player' })
+  @IsOptional() @IsIn(['player', 'coach', 'manager'])
+  role?: string
+
+  @ApiPropertyOptional({ description: 'Profile photo URL' })
+  @IsOptional() @IsString()
+  photoUrl?: string
 
   @ApiPropertyOptional()
   @IsOptional() @IsEmail()

@@ -276,10 +276,19 @@ export function PortalLayout({
       const headers = { Authorization: `Bearer ${session.access_token}` }
       const base = process.env.NEXT_PUBLIC_FACILITY_SERVICE_URL ?? "http://127.0.0.1:4003"
 
-      const [orgRes, venuesRes] = await Promise.all([
-        fetch(`${base}/organisations/me`, { headers }),
-        fetch(`${base}/venues`, { headers }),
-      ])
+      let orgRes: Response
+      let venuesRes: Response
+
+      try {
+        ;[orgRes, venuesRes] = await Promise.all([
+          fetch(`${base}/organisations/me`, { headers }),
+          fetch(`${base}/venues`, { headers }),
+        ])
+      } catch (error) {
+        console.warn("Unable to load organisation context", error)
+        setOrgContext(null)
+        return
+      }
 
       const orgJson = orgRes.ok ? await orgRes.json() : null
       const venuesJson = venuesRes.ok ? await venuesRes.json() : null
@@ -395,14 +404,14 @@ export function PortalLayout({
 
                         {isOpen && (
                           <div className="ml-6 mt-1 space-y-0.5">
-                            {item.children.map((child) => {
+                            {item.children.map((child, childIndex) => {
                               const childActive =
                                 pathname === child.href ||
                                 (child.href !== "/" && pathname.startsWith(child.href))
 
                               return (
                                 <Link
-                                  key={child.href}
+                                  key={`${item.label}-${child.href}-${childIndex}`}
                                   href={child.href}
                                   className={[
                                     "block rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-150",

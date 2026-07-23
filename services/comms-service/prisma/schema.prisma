@@ -1,0 +1,189 @@
+// ClubSpark — Comms Service Prisma Schema
+// Owns: comms.message_log, comms.suppression, comms.templates, comms.campaigns, comms.campaign_recipients
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+  output          = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["comms"]
+}
+
+// ─── Message Log ─────────────────────────────────────────────────────────────
+// Central record of every communication intent — whether actually delivered or stubbed.
+// In production, status is updated via delivery provider webhooks.
+
+model MessageLog {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+
+  // Recipient
+  recipientEmail   String?   @map("recipient_email")
+  recipientName    String?   @map("recipient_name")
+  recipientPhone   String?   @map("recipient_phone")
+  recipientPersonId String?  @map("recipient_person_id") @db.Uuid
+
+  // Channel + content
+  channel          String    // email | sms | push | in_app
+  templateKey      String?   @map("template_key")
+  subject          String?
+  bodyPreview      String?   @map("body_preview")  // first 200 chars, for log display
+
+  // Status
+  // queued → sent | failed | suppressed
+  // In production: provider webhooks update to delivered | bounced | opened | clicked
+  status           String    @default("queued")
+  errorDetail      String?   @map("error_detail")
+
+  // Source
+  sourceEventType  String?   @map("source_event_type")  // e.g. booking.confirmed
+  sourceEntityId   String?   @map("source_entity_id")   // bookingId, membershipId, etc.
+  sourceModule     String?   @map("source_module")       // bookings | membership | payment | manual
+  campaignId       String?   @map("campaign_id") @db.Uuid
+
+  // Provider tracking (populated in production via webhooks)
+  providerMessageId String?  @map("provider_message_id")
+  sentAt           DateTime? @map("sent_at")
+  deliveredAt      DateTime? @map("delivered_at")
+  openedAt         DateTime? @map("opened_at")
+  clickedAt        DateTime? @map("clicked_at")
+  bouncedAt        DateTime? @map("bounced_at")
+
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  campaign         Campaign? @relation(fields: [campaignId], references: [id])
+
+  @@map("message_log")
+  @@schema("comms")
+  @@index([tenantId])
+  @@index([tenantId, channel])
+  @@index([tenantId, status])
+  @@index([tenantId, sourceEventType])
+  @@index([campaignId])
+  @@index([createdAt])
+}
+
+// ─── Suppression ─────────────────────────────────────────────────────────────
+// Org-level opt-outs and bounces. Checked before every send.
+
+model Suppression {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  email     String?
+  phone     String?
+  channel   String   // email | sms | all
+  reason    String   // unsubscribed | bounced | spam_complaint | admin
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([tenantId, email, channel])
+  @@unique([tenantId, phone, channel])
+  @@map("suppression")
+  @@schema("comms")
+  @@index([tenantId, email])
+  @@index([tenantId, phone])
+}
+
+// ─── Templates ───────────────────────────────────────────────────────────────
+// System templates are seeded at startup (isSystem = true).
+// Organisations can edit the customFooter and replyTo fields.
+// Premium: organisations can create their own campaign templates (isSystem = false).
+
+model Template {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String?  @map("tenant_id") @db.Uuid  // null = global system default
+  key             String   // e.g. booking.confirmed — unique per tenant (or globally for system)
+  name            String
+  channel         String   // email | sms
+  isSystem        Boolean  @default(false) @map("is_system")  // system templates are partially locked
+  isActive        Boolean  @default(true)  @map("is_active")
+
+  // Email fields
+  subjectTemplate String?  @map("subject_template")  // supports {{variables}}
+  bodyTemplate    String?  @map("body_template")      // HTML, supports {{variables}}
+  customFooter    String?  @map("custom_footer")      // org-editable section appended to body
+
+  // SMS fields
+  smsTemplate     String?  @map("sms_template")       // plain text, supports {{variables}}
+
+  // Routing
+  replyTo         String?  @map("reply_to")           // org-configurable reply-to address
+  fromName        String?  @map("from_name")
+
+  // Variable manifest — documents which variables this template uses
+  variables       String[] // e.g. ["firstName","bookingReference","startsAt","venueName"]
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt      @map("updated_at")
+
+  @@unique([tenantId, key])
+  @@map("templates")
+  @@schema("comms")
+  @@index([tenantId])
+  @@index([key])
+}
+
+// ─── Campaigns ───────────────────────────────────────────────────────────────
+// User-initiated bulk sends. Each recipient resolves to a MessageLog entry.
+
+model Campaign {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String    @map("tenant_id") @db.Uuid
+
+  name            String?   // optional label for scheduled/draft campaigns
+  channel         String    // email | sms
+
+  // Audience definition — stored as JSON, resolved at send time
+  // { type: 'all_members' | 'active_members' | 'team' | 'competition' | 'manual', filters: {...} }
+  audienceDefinition String? @map("audience_definition") // JSON string
+
+  subject         String?
+  body            String?   // HTML (email) or plain (SMS)
+  templateId      String?   @map("template_id") @db.Uuid
+  replyTo         String?   @map("reply_to")
+
+  // Status: draft | scheduled | sending | sent | cancelled
+  status          String    @default("draft")
+
+  recipientCount  Int?      @map("recipient_count")
+  sentCount       Int?      @map("sent_count")
+  suppressedCount Int?      @map("suppressed_count")
+
+  // Premium: scheduling
+  scheduledAt     DateTime? @map("scheduled_at")
+  sentAt          DateTime? @map("sent_at")
+
+  createdBy       String?   @map("created_by")  // admin user ID
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt      @map("updated_at")
+
+  messages        MessageLog[]
+
+  @@map("campaigns")
+  @@schema("comms")
+  @@index([tenantId])
+  @@index([tenantId, status])
+}
+
+// ─── Saved Audiences ─────────────────────────────────────────────────────────
+// Named, reusable audience definitions for campaigns.
+// The rulesJson is an AND/OR filter tree resolved at send time.
+
+model SavedAudience {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  name           String
+  description    String?
+  // JSON: { logic: 'and'|'or', rules: [{ field, operator, value }] }
+  rulesJson      String   @map("rules_json")
+  estimatedCount Int      @default(0) @map("estimated_count")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt      @map("updated_at")
+
+  @@map("saved_audiences")
+  @@schema("comms")
+  @@index([tenantId])
+}

@@ -22,18 +22,28 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   }
 }
 
-export async function getVenues() {
-  const res = await fetch(`${FACILITY_SERVICE}/venues`, {
-    headers: await getAuthHeaders(),
-    cache: "no-store",
-  })
+async function getServiceArray(url: string, label: string): Promise<any[]> {
+  try {
+    const res = await fetch(url, {
+      headers: await getAuthHeaders(),
+      cache: "no-store",
+    })
 
-  if (!res.ok) {
-    throw new Error("Failed to load venues")
+    if (!res.ok) {
+      console.warn(`${label} returned ${res.status}`)
+      return []
+    }
+
+    const json = await res.json()
+    return (json.data ?? json) as any[]
+  } catch (error) {
+    console.warn(`Unable to load ${label}`, error)
+    return []
   }
+}
 
-  const json = await res.json()
-  return (json.data ?? json) as any[]
+export async function getVenues() {
+  return getServiceArray(`${FACILITY_SERVICE}/venues`, "venues")
 }
 
 export async function createVenue(input: {
@@ -55,17 +65,7 @@ export async function createVenue(input: {
 }
 
 export async function getBookableUnits() {
-  const res = await fetch(`${FACILITY_SERVICE}/bookable-units`, {
-    headers: await getAuthHeaders(),
-    cache: "no-store",
-  })
-
-  if (!res.ok) {
-    throw new Error("Failed to load bookable units")
-  }
-
-  const json = await res.json()
-  return (json.data ?? json) as any[]
+  return getServiceArray(`${FACILITY_SERVICE}/bookable-units`, "bookable units")
 }
 
 export type CreateBookableUnitInput = {
@@ -211,13 +211,7 @@ export async function getBookingRuleById(id: string) {
 }
 
 export async function getBookingSeries() {
-  const res = await fetch(`${BOOKING_SERVICE}/booking-series`, {
-    headers: await getAuthHeaders(),
-    cache: "no-store",
-  })
-  if (!res.ok) throw new Error("Failed to load booking series")
-  const json = await res.json()
-  return (json.data ?? json) as any[]
+  return getServiceArray(`${BOOKING_SERVICE}/booking-series`, "booking series")
 }
 
 export async function getBookingSeriesById(id: string) {
@@ -270,17 +264,7 @@ export async function updateBookingSeries(
 }
 
 export async function getResources() {
-  const res = await fetch(`${FACILITY_SERVICE}/resources`, {
-    headers: await getAuthHeaders(),
-    cache: "no-store",
-  })
-
-  if (!res.ok) {
-    throw new Error("Failed to load resources")
-  }
-
-  const json = await res.json()
-  return (json.data ?? json) as any[]
+  return getServiceArray(`${FACILITY_SERVICE}/resources`, "resources")
 }
 
 export async function getDayAvailability(params: {
@@ -588,12 +572,21 @@ export async function getCustomers(page = 1, limit = 25, opts?: { search?: strin
   const qs = new URLSearchParams({ page: String(page), limit: String(limit) })
   if (opts?.search) qs.set("search", opts.search)
   if (opts?.lifecycle) qs.set("lifecycle", opts.lifecycle)
-  const res = await fetch(`${PEOPLE_SERVICE}/people?${qs}`, {
-    headers: await getAuthHeaders(),
-    cache: "no-store",
-  })
-  if (!res.ok) { const body = await res.text().catch(() => ""); throw new Error(`Failed to load customers: ${res.status} ${body}`) }
-  return res.json() as Promise<{ data: any[]; pagination: PaginationMeta }>
+  try {
+    const res = await fetch(`${PEOPLE_SERVICE}/people?${qs}`, {
+      headers: await getAuthHeaders(),
+      cache: "no-store",
+    })
+    if (!res.ok) {
+      const body = await res.text().catch(() => "")
+      console.warn(`Failed to load customers: ${res.status} ${body}`)
+      return { data: [], pagination: { total: 0, page, limit, totalPages: 0 } }
+    }
+    return res.json() as Promise<{ data: any[]; pagination: PaginationMeta }>
+  } catch (error) {
+    console.warn("Unable to load customers", error)
+    return { data: [], pagination: { total: 0, page, limit, totalPages: 0 } }
+  }
 }
 
 export async function getCustomerById(id: string) {
@@ -1045,10 +1038,7 @@ export async function getResourceGroups(params?: { venueId?: string }) {
   if (params?.venueId) search.set("venueId", params.venueId)
   const query = search.toString()
   const url = query ? `${FACILITY_SERVICE}/resource-groups?${query}` : `${FACILITY_SERVICE}/resource-groups`
-  const res = await fetch(url, { headers: await getAuthHeaders(), cache: "no-store" })
-  if (!res.ok) throw new Error(`Failed to load resource groups: ${res.status}`)
-  const json = await res.json()
-  return (json.data ?? json) as any[]
+  return getServiceArray(url, "resource groups")
 }
 
 export async function getResourceGroupById(id: string) {
@@ -1549,12 +1539,20 @@ export type LessonType = {
 export async function getCoaches(page = 1, limit = 25, activeOnly = false) {
   const qs = new URLSearchParams({ page: String(page), limit: String(limit) })
   if (activeOnly) qs.set("activeOnly", "true")
-  const res = await fetch(`${COACHING_SERVICE}/coaches?${qs}`, {
-    headers: await getAuthHeaders(),
-    cache: "no-store",
-  })
-  if (!res.ok) throw new Error("Failed to load coaches")
-  return res.json() as Promise<{ data: Coach[]; pagination: PaginationMeta }>
+  try {
+    const res = await fetch(`${COACHING_SERVICE}/coaches?${qs}`, {
+      headers: await getAuthHeaders(),
+      cache: "no-store",
+    })
+    if (!res.ok) {
+      console.warn(`Failed to load coaches: ${res.status}`)
+      return { data: [], pagination: { total: 0, page, limit, totalPages: 0 } }
+    }
+    return res.json() as Promise<{ data: Coach[]; pagination: PaginationMeta }>
+  } catch (error) {
+    console.warn("Unable to load coaches", error)
+    return { data: [], pagination: { total: 0, page, limit, totalPages: 0 } }
+  }
 }
 
 export async function getCoach(id: string) {
@@ -2393,19 +2391,21 @@ export async function getRankingConfigs(sport?: string) {
   const url = sport
     ? `${COMPETITION_SERVICE}/rankings/configs?sport=${sport}`
     : `${COMPETITION_SERVICE}/rankings/configs`
-  const res = await fetch(url, { headers: await getAuthHeaders(), cache: "no-store" })
-  if (!res.ok) return [] as any[]
-  const json = await res.json()
-  return (json.data ?? []) as any[]
+  return getServiceArray(url, "ranking configs")
 }
 
 export async function getRankingLeaderboard(configId: string, limit = 100) {
-  const res = await fetch(
-    `${COMPETITION_SERVICE}/rankings/${configId}?limit=${limit}`,
-    { headers: await getAuthHeaders(), cache: "no-store" }
-  )
-  if (!res.ok) return { config: null, data: [] as any[], total: 0 }
-  return res.json()
+  try {
+    const res = await fetch(
+      `${COMPETITION_SERVICE}/rankings/${configId}?limit=${limit}`,
+      { headers: await getAuthHeaders(), cache: "no-store" }
+    )
+    if (!res.ok) return { config: null, data: [] as any[], total: 0 }
+    return res.json()
+  } catch (error) {
+    console.warn("Unable to load ranking leaderboard", error)
+    return { config: null, data: [] as any[], total: 0 }
+  }
 }
 
 export async function createRankingConfig(payload: {
@@ -2518,14 +2518,17 @@ export async function getOpenSessions(filters: { status?: string; upcoming?: boo
 // ─── Integration Service ──────────────────────────────────────────────────────
 
 const INTEGRATION_SERVICE =
-  process.env.NEXT_PUBLIC_INTEGRATION_SERVICE_URL || "http://127.0.0.1:4013"
+  process.env.NEXT_PUBLIC_INTEGRATION_SERVICE_URL || "http://127.0.0.1:4016"
 
 export async function getApiKeys() {
   const res = await fetch(`${INTEGRATION_SERVICE}/v1/api-keys`, {
     headers: await getAuthHeaders(),
     cache: "no-store",
   })
-  if (!res.ok) throw new Error("Failed to load API keys")
+  if (!res.ok) {
+    console.warn(`Failed to load API keys (${res.status}) from ${INTEGRATION_SERVICE}`)
+    return { data: [] } as { data: ApiKey[] }
+  }
   return res.json() as Promise<{ data: ApiKey[] }>
 }
 
@@ -2580,7 +2583,10 @@ export async function getWebhookSubscriptions() {
     headers: await getAuthHeaders(),
     cache: "no-store",
   })
-  if (!res.ok) throw new Error("Failed to load webhook subscriptions")
+  if (!res.ok) {
+    console.warn(`Failed to load webhook subscriptions (${res.status}) from ${INTEGRATION_SERVICE}`)
+    return { data: [] } as { data: WebhookSubscription[] }
+  }
   return res.json() as Promise<{ data: WebhookSubscription[] }>
 }
 
@@ -2973,4 +2979,136 @@ export async function findPlayerMatches(personId: string, sport: string) {
   })
   if (!res.ok) return null
   return res.json() as Promise<MatchResult>
+}
+
+// ─── Programmes ───────────────────────────────────────────────────────────────
+
+export type Programme = {
+  id: string
+  tenantId: string
+  name: string
+  description?: string | null
+  sport?: string | null
+  coachId?: string | null
+  venueId?: string | null
+  maxParticipants: number
+  minParticipants: number
+  price: string
+  currency: string
+  enrollsFrom?: string | null
+  enrollsUntil?: string | null
+  status: string
+  createdAt: string
+  updatedAt: string
+  coach?: { id: string; displayName: string; avatarUrl?: string | null } | null
+  sessions?: ProgrammeSession[]
+  _count?: { enrolments: number; sessions?: number }
+}
+
+export type ProgrammeSession = {
+  id: string
+  tenantId: string
+  programmeId: string
+  coachId?: string | null
+  bookableUnitId?: string | null
+  startsAt: string
+  endsAt: string
+  status: string
+  notes?: string | null
+  coach?: { id: string; displayName: string } | null
+}
+
+export type Enrolment = {
+  id: string
+  tenantId: string
+  programmeId: string
+  customerId: string
+  status: string
+  orderId?: string | null
+  notes?: string | null
+  createdAt: string
+}
+
+export type AttendanceRecord = {
+  id: string
+  tenantId: string
+  programmeSessionId: string
+  enrolmentId: string
+  customerId: string
+  attended: boolean | null
+  notes?: string | null
+}
+
+export async function getProgrammes(page = 1, limit = 25, filters: { status?: string; sport?: string; coachId?: string } = {}) {
+  const qs = new URLSearchParams({ page: String(page), limit: String(limit) })
+  if (filters.status) qs.set("status", filters.status)
+  if (filters.sport) qs.set("sport", filters.sport)
+  if (filters.coachId) qs.set("coachId", filters.coachId)
+  const res = await fetch(`${COACHING_SERVICE}/programmes?${qs}`, { headers: await getAuthHeaders(), cache: "no-store" })
+  if (!res.ok) throw new Error("Failed to load programmes")
+  return res.json() as Promise<{ data: Programme[]; pagination: PaginationMeta }>
+}
+
+export async function getProgramme(id: string) {
+  const res = await fetch(`${COACHING_SERVICE}/programmes/${id}`, { headers: await getAuthHeaders(), cache: "no-store" })
+  if (!res.ok) throw new Error("Failed to load programme")
+  const json = await res.json()
+  return json.data as Programme
+}
+
+export async function getEnrolments(programmeId: string) {
+  const res = await fetch(`${COACHING_SERVICE}/programmes/${programmeId}/enrolments`, { headers: await getAuthHeaders(), cache: "no-store" })
+  if (!res.ok) throw new Error("Failed to load enrolments")
+  const json = await res.json()
+  return json.data as Enrolment[]
+}
+
+// ─── Order Service — Products ─────────────────────────────────────────────────
+
+const ORDER_SERVICE =
+  process.env.NEXT_PUBLIC_ORDER_SERVICE_URL || "http://127.0.0.1:4015"
+
+export type Price = {
+  id: string
+  tenantId: string
+  productId: string
+  amount: string
+  currency: string
+  memberAmount?: string | null
+  priceType: string
+  isActive: boolean
+  createdAt: string
+}
+
+export type Product = {
+  id: string
+  tenantId: string
+  organisationId?: string | null
+  name: string
+  description?: string | null
+  productType: string
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+  prices: Price[]
+}
+
+export async function getProducts(
+  page = 1,
+  limit = 50,
+  filters: { productType?: string; isActive?: boolean } = {},
+) {
+  const qs = new URLSearchParams({ page: String(page), limit: String(limit) })
+  if (filters.productType) qs.set("productType", filters.productType)
+  if (filters.isActive !== undefined) qs.set("isActive", String(filters.isActive))
+  const res = await fetch(`${ORDER_SERVICE}/products?${qs}`, { headers: await getAuthHeaders(), cache: "no-store" })
+  if (!res.ok) throw new Error("Failed to load products")
+  return res.json() as Promise<{ data: Product[]; pagination: PaginationMeta }>
+}
+
+export async function getProduct(id: string) {
+  const res = await fetch(`${ORDER_SERVICE}/products/${id}`, { headers: await getAuthHeaders(), cache: "no-store" })
+  if (!res.ok) throw new Error("Failed to load product")
+  const json = await res.json()
+  return json.data as Product
 }

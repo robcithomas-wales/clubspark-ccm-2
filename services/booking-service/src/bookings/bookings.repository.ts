@@ -37,6 +37,7 @@ export interface BookingRow {
   currency: string
   createdAt: Date
   updatedAt: Date
+  bookedForPersonId: string | null
   customerFirstName: string | null
   customerLastName: string | null
   customerEmail: string | null
@@ -44,6 +45,19 @@ export interface BookingRow {
   venueName: string | null
   resourceName: string | null
   unitName: string | null
+}
+
+export interface BookingParticipantRow {
+  id: string
+  bookingId: string
+  tenantId: string
+  personId: string | null
+  name: string
+  email: string | null
+  phone: string | null
+  notes: string | null
+  createdAt: Date
+  updatedAt: Date
 }
 
 @Injectable()
@@ -285,7 +299,7 @@ export class BookingsRepository {
               bookable_unit_id, customer_id, booking_source,
               starts_at, ends_at, status, payment_status, booking_reference, notes,
               optional_unit_ids, admin_override, price, currency,
-              coach_id, lesson_type_id
+              coach_id, lesson_type_id, booked_for_person_id
             ) VALUES (
               ${tenantId}::uuid,
               ${organisationId}::uuid,
@@ -305,32 +319,34 @@ export class BookingsRepository {
               ${dto.price ?? null},
               ${dto.currency ?? 'GBP'},
               ${dto.coachId ?? null}::uuid,
-              ${dto.lessonTypeId ?? null}::uuid
+              ${dto.lessonTypeId ?? null}::uuid,
+              ${(dto as any).bookedForPersonId ?? null}::uuid
             )
             RETURNING
               id,
-              tenant_id         AS "tenantId",
-              organisation_id   AS "organisationId",
-              venue_id          AS "venueId",
-              resource_id       AS "resourceId",
-              bookable_unit_id  AS "bookableUnitId",
-              customer_id       AS "customerId",
-              booking_source    AS "bookingSource",
-              starts_at         AS "startsAt",
-              ends_at           AS "endsAt",
+              tenant_id              AS "tenantId",
+              organisation_id        AS "organisationId",
+              venue_id               AS "venueId",
+              resource_id            AS "resourceId",
+              bookable_unit_id       AS "bookableUnitId",
+              customer_id            AS "customerId",
+              booking_source         AS "bookingSource",
+              starts_at              AS "startsAt",
+              ends_at                AS "endsAt",
               status,
-              payment_status    AS "paymentStatus",
-              booking_reference AS "bookingReference",
+              payment_status         AS "paymentStatus",
+              booking_reference      AS "bookingReference",
               notes,
-              optional_unit_ids AS "optionalUnitIds",
-              admin_override    AS "adminOverride",
-              approved_by       AS "approvedBy",
-              approved_at       AS "approvedAt",
-              cancelled_at      AS "cancelledAt",
+              optional_unit_ids      AS "optionalUnitIds",
+              admin_override         AS "adminOverride",
+              approved_by            AS "approvedBy",
+              approved_at            AS "approvedAt",
+              cancelled_at           AS "cancelledAt",
               price,
               currency,
-              created_at        AS "createdAt",
-              updated_at        AS "updatedAt"
+              booked_for_person_id   AS "bookedForPersonId",
+              created_at             AS "createdAt",
+              updated_at             AS "updatedAt"
           `
 
           return rows[0]
@@ -431,27 +447,28 @@ export class BookingsRepository {
     const returning = Prisma.sql`
       RETURNING
         id,
-        tenant_id         AS "tenantId",
-        organisation_id   AS "organisationId",
-        venue_id          AS "venueId",
-        resource_id       AS "resourceId",
-        bookable_unit_id  AS "bookableUnitId",
-        customer_id       AS "customerId",
-        booking_source    AS "bookingSource",
-        starts_at         AS "startsAt",
-        ends_at           AS "endsAt",
+        tenant_id              AS "tenantId",
+        organisation_id        AS "organisationId",
+        venue_id               AS "venueId",
+        resource_id            AS "resourceId",
+        bookable_unit_id       AS "bookableUnitId",
+        customer_id            AS "customerId",
+        booking_source         AS "bookingSource",
+        starts_at              AS "startsAt",
+        ends_at                AS "endsAt",
         status,
-        payment_status    AS "paymentStatus",
-        booking_reference AS "bookingReference",
+        payment_status         AS "paymentStatus",
+        booking_reference      AS "bookingReference",
         notes,
-        optional_unit_ids AS "optionalUnitIds",
-        admin_override    AS "adminOverride",
-        approved_by       AS "approvedBy",
-        approved_at       AS "approvedAt",
-        series_id         AS "seriesId",
-        cancelled_at      AS "cancelledAt",
-        created_at        AS "createdAt",
-        updated_at        AS "updatedAt"
+        optional_unit_ids      AS "optionalUnitIds",
+        admin_override         AS "adminOverride",
+        approved_by            AS "approvedBy",
+        approved_at            AS "approvedAt",
+        series_id              AS "seriesId",
+        cancelled_at           AS "cancelledAt",
+        booked_for_person_id   AS "bookedForPersonId",
+        created_at             AS "createdAt",
+        updated_at             AS "updatedAt"
     `
 
     // Unit change requires a conflict-checked atomic transaction
@@ -496,10 +513,11 @@ export class BookingsRepository {
                   ends_at           = COALESCE(${dto.endsAt ?? null}::timestamptz,   ends_at),
                   notes             = CASE WHEN ${dto.notes !== undefined} THEN ${dto.notes ?? null} ELSE notes END,
                   booking_source    = CASE WHEN ${dto.bookingSource !== undefined} THEN ${dto.bookingSource ?? null} ELSE booking_source END,
-                  customer_id       = CASE WHEN ${dto.customerId !== undefined} THEN ${dto.customerId ?? null}::uuid ELSE customer_id END,
-                  optional_unit_ids = CASE WHEN ${dto.optionalUnitIds !== undefined} THEN ${dto.optionalUnitIds ?? []}::uuid[] ELSE optional_unit_ids END,
-                  admin_override    = CASE WHEN ${dto.adminOverride !== undefined} THEN ${dto.adminOverride ?? false} ELSE admin_override END,
-                  updated_at        = now()
+                  customer_id            = CASE WHEN ${dto.customerId !== undefined} THEN ${dto.customerId ?? null}::uuid ELSE customer_id END,
+                  optional_unit_ids      = CASE WHEN ${dto.optionalUnitIds !== undefined} THEN ${dto.optionalUnitIds ?? []}::uuid[] ELSE optional_unit_ids END,
+                  admin_override         = CASE WHEN ${dto.adminOverride !== undefined} THEN ${dto.adminOverride ?? false} ELSE admin_override END,
+                  booked_for_person_id   = CASE WHEN ${(dto as any).bookedForPersonId !== undefined} THEN ${(dto as any).bookedForPersonId ?? null}::uuid ELSE booked_for_person_id END,
+                  updated_at             = now()
                 WHERE tenant_id = ${tenantId}::uuid
                   AND id        = ${id}::uuid
                   AND status   <> 'cancelled'
@@ -524,14 +542,15 @@ export class BookingsRepository {
       Prisma.sql`
         UPDATE booking.bookings
         SET
-          starts_at         = COALESCE(${dto.startsAt ?? null}::timestamptz, starts_at),
-          ends_at           = COALESCE(${dto.endsAt ?? null}::timestamptz,   ends_at),
-          notes             = CASE WHEN ${dto.notes !== undefined} THEN ${dto.notes ?? null} ELSE notes END,
-          booking_source    = CASE WHEN ${dto.bookingSource !== undefined} THEN ${dto.bookingSource ?? null} ELSE booking_source END,
-          customer_id       = CASE WHEN ${dto.customerId !== undefined} THEN ${dto.customerId ?? null}::uuid ELSE customer_id END,
-          optional_unit_ids = CASE WHEN ${dto.optionalUnitIds !== undefined} THEN ${dto.optionalUnitIds ?? []}::uuid[] ELSE optional_unit_ids END,
-          admin_override    = CASE WHEN ${dto.adminOverride !== undefined} THEN ${dto.adminOverride ?? false} ELSE admin_override END,
-          updated_at        = now()
+          starts_at              = COALESCE(${dto.startsAt ?? null}::timestamptz, starts_at),
+          ends_at                = COALESCE(${dto.endsAt ?? null}::timestamptz,   ends_at),
+          notes                  = CASE WHEN ${dto.notes !== undefined} THEN ${dto.notes ?? null} ELSE notes END,
+          booking_source         = CASE WHEN ${dto.bookingSource !== undefined} THEN ${dto.bookingSource ?? null} ELSE booking_source END,
+          customer_id            = CASE WHEN ${dto.customerId !== undefined} THEN ${dto.customerId ?? null}::uuid ELSE customer_id END,
+          optional_unit_ids      = CASE WHEN ${dto.optionalUnitIds !== undefined} THEN ${dto.optionalUnitIds ?? []}::uuid[] ELSE optional_unit_ids END,
+          admin_override         = CASE WHEN ${dto.adminOverride !== undefined} THEN ${dto.adminOverride ?? false} ELSE admin_override END,
+          booked_for_person_id   = CASE WHEN ${(dto as any).bookedForPersonId !== undefined} THEN ${(dto as any).bookedForPersonId ?? null}::uuid ELSE booked_for_person_id END,
+          updated_at             = now()
         WHERE tenant_id = ${tenantId}::uuid
           AND id        = ${id}::uuid
           AND status   <> 'cancelled'
@@ -860,6 +879,207 @@ export class BookingsRepository {
         AND starts_at < ${dayEnd}::timestamptz
         AND ends_at   > ${dayStart}::timestamptz
     `
+  }
+
+  /**
+   * Returns active/pending bookings that start in the next 23–25 hours
+   * and have not yet had a reminder sent. The 2-hour window prevents
+   * duplicate fires across hourly cron runs.
+   */
+  async findDueReminders(): Promise<{
+    id: string
+    tenantId: string
+    customerId: string | null
+    customerEmail: string | null
+    customerFirstName: string | null
+    customerLastName: string | null
+    bookingReference: string
+    startsAt: Date
+    endsAt: Date
+    venueName: string | null
+    resourceName: string | null
+  }[]> {
+    const windowStart = new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString()
+    const windowEnd = new Date(Date.now() + 25 * 60 * 60 * 1000).toISOString()
+    return this.prisma.read.$queryRaw`
+      SELECT
+        b.id,
+        b.tenant_id              AS "tenantId",
+        b.customer_id            AS "customerId",
+        b.booking_reference      AS "bookingReference",
+        b.starts_at              AS "startsAt",
+        b.ends_at                AS "endsAt",
+        p.email                  AS "customerEmail",
+        p.first_name             AS "customerFirstName",
+        p.last_name              AS "customerLastName",
+        v.name                   AS "venueName",
+        r.name                   AS "resourceName"
+      FROM booking.bookings b
+      LEFT JOIN people.people p   ON p.id = b.customer_id
+      LEFT JOIN venue.venues v    ON v.id = b.venue_id::uuid
+      LEFT JOIN venue.resources r ON r.id = b.resource_id::uuid
+      WHERE b.status IN ('active', 'pending')
+        AND b.reminder_sent_at IS NULL
+        AND b.starts_at >= ${windowStart}::timestamptz
+        AND b.starts_at <  ${windowEnd}::timestamptz
+    `
+  }
+
+  /** Stamp reminder_sent_at on a booking so it only fires once. */
+  async markReminderSent(id: string): Promise<void> {
+    await this.prisma.write.$queryRaw`
+      UPDATE booking.bookings
+      SET reminder_sent_at = now(),
+          updated_at       = now()
+      WHERE id = ${id}::uuid
+        AND reminder_sent_at IS NULL
+    `
+  }
+
+  // ─── Booking Participants ───────────────────────────────────────────────────
+
+  async listParticipants(tenantId: string, bookingId: string) {
+    return this.prisma.read.$queryRaw<BookingParticipantRow[]>`
+      SELECT
+        id,
+        booking_id AS "bookingId",
+        tenant_id  AS "tenantId",
+        person_id  AS "personId",
+        name,
+        email,
+        phone,
+        notes,
+        created_at AS "createdAt",
+        updated_at AS "updatedAt"
+      FROM booking.booking_participants
+      WHERE tenant_id  = ${tenantId}::uuid
+        AND booking_id = ${bookingId}::uuid
+      ORDER BY created_at
+    `
+  }
+
+  async addParticipant(
+    tenantId: string,
+    bookingId: string,
+    dto: { name: string; email?: string; phone?: string; personId?: string; notes?: string },
+  ) {
+    const rows = await this.prisma.write.$queryRaw<BookingParticipantRow[]>`
+      INSERT INTO booking.booking_participants
+        (tenant_id, booking_id, person_id, name, email, phone, notes)
+      VALUES (
+        ${tenantId}::uuid,
+        ${bookingId}::uuid,
+        ${dto.personId ?? null}::uuid,
+        ${dto.name},
+        ${dto.email ?? null},
+        ${dto.phone ?? null},
+        ${dto.notes ?? null}
+      )
+      RETURNING
+        id,
+        booking_id AS "bookingId",
+        tenant_id  AS "tenantId",
+        person_id  AS "personId",
+        name,
+        email,
+        phone,
+        notes,
+        created_at AS "createdAt",
+        updated_at AS "updatedAt"
+    `
+    return rows[0] ?? null
+  }
+
+  async removeParticipant(tenantId: string, bookingId: string, participantId: string) {
+    const rows = await this.prisma.write.$queryRaw<{ id: string }[]>`
+      DELETE FROM booking.booking_participants
+      WHERE tenant_id  = ${tenantId}::uuid
+        AND booking_id = ${bookingId}::uuid
+        AND id         = ${participantId}::uuid
+      RETURNING id
+    `
+    return rows.length > 0
+  }
+
+  // ─── Payment Splits ─────────────────────────────────────────────────────────
+
+  async listPaymentSplits(tenantId: string, bookingId: string) {
+    return this.prisma.read.$queryRaw<{
+      id: string; bookingId: string; tenantId: string;
+      payerPersonId: string | null; payerName: string; payerEmail: string | null;
+      amountDue: number; amountPaid: number; currency: string;
+      paymentStatus: string; notes: string | null; createdAt: Date; updatedAt: Date;
+    }[]>`
+      SELECT
+        id,
+        booking_id       AS "bookingId",
+        tenant_id        AS "tenantId",
+        payer_person_id  AS "payerPersonId",
+        payer_name       AS "payerName",
+        payer_email      AS "payerEmail",
+        amount_due       AS "amountDue",
+        amount_paid      AS "amountPaid",
+        currency,
+        payment_status   AS "paymentStatus",
+        notes,
+        created_at       AS "createdAt",
+        updated_at       AS "updatedAt"
+      FROM booking.booking_payment_splits
+      WHERE tenant_id = ${tenantId}::uuid AND booking_id = ${bookingId}::uuid
+      ORDER BY created_at ASC
+    `
+  }
+
+  async addPaymentSplit(
+    tenantId: string,
+    bookingId: string,
+    dto: { payerName: string; payerEmail?: string; payerPersonId?: string; amountDue: number; currency?: string; notes?: string },
+  ) {
+    const rows = await this.prisma.write.$queryRaw<{ id: string; payerName: string; amountDue: number; paymentStatus: string }[]>`
+      INSERT INTO booking.booking_payment_splits
+        (tenant_id, booking_id, payer_person_id, payer_name, payer_email, amount_due, currency, notes)
+      VALUES (
+        ${tenantId}::uuid,
+        ${bookingId}::uuid,
+        ${dto.payerPersonId ?? null}::uuid,
+        ${dto.payerName},
+        ${dto.payerEmail ?? null},
+        ${dto.amountDue},
+        ${dto.currency ?? 'GBP'},
+        ${dto.notes ?? null}
+      )
+      RETURNING id, payer_name AS "payerName", amount_due AS "amountDue", payment_status AS "paymentStatus"
+    `
+    return rows[0] ?? null
+  }
+
+  async removePaymentSplit(tenantId: string, bookingId: string, splitId: string) {
+    const rows = await this.prisma.write.$queryRaw<{ id: string }[]>`
+      DELETE FROM booking.booking_payment_splits
+      WHERE tenant_id  = ${tenantId}::uuid
+        AND booking_id = ${bookingId}::uuid
+        AND id         = ${splitId}::uuid
+      RETURNING id
+    `
+    return rows.length > 0
+  }
+
+  async updatePaymentSplitStatus(
+    tenantId: string,
+    splitId: string,
+    paymentStatus: string,
+    amountPaid?: number,
+  ) {
+    const rows = await this.prisma.write.$queryRaw<{ id: string }[]>`
+      UPDATE booking.booking_payment_splits
+      SET
+        payment_status = ${paymentStatus},
+        amount_paid    = COALESCE(${amountPaid ?? null}, amount_paid),
+        updated_at     = now()
+      WHERE tenant_id = ${tenantId}::uuid AND id = ${splitId}::uuid
+      RETURNING id
+    `
+    return rows.length > 0
   }
 
 }

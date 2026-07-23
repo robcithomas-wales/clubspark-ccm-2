@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(*)"
+    ],
+    "additionalDirectories": [
+      "/Users/clubspark/.claude/projects/-Users-clubspark-Documents-code-Club-and-Coach-2/memory"
+    ]
+  }
+}

@@ -47,6 +47,12 @@ export class OrganisationsController {
     return this.service.getBySlug(slug)
   }
 
+  @Get('public/first')
+  @SkipTenant()
+  getFirst() {
+    return this.service.getFirst()
+  }
+
   @Get('public/by-domain')
   @SkipTenant()
   getByDomain(@Query('domain') domain: string) {

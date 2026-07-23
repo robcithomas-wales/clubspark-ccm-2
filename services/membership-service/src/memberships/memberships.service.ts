@@ -2,9 +2,11 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common'
 import { MembershipsRepository } from './memberships.repository'
 import { MembershipPlansRepository } from '../membership-plans/membership-plans.repository'
+import { EventBusService } from '../event-bus/event-bus.service'
 import { CreateMembershipDto } from './dto/create-membership.dto'
 import { UpdateMembershipDto } from './dto/update-membership.dto'
 import { TransitionMembershipDto } from './dto/transition-membership.dto'
@@ -50,9 +52,12 @@ const TRANSITIONS: Record<string, { from: string[]; to: string }> = {
 
 @Injectable()
 export class MembershipsService {
+  private readonly logger = new Logger(MembershipsService.name)
+
   constructor(
     private readonly repo: MembershipsRepository,
     private readonly plansRepo: MembershipPlansRepository,
+    private readonly eventBus: EventBusService,
   ) {}
 
   async list(
@@ -251,6 +256,39 @@ export class MembershipsService {
       dto.reason ?? null,
       actorEmail,
     )
+
+    // Publish domain events for comms-service
+    // TODO: populate personEmail + personFirstName from people-service lookup by m.customerId
+    const personEmail = ''  // TODO: fetch from people-service
+    const personFirstName = ''
+    const planName = (m as any).plan?.name ?? ''
+
+    if (rule.to === 'active') {
+      void this.eventBus.publish({
+        type: 'membership.activated',
+        tenantId,
+        occurredAt: new Date().toISOString(),
+        membershipId: m.id,
+        personId: m.customerId ?? '',
+        personEmail,
+        personFirstName,
+        planName,
+        startsAt: m.startDate ?? '',
+        expiresAt: m.endDate ?? undefined,
+      })
+    } else if (rule.to === 'expired') {
+      void this.eventBus.publish({
+        type: 'membership.expired',
+        tenantId,
+        occurredAt: new Date().toISOString(),
+        membershipId: m.id,
+        personId: m.customerId ?? '',
+        personEmail,
+        personFirstName,
+        planName,
+        expiredAt: (m as any).expiredAt?.toISOString() ?? new Date().toISOString(),
+      })
+    }
 
     return { data: m }
   }

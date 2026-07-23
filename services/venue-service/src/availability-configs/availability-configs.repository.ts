@@ -7,12 +7,17 @@ import { UpdateAvailabilityConfigDto } from './dto/update-availability-config.dt
 export class AvailabilityConfigsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(tenantId: string, scopeType?: string, scopeId?: string) {
+  findAll(tenantId: string, scopeType?: string, scopeId?: string, seasonalScheduleId?: string) {
     return this.prisma.read.availabilityConfig.findMany({
       where: {
         tenantId,
         ...(scopeType ? { scopeType } : {}),
         ...(scopeId ? { scopeId } : {}),
+        ...(seasonalScheduleId !== undefined
+          ? seasonalScheduleId === 'none'
+            ? { seasonalScheduleId: null }
+            : { seasonalScheduleId }
+          : {}),
       },
       orderBy: [{ scopeType: 'asc' }, { dayOfWeek: 'asc' }],
     })
@@ -35,6 +40,7 @@ export class AvailabilityConfigsRepository {
         bookingIntervalMinutes: dto.bookingIntervalMinutes ?? null,
         newDayReleaseTime: dto.newDayReleaseTime ?? null,
         isActive: dto.isActive ?? true,
+        seasonalScheduleId: dto.seasonalScheduleId ?? null,
       },
     })
   }
@@ -53,6 +59,7 @@ export class AvailabilityConfigsRepository {
         bookingIntervalMinutes: dto.bookingIntervalMinutes !== undefined ? dto.bookingIntervalMinutes : existing.bookingIntervalMinutes,
         newDayReleaseTime: dto.newDayReleaseTime !== undefined ? dto.newDayReleaseTime : existing.newDayReleaseTime,
         isActive: dto.isActive !== undefined ? dto.isActive : existing.isActive,
+        seasonalScheduleId: dto.seasonalScheduleId !== undefined ? dto.seasonalScheduleId : existing.seasonalScheduleId,
       },
     })
   }

@@ -5,17 +5,20 @@ import { redirect } from "next/navigation"
  * slug. Useful in local development where there is only one org.
  */
 export default async function RootPage() {
+  let slug: string | undefined
+
   try {
     const venueUrl = process.env.NEXT_PUBLIC_VENUE_SERVICE_URL ?? "http://127.0.0.1:4003"
     const res = await fetch(`${venueUrl}/organisations/public/first`, { cache: "no-store" })
     if (res.ok) {
       const json = await res.json()
-      const slug = json?.data?.slug
-      if (slug) redirect(`/${slug}`)
+      slug = json?.data?.slug
     }
   } catch {
     // fall through to the prompt below
   }
+
+  if (slug) redirect(`/${slug}`)
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50">
@@ -25,7 +28,7 @@ export default async function RootPage() {
           Navigate to your club's portal at:
         </p>
         <code className="mt-3 block rounded-lg bg-slate-100 px-4 py-3 text-sm text-slate-700">
-          localhost:3001/<span className="font-bold">your-slug</span>
+          localhost:3006/<span className="font-bold">your-slug</span>
         </code>
         <p className="mt-3 text-xs text-slate-400">
           Find your slug in Admin Portal → Settings → Organisation.

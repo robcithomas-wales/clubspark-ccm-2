@@ -5,6 +5,18 @@ import { PrismaService } from '../prisma/prisma.service.js'
 export class VenuesRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  create(data: {
+    id: string
+    tenantId: string
+    organisationId?: string | null
+    name: string
+    timezone: string
+    city?: string | null
+    country: string
+  }) {
+    return this.prisma.write.venue.create({ data })
+  }
+
   findAll(tenantId: string) {
     return this.prisma.read.venue.findMany({
       where: { tenantId },
@@ -18,6 +30,17 @@ export class VenuesRepository {
         city: true,
         country: true,
       },
+    })
+  }
+
+  countByOrganisation(organisationId: string) {
+    return this.prisma.read.venue.count({ where: { organisationId } })
+  }
+
+  findOrganisationByTenantId(tenantId: string) {
+    return this.prisma.read.organisation.findFirst({
+      where: { tenantId },
+      select: { id: true },
     })
   }
 

@@ -9,6 +9,7 @@ import { MembershipSchemesModule } from './membership-schemes/membership-schemes
 import { MembershipPlansModule } from './membership-plans/membership-plans.module'
 import { MembershipsModule } from './memberships/memberships.module'
 import { EntitlementPoliciesModule } from './entitlement-policies/entitlement-policies.module'
+import { EventBusModule } from './event-bus/event-bus.module'
 import { TenantContextGuard } from './common/guards/tenant-context.guard'
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter'
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor'
@@ -18,6 +19,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor'
     ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
     ScheduleModule.forRoot(),
     PrismaModule,
+    EventBusModule,
     HealthModule,
     MembershipSchemesModule,
     MembershipPlansModule,

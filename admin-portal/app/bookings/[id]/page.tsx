@@ -14,6 +14,8 @@ import { CancelBookingButton } from "@/components/cancel-booking-button"
 import { PaymentStatusButton } from "@/components/payment-status-button"
 import { EditBookingPanel } from "@/components/edit-booking-panel"
 import { ApproveRejectButtons } from "@/components/approve-reject-buttons"
+import { BookingParticipantsPanel } from "@/components/booking-participants-panel"
+import { BookingPaymentSplitsPanel } from "@/components/booking-payment-splits-panel"
 
 function formatDate(value?: string | null) {
   if (!value) return "n/a"
@@ -151,6 +153,34 @@ async function getBookingAddOns(id: string) {
   }
 }
 
+async function getBookingPaymentSplits(id: string) {
+  try {
+    const response = await fetch(`http://127.0.0.1:4005/v1/bookings/${id}/payment-splits`, {
+      headers: BOOKING_HEADERS,
+      cache: "no-store",
+    })
+    if (!response.ok) return []
+    const json = await response.json()
+    return json?.data ?? []
+  } catch {
+    return []
+  }
+}
+
+async function getBookingParticipants(id: string) {
+  try {
+    const response = await fetch(`http://127.0.0.1:4005/v1/bookings/${id}/participants`, {
+      headers: BOOKING_HEADERS,
+      cache: "no-store",
+    })
+    if (!response.ok) return []
+    const json = await response.json()
+    return json?.data ?? []
+  } catch {
+    return []
+  }
+}
+
 function SummaryCard({
   label,
   value,
@@ -198,12 +228,14 @@ export default async function BookingDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const [booking, units, resources, bookingAddOns, addOnServices] = await Promise.all([
+  const [booking, units, resources, bookingAddOns, addOnServices, participants, paymentSplits] = await Promise.all([
     getBooking(id),
     getBookableUnits(),
     getResources().catch(() => []),
     getBookingAddOns(id),
     getAddOnServices().catch(() => []),
+    getBookingParticipants(id),
+    getBookingPaymentSplits(id),
   ])
 
   if (!booking) {
@@ -323,6 +355,13 @@ export default async function BookingDetailPage({
                   value="Booking rules bypassed by admin"
                 />
               )}
+
+              {booking.bookedForPersonId && (
+                <DetailTile
+                  label="Booked on behalf of"
+                  value={booking.bookedForPersonId}
+                />
+              )}
             </div>
 
             {booking.seriesId && (
@@ -433,6 +472,7 @@ export default async function BookingDetailPage({
               bookingSource={booking.bookingSource}
               bookableUnitId={booking.bookableUnitId}
               adminOverride={booking.adminOverride ?? false}
+              bookedForPersonId={booking.bookedForPersonId ?? null}
               availableUnits={units
                 .filter((u: any) => u.isActive !== false)
                 .map((u: any) => ({
@@ -457,6 +497,18 @@ export default async function BookingDetailPage({
             </div>
           </div>
         </section>
+
+        <BookingParticipantsPanel
+          bookingId={booking.id}
+          initialParticipants={participants}
+          isCancelled={booking.status === "cancelled"}
+        />
+
+        <BookingPaymentSplitsPanel
+          bookingId={booking.id}
+          initialSplits={paymentSplits}
+          isCancelled={booking.status === "cancelled"}
+        />
       </div>
     </PortalLayout>
   )

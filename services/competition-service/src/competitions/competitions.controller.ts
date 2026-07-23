@@ -40,22 +40,10 @@ export class CompetitionsController {
     return this.service.create(req.tenantContext.tenantId, req.tenantContext.organisationId, req.tenantContext.adminId, dto)
   }
 
-  @Post(':id/submit-for-approval')
-  @ApiOperation({ summary: 'Submit a DRAFT competition for approval' })
-  submitForApproval(@Request() req: TenantReq, @Param('id') id: string) {
-    return this.service.submitForApproval(req.tenantContext.tenantId, id, req.tenantContext.adminId)
-  }
-
-  @Post(':id/approve')
-  @ApiOperation({ summary: 'Approve a competition (moves to REGISTRATION_OPEN)' })
-  approve(@Request() req: TenantReq, @Param('id') id: string) {
-    return this.service.approve(req.tenantContext.tenantId, id, req.tenantContext.adminId)
-  }
-
-  @Post(':id/reject')
-  @ApiOperation({ summary: 'Reject a competition (returns to DRAFT with reason)' })
-  reject(@Request() req: TenantReq, @Param('id') id: string, @Body() body: { reason: string }) {
-    return this.service.reject(req.tenantContext.tenantId, id, req.tenantContext.adminId, body.reason)
+  @Post(':id/publish')
+  @ApiOperation({ summary: 'Publish a DRAFT competition (opens registration)' })
+  publish(@Request() req: TenantReq, @Param('id') id: string) {
+    return this.service.publish(req.tenantContext.tenantId, id, req.tenantContext.adminId)
   }
 
   @Patch(':id')

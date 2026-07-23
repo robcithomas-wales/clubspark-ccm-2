@@ -10,6 +10,8 @@ import {
   ChevronDown,
   CreditCard,
   LayoutDashboard,
+  Layers,
+  Mail,
   MapPinned,
   Search,
   Settings,
@@ -24,6 +26,8 @@ const navItems = [
   { label: "Customers", href: "/customers", icon: Users },
   { label: "Membership", href: "/membership", icon: CreditCard },
   { label: "Bookings", href: "/bookings", icon: CalendarDays },
+  { label: "Communications", href: "/communications/log", icon: Mail },
+  { label: "Plan & Billing", href: "/pricing", icon: Layers },
   { label: "Settings", href: "/settings", icon: Settings },
 ]
 
@@ -55,8 +59,11 @@ export function AdminShell() {
           <nav className="space-y-2">
             {navItems.map((item) => {
               const Icon = item.icon
+              // For Communications, match any /communications/* path
               const isActive =
-                pathname === item.href || pathname.startsWith(`${item.href}/`)
+                item.href === "/communications/log"
+                  ? pathname.startsWith("/communications")
+                  : pathname === item.href || pathname.startsWith(`${item.href}/`)
 
               return (
                 <Link

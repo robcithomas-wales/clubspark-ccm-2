@@ -1,0 +1,23 @@
+import { NextRequest, NextResponse } from "next/server"
+import { createClient } from "@/lib/supabase/server"
+
+const COACHING_SERVICE = process.env.NEXT_PUBLIC_COACHING_SERVICE_URL || "http://127.0.0.1:4007"
+
+async function getAuthHeaders() {
+  const supabase = await createClient()
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error("Not authenticated")
+  return { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" }
+}
+
+export async function DELETE(_req: NextRequest, { params }: { params: { id: string; enrolmentId: string } }) {
+  try {
+    const res = await fetch(`${COACHING_SERVICE}/programmes/${params.id}/enrolments/${params.enrolmentId}`, {
+      method: "DELETE", headers: await getAuthHeaders(),
+    })
+    if (res.status === 204) return new NextResponse(null, { status: 204 })
+    return NextResponse.json(await res.json(), { status: res.status })
+  } catch {
+    return NextResponse.json({ error: "Failed to cancel enrolment" }, { status: 500 })
+  }
+}

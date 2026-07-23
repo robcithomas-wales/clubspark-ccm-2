@@ -54,7 +54,8 @@ export class TenantContextGuard implements CanActivate {
       try {
         const result = await jwtVerify(token, getJwks())
         payload = result.payload as unknown as SupabasePayload
-      } catch {
+      } catch (err) {
+        console.error('[TenantContextGuard] JWT verification failed:', err)
         throw new UnauthorizedException('Invalid or expired token')
       }
 

@@ -239,6 +239,8 @@ model ChargeRun {
   initiatedBy String?         @map("initiated_by") @db.Uuid  // userId of manager
   status      ChargeRunStatus @default(draft)
   notes       String?
+  // Cross-service reference to order-service (no hard FK)
+  orderId     String?         @map("order_id") @db.Uuid
   createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 

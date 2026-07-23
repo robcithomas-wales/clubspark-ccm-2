@@ -29,4 +29,22 @@ export class TeamsService {
     const team = await this.repo.update(tenantId, id, dto)
     return { data: team }
   }
+
+  async remove(tenantId: string, id: string) {
+    const existing = await this.repo.findById(tenantId, id)
+    if (!existing) throw new NotFoundException('Team not found')
+    await this.repo.deactivate(tenantId, id)
+    return { data: { success: true } }
+  }
+
+  async listPublic(tenantId: string) {
+    const teams = await this.repo.listPublic(tenantId)
+    return { data: teams }
+  }
+
+  async findByIdPublic(tenantId: string, id: string) {
+    const team = await this.repo.findByIdPublic(tenantId, id)
+    if (!team) throw new NotFoundException('Team not found')
+    return { data: team }
+  }
 }

@@ -14,6 +14,7 @@ interface EditBookingPanelProps {
   bookableUnitId: string
   availableUnits: { id: string; name: string; resourceName?: string }[]
   adminOverride?: boolean
+  bookedForPersonId?: string | null
 }
 
 export function EditBookingPanel({
@@ -26,6 +27,7 @@ export function EditBookingPanel({
   bookableUnitId,
   availableUnits,
   adminOverride,
+  bookedForPersonId,
 }: EditBookingPanelProps) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -45,6 +47,7 @@ export function EditBookingPanel({
     bookingSource: bookingSource ?? "",
     bookableUnitId: bookableUnitId,
     adminOverride: adminOverride ?? false,
+    bookedForPersonId: bookedForPersonId ?? "",
   })
 
   if (status === "cancelled") return null
@@ -59,6 +62,7 @@ export function EditBookingPanel({
         notes: form.notes || undefined,
         bookingSource: form.bookingSource || undefined,
         adminOverride: form.adminOverride,
+        bookedForPersonId: form.bookedForPersonId || null,
       }
 
       if (form.bookableUnitId !== bookableUnitId) {
@@ -186,6 +190,19 @@ export function EditBookingPanel({
               rows={3}
               className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#1857E0]"
               placeholder="Optional notes..."
+            />
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-slate-600">
+              Book on behalf of <span className="font-normal text-slate-400">(person UUID — optional)</span>
+            </label>
+            <input
+              type="text"
+              value={form.bookedForPersonId}
+              onChange={(e) => setForm((f) => ({ ...f, bookedForPersonId: e.target.value }))}
+              placeholder="e.g. child's person ID"
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#1857E0] font-mono"
             />
           </div>
 

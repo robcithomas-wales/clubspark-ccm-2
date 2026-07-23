@@ -8,6 +8,11 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js'
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor.js'
 import { HealthModule } from './health/health.module.js'
 import { AdminUsersModule } from './admin-users/admin-users.module.js'
+import { OrganisationsModule } from './internal/organisations/organisations.module.js'
+import { FeatureFlagsModule } from './internal/feature-flags/feature-flags.module.js'
+import { AuditModule } from './internal/audit/audit.module.js'
+import { ImpersonationModule } from './internal/impersonation/impersonation.module.js'
+import { StatsModule } from './internal/stats/stats.module.js'
 
 @Module({
   imports: [
@@ -15,6 +20,11 @@ import { AdminUsersModule } from './admin-users/admin-users.module.js'
     PrismaModule,
     HealthModule,
     AdminUsersModule,
+    OrganisationsModule,
+    FeatureFlagsModule,
+    AuditModule,
+    ImpersonationModule,
+    StatsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: TenantContextGuard },

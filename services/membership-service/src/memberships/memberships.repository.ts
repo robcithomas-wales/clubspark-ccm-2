@@ -464,6 +464,54 @@ export class MembershipsRepository {
     return created
   }
 
+  /**
+   * Find active memberships whose endDate falls in [now + minDays, now + maxDays]
+   * and for which a renewal reminder has not yet been sent.
+   */
+  async findDueRenewalReminders(minDays: number, maxDays: number): Promise<{
+    id: string
+    tenantId: string
+    customerId: string | null
+    planName: string | null
+    endDate: Date | null
+  }[]> {
+    const from = new Date()
+    from.setDate(from.getDate() + minDays)
+    const to = new Date()
+    to.setDate(to.getDate() + maxDays)
+
+    const rows = await this.prisma.membership.findMany({
+      where: {
+        status: 'active',
+        endDate: { gte: from, lte: to },
+        renewalReminderSentAt: null,
+      },
+      select: {
+        id: true,
+        tenantId: true,
+        customerId: true,
+        endDate: true,
+        plan: { select: { name: true } },
+      },
+    })
+
+    return rows.map((r) => ({
+      id: r.id,
+      tenantId: r.tenantId,
+      customerId: r.customerId,
+      planName: r.plan?.name ?? null,
+      endDate: r.endDate,
+    }))
+  }
+
+  /** Stamp renewalReminderSentAt; guard with IS NULL to prevent double-sending on concurrent runs. */
+  async markRenewalReminderSent(id: string): Promise<void> {
+    await this.prisma.membership.updateMany({
+      where: { id, renewalReminderSentAt: null },
+      data: { renewalReminderSentAt: new Date() },
+    })
+  }
+
   private format(m: any) {
     const { plan, ...rest } = m
     return {

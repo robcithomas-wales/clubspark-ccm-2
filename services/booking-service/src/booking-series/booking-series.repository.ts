@@ -28,6 +28,9 @@ export interface SeriesRow {
   status: string
   minSessions: number | null
   maxSessions: number | null
+  pricePerSession: number | null
+  discountPct: number | null
+  currency: string
   createdAt: Date
   updatedAt: Date
 }
@@ -85,6 +88,9 @@ export class BookingSeriesRepository {
         status,
         min_sessions       AS "minSessions",
         max_sessions       AS "maxSessions",
+        price_per_session  AS "pricePerSession",
+        discount_pct       AS "discountPct",
+        currency,
         created_at         AS "createdAt",
         updated_at         AS "updatedAt"
       FROM booking.booking_series
@@ -112,6 +118,9 @@ export class BookingSeriesRepository {
         status,
         min_sessions       AS "minSessions",
         max_sessions       AS "maxSessions",
+        price_per_session  AS "pricePerSession",
+        discount_pct       AS "discountPct",
+        currency,
         created_at         AS "createdAt",
         updated_at         AS "updatedAt"
       FROM booking.booking_series
@@ -185,6 +194,14 @@ export class BookingSeriesRepository {
     const slotEndsAt = firstEndsAt.toTimeString().slice(0, 8)
     const paymentStatus = dto.paymentStatus ?? 'unpaid'
 
+    // Compute per-booking price after discount
+    let bookingPrice: number | null = null
+    if (dto.pricePerSession != null) {
+      const discount = dto.discountPct ?? 0
+      bookingPrice = Number((dto.pricePerSession * (1 - discount / 100)).toFixed(2))
+    }
+    const bookingCurrency = dto.currency ?? 'GBP'
+
     return this.prisma.write.$transaction(
       async (tx) => {
         // Insert the series record
@@ -193,7 +210,8 @@ export class BookingSeriesRepository {
             tenant_id, organisation_id, venue_id, resource_id,
             bookable_unit_id, customer_id, booking_source,
             rrule, slot_starts_at, slot_ends_at,
-            payment_status, notes, status, min_sessions, max_sessions
+            payment_status, notes, status, min_sessions, max_sessions,
+            price_per_session, discount_pct, currency
           ) VALUES (
             ${tenantId}::uuid,
             ${organisationId}::uuid,
@@ -209,7 +227,10 @@ export class BookingSeriesRepository {
             ${dto.notes ?? null},
             'active',
             ${dto.minSessions ?? null},
-            ${dto.maxSessions ?? null}
+            ${dto.maxSessions ?? null},
+            ${dto.pricePerSession ?? null},
+            ${dto.discountPct ?? null},
+            ${dto.currency ?? 'GBP'}
           )
           RETURNING
             id,
@@ -266,7 +287,7 @@ export class BookingSeriesRepository {
               tenant_id, organisation_id, venue_id, resource_id,
               bookable_unit_id, customer_id, booking_source,
               starts_at, ends_at, status, payment_status,
-              booking_reference, notes, series_id
+              booking_reference, notes, series_id, price, currency
             ) VALUES (
               ${tenantId}::uuid,
               ${organisationId}::uuid,
@@ -281,7 +302,9 @@ export class BookingSeriesRepository {
               ${paymentStatus},
               ${ref},
               ${dto.notes ?? null},
-              ${series.id}::uuid
+              ${series.id}::uuid,
+              ${bookingPrice},
+              ${bookingCurrency}
             )
             RETURNING
               id,

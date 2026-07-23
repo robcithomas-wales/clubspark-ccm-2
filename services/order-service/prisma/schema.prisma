@@ -1,0 +1,143 @@
+// ClubSpark — Order Service Prisma Schema
+// Owns the commerce schema: orders, order_items
+//
+// Every transaction on the platform must create an Order. This is the single
+// shared commerce layer — revenue logic must not be reimplemented per module.
+// Payment processing stays in payment-service; this service owns the transaction
+// record and line-item breakdown.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+  output          = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["commerce"]
+}
+
+// ── Enums ────────────────────────────────────────────────────────────────────
+
+enum OrderStatus {
+  pending    // created, awaiting payment
+  confirmed  // payment succeeded
+  cancelled  // cancelled before payment
+  refunded   // fully refunded
+
+  @@schema("commerce")
+}
+
+// ── Models ───────────────────────────────────────────────────────────────────
+
+// Canonical transaction container. One Order per purchase event regardless of
+// activity type. Payment-service references orderId via subjectType='order'.
+model Order {
+  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String      @map("tenant_id") @db.Uuid
+  organisationId String?     @map("organisation_id") @db.Uuid
+  // The person placing the order — cross-service reference, no hard FK
+  personId       String?     @map("person_id") @db.Uuid
+  status         OrderStatus @default(pending)
+  currency       String      @default("GBP") @db.Char(3)
+  // Total in smallest currency unit (pence for GBP). Denormalised sum of items.
+  totalAmount    Int         @map("total_amount")
+  // Cross-service anchor: what triggered this order
+  // Values: 'booking' | 'membership' | 'competition_entry' | 'charge_run' | 'coach_session'
+  subjectType    String?     @map("subject_type")
+  subjectId      String?     @map("subject_id") @db.Uuid
+  // Caller-supplied idempotency key — identical keys return the existing order
+  idempotencyKey String?     @unique @map("idempotency_key")
+  metadata       Json?
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  items OrderItem[]
+
+  @@map("orders")
+  @@schema("commerce")
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, personId])
+  @@index([tenantId, subjectType, subjectId])
+  @@index([tenantId, organisationId])
+}
+
+// Line item within an Order. Each purchased unit is one OrderItem.
+model OrderItem {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderId     String   @map("order_id") @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  // What is being purchased — cross-service reference, no hard FK
+  // Values: 'booking_slot' | 'membership_plan' | 'competition_entry' | 'coach_session' | 'add_on' | 'match_fee'
+  productType String   @map("product_type")
+  productId   String?  @map("product_id") @db.Uuid
+  description String
+  // Amounts in smallest currency unit (pence for GBP)
+  unitAmount  Int      @map("unit_amount")
+  quantity    Int      @default(1)
+  totalAmount Int      @map("total_amount")
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@map("order_items")
+  @@schema("commerce")
+  @@index([orderId])
+  @@index([tenantId])
+  @@index([tenantId, productType, productId])
+}
+
+// ── Product catalogue ────────────────────────────────────────────────────────
+
+// Canonical sellable items. productType mirrors OrderItem.productType values so
+// automated line-item creation can resolve a Product without domain knowledge.
+model Product {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  organisationId String?  @map("organisation_id") @db.Uuid
+  name           String
+  description    String?
+  // booking_slot | programme_enrolment | membership | add_on | competition_entry | match_fee | coach_session
+  productType    String   @map("product_type")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  prices     Price[]
+  orderItems OrderItem[]
+
+  @@map("products")
+  @@schema("commerce")
+  @@index([tenantId])
+  @@index([tenantId, isActive])
+  @@index([tenantId, productType])
+}
+
+// Pricing tiers attached to a Product. A product can have multiple prices
+// (e.g. standard + member rate). isActive flag lets you retire old prices
+// without deleting them.
+model Price {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  productId    String   @map("product_id") @db.Uuid
+  amount       Decimal  @db.Decimal(10, 2)
+  currency     String   @default("GBP") @db.Char(3)
+  memberAmount Decimal? @map("member_amount") @db.Decimal(10, 2)
+  // standard | member | tiered
+  priceType    String   @default("standard") @map("price_type")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("prices")
+  @@schema("commerce")
+  @@index([productId])
+  @@index([tenantId])
+  @@index([tenantId, isActive])
+}

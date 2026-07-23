@@ -1,5 +1,6 @@
 import {
   IsString,
+  IsNotEmpty,
   IsOptional,
   IsInt,
   Min,
@@ -40,4 +41,9 @@ export class UpdateAvailabilityConfigDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  seasonalScheduleId?: string | null
 }

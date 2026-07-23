@@ -3,13 +3,17 @@ import { BookingsController } from './bookings.controller.js'
 import { BookingsService } from './bookings.service.js'
 import { BookingsRepository } from './bookings.repository.js'
 import { BookingExpiryTask } from './tasks/booking-expiry.task.js'
+import { BookingReminderTask } from './tasks/booking-reminder.task.js'
 import { AvailabilityModule } from '../availability/availability.module.js'
 import { BookingRulesModule } from '../booking-rules/booking-rules.module.js'
 import { MembershipModule } from '../membership/membership.module.js'
+import { PricingModule } from '../pricing/pricing.module.js'
+import { EventBusModule } from '../event-bus/event-bus.module.js'
+import { RefundPoliciesRepository } from '../refund-policies/refund-policies.repository.js'
 
 @Module({
-  imports: [AvailabilityModule, BookingRulesModule, MembershipModule],
+  imports: [AvailabilityModule, BookingRulesModule, MembershipModule, PricingModule, EventBusModule],
   controllers: [BookingsController],
-  providers: [BookingsService, BookingsRepository, BookingExpiryTask],
+  providers: [BookingsService, BookingsRepository, BookingExpiryTask, BookingReminderTask, RefundPoliciesRepository],
 })
 export class BookingsModule {}

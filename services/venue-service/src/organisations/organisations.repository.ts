@@ -16,6 +16,12 @@ export class OrganisationsRepository {
     return this.prisma.read.organisation.findUnique({ where: { slug } })
   }
 
+  findFirst() {
+    return this.prisma.read.organisation.findFirst({
+      orderBy: [{ isPublished: 'desc' }, { createdAt: 'desc' }],
+    })
+  }
+
   findByCustomDomain(domain: string) {
     return this.prisma.read.organisation.findUnique({ where: { customDomain: domain } })
   }

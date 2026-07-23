@@ -75,6 +75,35 @@ export class AvailabilityRepository {
   }
 
   /**
+   * Checks whether any coaching session in the coaching schema occupies the
+   * same bookable unit during the requested window.
+   *
+   * This is a cross-schema read (booking-service DB user → coaching schema).
+   * coaching.lesson_sessions must have bookable_unit_id populated for a session
+   * to participate in conflict detection (sessions without a unit are ignored).
+   *
+   * Gap 1 fix: coaching sessions are now visible to the booking availability check.
+   */
+  async getCoachingSessionConflicts(
+    tenantId: string,
+    unitIds: string[],
+    startsAt: string,
+    endsAt: string,
+  ): Promise<{ id: string }[]> {
+    if (unitIds.length === 0) return []
+    return this.prisma.read.$queryRaw<{ id: string }[]>`
+      SELECT id
+      FROM coaching.lesson_sessions
+      WHERE tenant_id        = ${tenantId}::uuid
+        AND status          <> 'cancelled'
+        AND bookable_unit_id IS NOT NULL
+        AND bookable_unit_id = ANY(${unitIds}::uuid[])
+        AND starts_at        < ${endsAt}::timestamptz
+        AND ends_at          > ${startsAt}::timestamptz
+    `
+  }
+
+  /**
    * Loads ALL unit conflicts for a set of unit IDs in a SINGLE query.
    * Fixes the N+1: previously getDayAvailability called getConflictingUnits()
    * once per unit in a loop. Now it's O(1) regardless of unit count.
@@ -107,11 +136,20 @@ export class AvailabilityRepository {
       map.set(id, [id])
     }
 
-    // Add conflicts from the single query result
+    // Add conflicts from the single query result — both directions.
+    // The CASE-based SQL pivot only emits one row per conflict pair, so when
+    // both sides are in unitIds the parent never gets the child added to its
+    // list. Populating the reverse direction here fixes that.
     for (const row of rows) {
       const list = map.get(row.sourceUnitId)
       if (list && !list.includes(row.conflictingUnitId)) {
         list.push(row.conflictingUnitId)
+      }
+
+      // Reverse: if the conflicting unit is also tracked, add the source to it
+      const reverseList = map.get(row.conflictingUnitId)
+      if (reverseList && !reverseList.includes(row.sourceUnitId)) {
+        reverseList.push(row.sourceUnitId)
       }
     }
 

@@ -1,11 +1,24 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
 import { CustomersRepository } from './customers.repository.js'
 import type { CreateCustomerDto } from './dto/create-customer.dto.js'
 import type { UpdateCustomerDto } from './dto/update-customer.dto.js'
+import type { AppConfig } from '../config/configuration.js'
+
+const TENANT_HEADER = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
 
 @Injectable()
 export class CustomersService {
-  constructor(private readonly repo: CustomersRepository) {}
+  private readonly bookingServiceUrl: string
+  private readonly membershipServiceUrl: string
+
+  constructor(
+    private readonly repo: CustomersRepository,
+    private readonly config: ConfigService<AppConfig, true>,
+  ) {
+    this.bookingServiceUrl = config.get('bookingService', { infer: true }).url
+    this.membershipServiceUrl = config.get('membershipService', { infer: true }).url
+  }
 
   async list(tenantId: string, page: number, limit: number, search?: string, lifecycle?: string) {
     const { customers, total } = await this.repo.list(tenantId, page, limit, search, lifecycle)
@@ -65,5 +78,64 @@ export class CustomersService {
     if (!existing) throw new NotFoundException('Customer not found')
     await this.repo.update(tenantId, id, dto)
     return this.findById(tenantId, id)
+  }
+
+  async getFinancialProfile(tenantId: string, personId: string) {
+    const customer = await this.repo.findById(tenantId, personId)
+    if (!customer) throw new NotFoundException('Customer not found')
+
+    const headers = { 'x-tenant-id': tenantId, 'Content-Type': 'application/json' }
+
+    // Fetch booking stats for this customer (all statuses, no pagination needed for aggregation)
+    let lifetimeSpend = 0
+    let unpaidCount = 0
+    let bookingCount = 0
+    try {
+      const bRes = await fetch(
+        `${this.bookingServiceUrl}/v1/bookings?customerId=${personId}&limit=200`,
+        { headers },
+      )
+      if (bRes.ok) {
+        const bJson = await bRes.json() as { data?: { price?: number | null; paymentStatus?: string; status?: string }[] }
+        const bookings = bJson.data ?? []
+        bookingCount = bookings.filter((b) => b.status !== 'cancelled').length
+        for (const b of bookings) {
+          if (b.status === 'cancelled') continue
+          if (b.price != null) lifetimeSpend += Number(b.price)
+          if (b.paymentStatus === 'unpaid') unpaidCount++
+        }
+      }
+    } catch { /* non-fatal */ }
+
+    // Fetch active membership (if any)
+    let activeMembership: { planName: string; status: string; expiresAt?: string } | null = null
+    try {
+      const mRes = await fetch(
+        `${this.membershipServiceUrl}/v1/memberships?customerId=${personId}&status=active&limit=1`,
+        { headers },
+      )
+      if (mRes.ok) {
+        const mJson = await mRes.json() as { data?: { planName?: string; status?: string; expiresAt?: string }[] }
+        const first = mJson.data?.[0]
+        if (first) {
+          activeMembership = {
+            planName: first.planName ?? 'Unknown plan',
+            status: first.status ?? 'active',
+            expiresAt: first.expiresAt,
+          }
+        }
+      }
+    } catch { /* non-fatal */ }
+
+    return {
+      data: {
+        personId,
+        lifetimeSpend: Math.round(lifetimeSpend * 100) / 100,
+        currency: 'GBP',
+        bookingCount,
+        unpaidBookings: unpaidCount,
+        activeMembership,
+      },
+    }
   }
 }

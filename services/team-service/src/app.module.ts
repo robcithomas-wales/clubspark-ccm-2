@@ -11,6 +11,7 @@ import { AvailabilityModule } from './availability/availability.module.js'
 import { SelectionModule } from './selection/selection.module.js'
 import { ChargesModule } from './charges/charges.module.js'
 import { ReportingModule } from './reporting/reporting.module.js'
+import { OrderModule } from './order-client/order.module.js'
 import { TenantContextGuard } from './common/guards/tenant-context.guard.js'
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js'
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor.js'
@@ -20,6 +21,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor.js
     ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
     PrismaModule,
     HealthModule,
+    OrderModule,
     TeamsModule,
     RosterModule,
     FixturesModule,

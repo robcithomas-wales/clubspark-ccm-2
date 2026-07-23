@@ -1,5 +1,8 @@
-# Claude Code memory (machine-local)
-.claude/
+# Claude Code — shared team config is committed (CLAUDE.md, .claude/settings.json,
+# .claude/commands, .claude/agents). Only machine-local / secret bits are ignored.
+.claude/settings.local.json
+.claude/*.local.json
+.claude/local/
 
 # Dependencies
 node_modules/
@@ -8,6 +11,12 @@ node_modules/
 dist/
 .next/
 out/
+*.tsbuildinfo
+
+# Test artifacts
+test-results/
+playwright-report/
+.pytest_cache/
 
 # Environment files — never commit secrets
 .env

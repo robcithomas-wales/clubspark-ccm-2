@@ -1,4 +1,4 @@
-import { IsDateString, IsOptional, IsString, IsNotEmpty, IsIn, IsInt, Min } from 'class-validator'
+import { IsDateString, IsOptional, IsString, IsNotEmpty, IsIn, IsInt, IsNumber, Min, Max } from 'class-validator'
 import { PAYMENT_STATUSES } from '../../bookings/dto/update-payment-status.dto.js'
 
 export class CreateBookingSeriesDto {
@@ -51,4 +51,19 @@ export class CreateBookingSeriesDto {
   @IsInt()
   @Min(1)
   maxSessions?: number
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  pricePerSession?: number
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  discountPct?: number
+
+  @IsOptional()
+  @IsString()
+  currency?: string
 }

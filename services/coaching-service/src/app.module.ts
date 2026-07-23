@@ -11,16 +11,24 @@ import { CoachesModule } from './coaches/coaches.module.js'
 import { LessonTypesModule } from './lesson-types/lesson-types.module.js'
 import { AvailabilityModule } from './availability/availability.module.js'
 import { SessionsModule } from './sessions/sessions.module.js'
+import { OrderModule } from './order-client/order.module.js'
+import { ProgrammesModule } from './programmes/programmes.module.js'
+import { EnrolmentsModule } from './enrolments/enrolments.module.js'
+import { AttendanceModule } from './attendance/attendance.module.js'
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
     PrismaModule,
+    OrderModule,
     HealthModule,
     CoachesModule,
     LessonTypesModule,
     AvailabilityModule,
     SessionsModule,
+    ProgrammesModule,
+    EnrolmentsModule,
+    AttendanceModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: TenantContextGuard },

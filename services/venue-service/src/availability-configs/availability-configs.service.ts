@@ -63,8 +63,8 @@ function mergeConfigs(configs: RawConfig[], dayOfWeek: number) {
 export class AvailabilityConfigsService {
   constructor(private readonly repo: AvailabilityConfigsRepository) {}
 
-  async list(tenantId: string, scopeType?: string, scopeId?: string) {
-    const configs = await this.repo.findAll(tenantId, scopeType, scopeId)
+  async list(tenantId: string, scopeType?: string, scopeId?: string, seasonalScheduleId?: string) {
+    const configs = await this.repo.findAll(tenantId, scopeType, scopeId, seasonalScheduleId)
     return { data: configs }
   }
 

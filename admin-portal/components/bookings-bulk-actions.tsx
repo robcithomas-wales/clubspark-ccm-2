@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { CalendarDays, Clock3, ChevronRight, Trash2, Download } from "lucide-react"
+import { CalendarDays, Clock3, ChevronRight, Trash2, Download, Mail, X } from "lucide-react"
 
 function formatDate(value?: string | null) {
   if (!value) return "n/a"
@@ -100,6 +100,9 @@ export function BookingsBulkActions({
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [cancelling, setCancelling] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [emailOpen, setEmailOpen] = useState(false)
+  const [emailSubject, setEmailSubject] = useState("")
+  const [emailBody, setEmailBody] = useState("")
 
   const allCancellable = bookings.filter((b) => b.status !== "cancelled")
   const allSelected = allCancellable.length > 0 && allCancellable.every((b) => selected.has(b.id))
@@ -139,6 +142,22 @@ export function BookingsBulkActions({
     } finally {
       setCancelling(false)
     }
+  }
+
+  function getSelectedEmails() {
+    return bookings
+      .filter((b) => selected.has(b.id) && b.customerEmail)
+      .map((b) => b.customerEmail as string)
+      .filter((email, i, arr) => arr.indexOf(email) === i)
+  }
+
+  function handleEmailSend() {
+    const emails = getSelectedEmails()
+    const bcc = emails.join(",")
+    const subject = encodeURIComponent(emailSubject)
+    const body = encodeURIComponent(emailBody)
+    window.location.href = `mailto:?bcc=${encodeURIComponent(bcc)}&subject=${subject}&body=${body}`
+    setEmailOpen(false)
   }
 
   function handleExport() {
@@ -192,6 +211,13 @@ export function BookingsBulkActions({
             <Download className="h-3.5 w-3.5" />
             Export selected
           </button>
+          <button
+            onClick={() => { setEmailSubject(""); setEmailBody(""); setEmailOpen(true) }}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+          >
+            <Mail className="h-3.5 w-3.5" />
+            Email selected
+          </button>
           {error && <span className="text-xs text-red-600">{error}</span>}
         </div>
       )}
@@ -230,6 +256,85 @@ export function BookingsBulkActions({
           <div className="text-center">Payment</div>
         </div>
       </div>
+
+      {emailOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <h2 className="text-base font-semibold text-slate-900">Email customers</h2>
+              <button
+                type="button"
+                onClick={() => setEmailOpen(false)}
+                className="text-slate-400 hover:text-slate-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-4 px-5 py-4">
+              <div>
+                <div className="mb-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                  Recipients ({getSelectedEmails().length})
+                </div>
+                <div className="flex flex-wrap gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 min-h-[40px]">
+                  {getSelectedEmails().length === 0 ? (
+                    <span className="text-xs text-slate-400">No email addresses found for selected bookings</span>
+                  ) : (
+                    getSelectedEmails().map((email) => (
+                      <span key={email} className="inline-flex rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+                        {email}
+                      </span>
+                    ))
+                  )}
+                </div>
+              </div>
+              <div>
+                <label htmlFor="emailSubject" className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                  Subject
+                </label>
+                <input
+                  id="emailSubject"
+                  type="text"
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                  placeholder="e.g. Important update about your booking"
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none"
+                />
+              </div>
+              <div>
+                <label htmlFor="emailBody" className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                  Message
+                </label>
+                <textarea
+                  id="emailBody"
+                  value={emailBody}
+                  onChange={(e) => setEmailBody(e.target.value)}
+                  rows={5}
+                  placeholder="Type your message here…"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setEmailOpen(false)}
+                className="inline-flex h-9 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleEmailSend}
+                disabled={getSelectedEmails().length === 0}
+                className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#1832A8] px-4 text-sm font-semibold text-white hover:bg-[#142a8c] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Mail className="h-4 w-4" />
+                Open in email client
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="divide-y divide-slate-200">
         {bookings.map((booking: any) => {

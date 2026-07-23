@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest'
 import supertest from 'supertest'
 import { getApp, closeApp } from './helpers/app.js'
-import { prisma, seedFixtures, cleanBookings, cleanBookingRules, teardownFixtures, checkDbAvailable } from './helpers/db.js'
+import { prisma, seedFixtures, cleanBookings, cleanBookingRules, cleanPricingRules, teardownFixtures, checkDbAvailable } from './helpers/db.js'
 import {
   TEST_TENANT_ID,
   TEST_ORG_ID,
@@ -495,6 +495,115 @@ describe.runIf(DB_AVAILABLE)('Bookings — integration', () => {
 
     expect(res.status).toBe(409)
   })
+
+  // ── Payment splits ────────────────────────────────────────────────────────
+
+  it('lists payment splits for a booking — empty by default', async () => {
+    const created = await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
+    const id = created.body.data.id
+
+    const res = await request
+      .get(`/bookings/${id}/payment-splits`)
+      .set(HEADERS)
+
+    expect(res.status).toBe(200)
+    expect(Array.isArray(res.body.data)).toBe(true)
+    expect(res.body.data).toHaveLength(0)
+  })
+
+  it('adds a payment split and returns 201', async () => {
+    const created = await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
+    const id = created.body.data.id
+
+    const res = await request
+      .post(`/bookings/${id}/payment-splits`)
+      .set(JSON_HEADERS)
+      .send({ payerName: 'Alice Smith', amountDue: 25.00 })
+
+    expect(res.status).toBe(201)
+    expect(res.body.data.payerName).toBe('Alice Smith')
+    expect(parseFloat(res.body.data.amountDue)).toBe(25.00)
+    expect(res.body.data.paymentStatus).toBe('unpaid')
+  })
+
+  it('lists multiple payment splits after adding them', async () => {
+    const created = await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
+    const id = created.body.data.id
+
+    await request.post(`/bookings/${id}/payment-splits`).set(JSON_HEADERS)
+      .send({ payerName: 'Alice', amountDue: 20.00 })
+    await request.post(`/bookings/${id}/payment-splits`).set(JSON_HEADERS)
+      .send({ payerName: 'Bob', amountDue: 30.00 })
+
+    const res = await request.get(`/bookings/${id}/payment-splits`).set(HEADERS)
+
+    expect(res.status).toBe(200)
+    expect(res.body.data).toHaveLength(2)
+    const names = res.body.data.map((s: any) => s.payerName)
+    expect(names).toContain('Alice')
+    expect(names).toContain('Bob')
+  })
+
+  it('adds a split with status=paid', async () => {
+    const created = await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
+    const id = created.body.data.id
+
+    const res = await request
+      .post(`/bookings/${id}/payment-splits`)
+      .set(JSON_HEADERS)
+      .send({ payerName: 'Carol', amountDue: 50.00 })
+
+    expect(res.status).toBe(201)
+    expect(res.body.data.paymentStatus).toBe('unpaid')
+  })
+
+  it('removes a payment split and returns 204', async () => {
+    const created = await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
+    const id = created.body.data.id
+
+    const split = await request
+      .post(`/bookings/${id}/payment-splits`)
+      .set(JSON_HEADERS)
+      .send({ payerName: 'Dave', amountDue: 15.00 })
+    const splitId = split.body.data.id
+
+    const del = await request
+      .delete(`/bookings/${id}/payment-splits/${splitId}`)
+      .set(HEADERS)
+
+    expect(del.status).toBe(204)
+
+    const list = await request.get(`/bookings/${id}/payment-splits`).set(HEADERS)
+    expect(list.body.data).toHaveLength(0)
+  })
+
+  it('returns 404 when listing splits for a non-existent booking', async () => {
+    const res = await request
+      .get(`/bookings/${TEST_NONEXISTENT_ID}/payment-splits`)
+      .set(HEADERS)
+
+    expect(res.status).toBe(404)
+  })
+
+  it('returns 404 when adding a split to a non-existent booking', async () => {
+    const res = await request
+      .post(`/bookings/${TEST_NONEXISTENT_ID}/payment-splits`)
+      .set(JSON_HEADERS)
+      .send({ payerName: 'Ghost', amountDue: 10.00 })
+
+    expect(res.status).toBe(404)
+  })
+
+  it('returns 404 when removing a non-existent split', async () => {
+    const created = await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
+    const id = created.body.data.id
+
+    const res = await request
+      .delete(`/bookings/${id}/payment-splits/${TEST_NONEXISTENT_ID}`)
+      .set(HEADERS)
+
+    expect(res.status).toBe(404)
+  })
 })
 
 // ─── Booking rules enforcement ───────────────────────────────────────────────
@@ -646,5 +755,271 @@ describe.runIf(DB_AVAILABLE)('Booking rules — enforcement', () => {
       .send(bookingPayload({ bookingSource: 'online' }))
 
     expect(res.status).toBe(403)
+  })
+})
+
+// ─── Pricing engine integration ───────────────────────────────────────────────
+//
+// Gap 2: verify that pricing rules are wired into booking creation.
+// A rule scoped to 'organisation' (all bookings for the tenant) at £20/hr
+// should produce price = 20 on a 1-hour booking.
+
+describe.runIf(DB_AVAILABLE)('Pricing engine — wired into booking creation', () => {
+  let request: ReturnType<typeof supertest>
+
+  beforeAll(async () => {
+    await seedFixtures()
+    const app = await getApp()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    request = supertest(app.getHttpServer() as any)
+  })
+
+  afterEach(async () => {
+    await cleanBookings()
+    await cleanPricingRules()
+  })
+
+  afterAll(async () => {
+    await teardownFixtures()
+    await prisma.$disconnect()
+    await closeApp()
+  })
+
+  it('resolves org-level pricing rule and sets price on the booking', async () => {
+    // Insert a £20/hr organisation-scoped pricing rule (all days, all times)
+    await prisma.$executeRaw`
+      INSERT INTO booking.pricing_rules
+        (tenant_id, name, scope_type, scope_id, days_of_week, rate_per_hour, currency, priority, is_active)
+      VALUES
+        (${TEST_TENANT_ID}::uuid, 'Standard Rate', 'organisation', NULL, '{}', 20, 'GBP', 0, true)
+    `
+
+    // SLOT_START → SLOT_END = 10:00–11:00 = 1 hour → expected price = £20
+    const res = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload())
+
+    expect(res.status).toBe(201)
+    expect(res.body.data.price).toBeDefined()
+    expect(parseFloat(String(res.body.data.price))).toBe(20)
+    expect(res.body.data.currency).toBe('GBP')
+  })
+
+  it('resolves a venue-scoped rule and overrides the org-level rule', async () => {
+    // Org-level at £20/hr
+    await prisma.$executeRaw`
+      INSERT INTO booking.pricing_rules
+        (tenant_id, name, scope_type, scope_id, days_of_week, rate_per_hour, currency, priority, is_active)
+      VALUES
+        (${TEST_TENANT_ID}::uuid, 'Org Rate', 'organisation', NULL, '{}', 20, 'GBP', 0, true)
+    `
+    // Venue-scoped at £30/hr (more specific → should win)
+    await prisma.$executeRaw`
+      INSERT INTO booking.pricing_rules
+        (tenant_id, name, scope_type, scope_id, days_of_week, rate_per_hour, currency, priority, is_active)
+      VALUES
+        (${TEST_TENANT_ID}::uuid, 'Venue Rate', 'venue', ${TEST_VENUE_ID}::uuid, '{}', 30, 'GBP', 0, true)
+    `
+
+    const res = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload())
+
+    expect(res.status).toBe(201)
+    expect(parseFloat(String(res.body.data.price))).toBe(30)
+  })
+
+  it('resolves a resource-scoped rule (highest specificity at resource level)', async () => {
+    // Resource-scoped at £40/hr
+    await prisma.$executeRaw`
+      INSERT INTO booking.pricing_rules
+        (tenant_id, name, scope_type, scope_id, days_of_week, rate_per_hour, currency, priority, is_active)
+      VALUES
+        (${TEST_TENANT_ID}::uuid, 'Court Rate', 'resource', ${TEST_RESOURCE_ID}::uuid, '{}', 40, 'GBP', 0, true)
+    `
+
+    const res = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload())
+
+    expect(res.status).toBe(201)
+    expect(parseFloat(String(res.body.data.price))).toBe(40)
+  })
+
+  it('returns price=null when no pricing rule exists (manual price required)', async () => {
+    // No rule inserted — price field should remain null unless caller passes it explicitly
+    const res = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload())
+
+    expect(res.status).toBe(201)
+    expect(res.body.data.price).toBeNull()
+  })
+
+  it('caller-provided price is overridden by the pricing engine when a rule matches', async () => {
+    await prisma.$executeRaw`
+      INSERT INTO booking.pricing_rules
+        (tenant_id, name, scope_type, scope_id, days_of_week, rate_per_hour, currency, priority, is_active)
+      VALUES
+        (${TEST_TENANT_ID}::uuid, 'Fixed Rate', 'organisation', NULL, '{}', 20, 'GBP', 0, true)
+    `
+
+    // Caller passes price: 99 — the engine should override with 20
+    const res = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload({ price: 99 }))
+
+    expect(res.status).toBe(201)
+    expect(parseFloat(String(res.body.data.price))).toBe(20)
+  })
+})
+
+// ─── Coaching session conflict detection ─────────────────────────────────────
+//
+// Gap 1: coaching sessions with a bookable_unit_id now block the same time slot
+// from being booked as a venue booking. The check is a cross-schema read from
+// coaching.lesson_sessions inside the booking-service's availability repository.
+
+describe.runIf(DB_AVAILABLE)('Coaching session conflict detection', () => {
+  let request: ReturnType<typeof supertest>
+
+  beforeAll(async () => {
+    await seedFixtures()
+    const app = await getApp()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    request = supertest(app.getHttpServer() as any)
+  })
+
+  afterEach(async () => {
+    await cleanBookings()
+    // Remove any coaching sessions inserted by tests
+    await prisma.$executeRaw`
+      DELETE FROM coaching.lesson_sessions
+      WHERE tenant_id = ${TEST_TENANT_ID}::uuid
+    `
+  })
+
+  afterAll(async () => {
+    await teardownFixtures()
+    await prisma.$disconnect()
+    await closeApp()
+  })
+
+  /**
+   * Helper — inserts a coaching.lesson_session with a bookable_unit_id so that
+   * the booking-service conflict check can see it. Requires a coach + lesson type
+   * to exist; we insert stubs with ON CONFLICT DO NOTHING.
+   */
+  async function seedCoachingSession(
+    bookableUnitId: string,
+    startsAt: string,
+    endsAt: string,
+    status = 'scheduled',
+  ) {
+    // Seed a stub coach
+    const coachId = '20000000-0000-4000-8000-000000000001'
+    const lessonTypeId = '20000000-0000-4000-8000-000000000002'
+
+    await prisma.$executeRaw`
+      INSERT INTO coaching.coaches (id, tenant_id, display_name)
+      VALUES (${coachId}::uuid, ${TEST_TENANT_ID}::uuid, 'Test Coach')
+      ON CONFLICT (id) DO NOTHING
+    `
+    await prisma.$executeRaw`
+      INSERT INTO coaching.lesson_types (id, tenant_id, name, duration_minutes)
+      VALUES (${lessonTypeId}::uuid, ${TEST_TENANT_ID}::uuid, 'Test Lesson', 60)
+      ON CONFLICT (id) DO NOTHING
+    `
+    await prisma.$executeRaw`
+      INSERT INTO coaching.lesson_sessions
+        (tenant_id, coach_id, lesson_type_id, bookable_unit_id, starts_at, ends_at, status)
+      VALUES
+        (${TEST_TENANT_ID}::uuid, ${coachId}::uuid, ${lessonTypeId}::uuid,
+         ${bookableUnitId}::uuid, ${startsAt}::timestamptz, ${endsAt}::timestamptz, ${status})
+    `
+  }
+
+  it('returns 409 when a coaching session occupies the same unit and slot', async () => {
+    await seedCoachingSession(TEST_UNIT_ID, SLOT_START, SLOT_END)
+
+    const res = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload())
+
+    expect(res.status).toBe(409)
+    expect(res.body.message).toMatch(/coaching session/i)
+  })
+
+  it('allows booking when the coaching session is on a different unit', async () => {
+    // Use a different (non-existent) unit ID — the session won't conflict with TEST_UNIT_ID
+    const otherUnitId = TEST_NONEXISTENT_ID
+    await seedCoachingSession(otherUnitId, SLOT_START, SLOT_END)
+
+    const res = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload())
+
+    expect(res.status).toBe(201)
+  })
+
+  it('allows booking when the coaching session is in a non-overlapping time slot', async () => {
+    // Coaching session is adjacent — starts when our booking ends
+    await seedCoachingSession(TEST_UNIT_ID, SLOT_END, SLOT_ADJACENT_END)
+
+    const res = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload())
+
+    expect(res.status).toBe(201)
+  })
+
+  it('allows booking when the coaching session is cancelled', async () => {
+    await seedCoachingSession(TEST_UNIT_ID, SLOT_START, SLOT_END, 'cancelled')
+
+    const res = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload())
+
+    expect(res.status).toBe(201)
+  })
+
+  it('allows booking when the coaching session has no bookable_unit_id', async () => {
+    // Coaching sessions without a unit are invisible to the conflict check
+    const coachId = '20000000-0000-4000-8000-000000000001'
+    const lessonTypeId = '20000000-0000-4000-8000-000000000002'
+
+    await prisma.$executeRaw`
+      INSERT INTO coaching.coaches (id, tenant_id, display_name)
+      VALUES (${coachId}::uuid, ${TEST_TENANT_ID}::uuid, 'Test Coach')
+      ON CONFLICT (id) DO NOTHING
+    `
+    await prisma.$executeRaw`
+      INSERT INTO coaching.lesson_types (id, tenant_id, name, duration_minutes)
+      VALUES (${lessonTypeId}::uuid, ${TEST_TENANT_ID}::uuid, 'Test Lesson', 60)
+      ON CONFLICT (id) DO NOTHING
+    `
+    await prisma.$executeRaw`
+      INSERT INTO coaching.lesson_sessions
+        (tenant_id, coach_id, lesson_type_id, starts_at, ends_at, status)
+      VALUES
+        (${TEST_TENANT_ID}::uuid, ${coachId}::uuid, ${lessonTypeId}::uuid,
+         ${SLOT_START}::timestamptz, ${SLOT_END}::timestamptz, 'scheduled')
+    `
+
+    const res = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload())
+
+    expect(res.status).toBe(201)
   })
 })

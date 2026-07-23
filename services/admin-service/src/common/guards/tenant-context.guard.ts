@@ -9,8 +9,8 @@ import type { FastifyRequest } from 'fastify'
 
 export const SKIP_TENANT_KEY = 'skipTenant'
 
-/** Paths that bypass tenant auth entirely (e.g. health checks). */
-const PUBLIC_PREFIXES = ['/health']
+/** Paths that bypass tenant auth entirely — health checks and internal staff routes. */
+const PUBLIC_PREFIXES = ['/health', '/v1/internal/', '/internal/']
 
 let jwks: ReturnType<typeof createRemoteJWKSet> | null = null
 function getJwks() {

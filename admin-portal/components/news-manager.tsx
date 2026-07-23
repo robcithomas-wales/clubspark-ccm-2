@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, Pencil, Trash2, X, Eye, EyeOff } from "lucide-react"
+import { RichTextEditor } from "@/components/rich-text-editor"
 
 type NewsPost = {
   id: string
@@ -244,11 +245,11 @@ export function NewsManager({ initial }: { initial: NewsPost[] }) {
               </Field>
 
               <Field label="Body">
-                <textarea
-                  className={`${input} min-h-[200px] resize-y`}
+                <RichTextEditor
                   value={form.body}
-                  onChange={(e) => set("body", e.target.value)}
+                  onChange={(html) => set("body", html)}
                   placeholder="Write your news post here..."
+                  minHeight="200px"
                 />
               </Field>
 

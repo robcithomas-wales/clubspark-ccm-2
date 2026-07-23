@@ -11,6 +11,21 @@ async function getAuthHeaders() {
   }
 }
 
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params
+  const response = await fetch(`http://127.0.0.1:4003/resources/${id}`, {
+    headers: await getAuthHeaders(),
+    cache: "no-store",
+  })
+  const text = await response.text()
+  let data: any = null
+  try { data = text ? JSON.parse(text) : null } catch { data = { error: text } }
+  return NextResponse.json(data, { status: response.status })
+}
+
 export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }

@@ -1,0 +1,69 @@
+# Agentic Engineering — How We Work
+
+This repo is set up to be driven by **Claude Code** as a shared, version-controlled
+capability. Rather than each engineer maintaining a private agent rig, the agent's
+knowledge of our platform and our standard workflows lives **in the repo** and is loaded
+automatically for everyone. Improve it via PR, the same as any other code.
+
+## Why this approach
+
+We deliberately do **not** run a bespoke agent framework (the old `agent-starter/` Python
+scaffold has been retired). Claude Code already provides planning, tool execution,
+permissioning, human-in-the-loop approval, and cost control. Our job is to give it
+**good, shared context** — not to rebuild the plumbing.
+
+## What's committed (and why it matters)
+
+| File / dir | Purpose |
+|---|---|
+| `CLAUDE.md` | Loaded every session. The platform map: services, ports, commands, conventions. Single source of truth. |
+| `.claude/settings.json` | Shared team settings (permissions, allowed tools). |
+| `.claude/commands/*.md` | Slash commands for our recurring workflows (`/new-endpoint`, `/service-test`, `/safe-push`). |
+| `.claude/agents/*.md` | Reusable review roles (e.g. `service-reviewer`). |
+| `scripts/agent-worktree.sh` | Spin up isolated worktrees for parallel work. |
+
+**Machine-local / secret** files stay out of git: `.claude/settings.local.json`,
+`.claude/*.local.json`, `.claude/local/`, and all `.env*` (except `.env.example`).
+
+## Getting started (per engineer)
+
+1. Install Claude Code and open the repo. `CLAUDE.md` and `.claude/` load automatically.
+2. Put any personal permission overrides in `.claude/settings.local.json` (git-ignored).
+3. Authorize the MCP connectors you need (Azure, GitHub, Slack, etc.) via your
+   claude.ai connector settings or `claude mcp` — these are per-user, not committed.
+4. Try a workflow: `/service-test booking-service` or `/new-endpoint booking-service ...`.
+
+## Working on the same solution at the same time
+
+The rule: **one working copy per active agent session.** Two agents editing the same
+checkout will trip over each other. Use git worktrees:
+
+```bash
+# create an isolated copy on a new branch
+./scripts/agent-worktree.sh feature/my-thing
+
+cd ../worktrees/feature/my-thing
+npm install                 # per-worktree deps + Prisma client
+claude                      # start the session here
+```
+
+Each worktree is a full copy on its own branch that still picks up the committed
+`CLAUDE.md` / `.claude` config. List them with `./scripts/agent-worktree.sh --list`;
+remove with `--remove <branch>`. Merge back through normal PRs.
+
+Two engineers can each run several worktrees; nothing is shared except the git history
+and the committed agent config — which is exactly what we want everyone to share.
+
+## Keeping the shared config healthy
+
+- If you change how a service runs, a port, or a convention → update `CLAUDE.md` in the
+  same PR.
+- If you find yourself pasting the same instructions to the agent repeatedly → turn it
+  into a `.claude/commands/` slash command.
+- If you want a consistent review lens → add/adjust a `.claude/agents/` role.
+- Run the `service-reviewer` agent before opening a PR that touches `services/*`.
+
+## Known issues to be aware of
+
+- **Port collision:** `entitlement-service` and `integration-service` both default to
+  `4013`. Set `PORT` explicitly for one when running both locally.

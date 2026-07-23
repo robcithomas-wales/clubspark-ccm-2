@@ -65,4 +65,8 @@ export class CreateBookingDto {
   @IsOptional()
   @IsString()
   lessonTypeId?: string
+
+  @IsOptional()
+  @IsString()
+  bookedForPersonId?: string
 }

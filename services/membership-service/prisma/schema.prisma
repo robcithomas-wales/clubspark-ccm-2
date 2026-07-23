@@ -106,6 +106,9 @@ model Membership {
   paymentMethod     String?   @map("payment_method")
   paymentAmount     Decimal?  @map("payment_amount") @db.Decimal(10, 2)
 
+  // Renewal reminder — stamped when the reminder event is published to prevent duplicates
+  renewalReminderSentAt DateTime? @map("renewal_reminder_sent_at")
+
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
 

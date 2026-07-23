@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { NextRequest } from 'next/server'
 
 const INTEGRATION_SERVICE =
-  process.env.NEXT_PUBLIC_INTEGRATION_SERVICE_URL || 'http://127.0.0.1:4013'
+  process.env.NEXT_PUBLIC_INTEGRATION_SERVICE_URL || 'http://127.0.0.1:4016'
 
 async function getAuthHeaders() {
   const supabase = await createClient()

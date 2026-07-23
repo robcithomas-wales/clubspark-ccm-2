@@ -45,7 +45,7 @@ export default function NewRankingConfigPage() {
   }
 
   return (
-    <PortalLayout title="New Ranking Config" description="Set up a new ranking system for a sport.">
+    <PortalLayout title="New Rating Config" description="Set up a new rating system for a sport.">
       <div className="mx-auto max-w-lg">
         <form onSubmit={handleSubmit} className="space-y-6 rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
 

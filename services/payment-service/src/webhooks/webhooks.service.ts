@@ -3,6 +3,7 @@ import { GatewayFactory } from '../gateways/gateway.factory.js'
 import { ProviderConfigsRepository } from '../provider-configs/provider-configs.repository.js'
 import { PaymentsRepository } from '../payments/payments.repository.js'
 import { PrismaService } from '../prisma/prisma.service.js'
+import { EventBusService } from '../event-bus/event-bus.service.js'
 
 @Injectable()
 export class WebhooksService {
@@ -13,6 +14,7 @@ export class WebhooksService {
     private readonly providerConfigsRepo: ProviderConfigsRepository,
     private readonly paymentsRepo: PaymentsRepository,
     private readonly gatewayFactory: GatewayFactory,
+    private readonly eventBus: EventBusService,
   ) {}
 
   async handleStripe(tenantId: string, rawBody: Buffer, signature: string): Promise<void> {
@@ -102,20 +104,52 @@ export class WebhooksService {
       case 'payment.succeeded':
         await this.paymentsRepo.updateStatus(payment.id, 'succeeded')
         this.logger.log(`Payment ${payment.id} succeeded`)
-        // TODO: emit payment.succeeded event when Redis/Service Bus is available
+        // TODO: populate personEmail + personFirstName from people-service lookup
+        void this.eventBus.publish({
+          type: 'payment.succeeded',
+          tenantId: payment.tenantId,
+          occurredAt: new Date().toISOString(),
+          paymentId: payment.id,
+          personId: payment.customerId ?? '',
+          personEmail: '',      // TODO: fetch from people-service
+          personFirstName: '',
+          amount: Number(payment.amount ?? 0),
+          currency: payment.currency ?? 'GBP',
+          description: 'Payment',
+        })
         break
 
       case 'payment.failed':
         await this.paymentsRepo.updateStatus(payment.id, 'failed')
         this.logger.log(`Payment ${payment.id} failed`)
-        // TODO: emit payment.failed event
+        void this.eventBus.publish({
+          type: 'payment.failed',
+          tenantId: payment.tenantId,
+          occurredAt: new Date().toISOString(),
+          paymentId: payment.id,
+          personId: payment.customerId ?? '',
+          personEmail: '',      // TODO: fetch from people-service
+          personFirstName: '',
+          amount: Number(payment.amount ?? 0),
+          currency: payment.currency ?? 'GBP',
+          description: 'Payment',
+        })
         break
 
       case 'payment.refunded':
-        // Refund record was already created by the refund endpoint.
-        // Update its status here if it's still pending.
         this.logger.log(`Refund confirmed for payment ${payment.id}`)
-        // TODO: emit payment.refunded event
+        void this.eventBus.publish({
+          type: 'payment.refund_issued',
+          tenantId: payment.tenantId,
+          occurredAt: new Date().toISOString(),
+          paymentId: payment.id,
+          personId: payment.customerId ?? '',
+          personEmail: '',      // TODO: fetch from people-service
+          personFirstName: '',
+          amount: Number(payment.amount ?? 0),
+          currency: payment.currency ?? 'GBP',
+          description: 'Refund',
+        })
         break
     }
   }

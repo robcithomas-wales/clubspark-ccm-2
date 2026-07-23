@@ -9,16 +9,26 @@ import {
   HttpStatus,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common'
 import { ApiTags, ApiSecurity } from '@nestjs/swagger'
 import { IsOptional, IsBoolean, IsString, IsNotEmpty, IsEmail } from 'class-validator'
+import { randomUUID } from 'node:crypto'
 import { SetMetadata } from '@nestjs/common'
 import { VenuesService } from './venues.service.js'
 import { TenantCtx, type TenantContext } from '../common/decorators/tenant-context.decorator.js'
 import { SKIP_TENANT_KEY } from '../common/guards/tenant-context.guard.js'
+import { isFeatureBlockedError } from '../common/entitlement.js'
 
 // ─── Inline decorator so we don't need a separate file ───────────────────────
 const SkipTenant = () => SetMetadata(SKIP_TENANT_KEY, true)
+
+class CreateVenueDto {
+  @IsString() @IsNotEmpty() name!: string
+  @IsOptional() @IsString() city?: string
+  @IsOptional() @IsString() country?: string
+  @IsOptional() @IsString() timezone?: string
+}
 
 class UpsertVenueSettingsDto {
   @IsOptional() @IsBoolean() openBookings?: boolean
@@ -41,6 +51,33 @@ class CustomerRegisterDto {
 @Controller('venues')
 export class VenuesController {
   constructor(private readonly service: VenuesService) {}
+
+  @Post()
+  @HttpCode(HttpStatus.CREATED)
+  async create(@TenantCtx() ctx: TenantContext, @Body() dto: CreateVenueDto) {
+    try {
+      const venue = await this.service.createVenue({
+        id: randomUUID(),
+        tenantId: ctx.tenantId,
+        organisationId: ctx.organisationId ?? null,
+        name: dto.name,
+        city: dto.city ?? null,
+        country: dto.country ?? 'GB',
+        timezone: dto.timezone ?? 'Europe/London',
+      })
+      return { data: venue }
+    } catch (e) {
+      if (isFeatureBlockedError(e)) {
+        throw new ForbiddenException({
+          code: 'FEATURE_BLOCKED',
+          feature: e.feature,
+          upgradeRequired: e.upgradeRequired,
+          message: `Your plan does not include the '${e.feature}' feature. Upgrade to ${e.upgradeRequired ?? 'a higher plan'} to add multiple venues.`,
+        })
+      }
+      throw e
+    }
+  }
 
   @Get()
   async list(@TenantCtx() ctx: TenantContext) {

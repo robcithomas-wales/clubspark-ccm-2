@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, Trash2 } from "lucide-react"
+import { RichTextEditor } from "@/components/rich-text-editor"
 
 type HomePageContent = {
   heroImageUrl: string
@@ -186,11 +187,11 @@ export function HomePageEditor({ initial }: { initial: any }) {
           />
         </Field>
         <Field label="Body text">
-          <textarea
-            className={`${input} min-h-[120px] resize-y`}
+          <RichTextEditor
             value={form.introText}
-            onChange={(e) => set("introText", e.target.value)}
+            onChange={(html) => set("introText", html)}
             placeholder="Tell visitors a bit more about your club, facilities and what makes you unique..."
+            minHeight="120px"
           />
         </Field>
       </Section>

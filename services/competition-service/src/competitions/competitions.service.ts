@@ -60,23 +60,10 @@ export class CompetitionsService {
     })
   }
 
-  async submitForApproval(tenantId: string, id: string, actorId: string | undefined) {
+  async publish(tenantId: string, id: string, actorId: string | undefined) {
     const existing = await this.repo.findById(tenantId, id)
     if (!existing) throw new NotFoundException('Competition not found')
-    if (existing.status !== 'DRAFT') throw new BadRequestException('Only DRAFT competitions can be submitted for approval')
-    const c = await this.repo.update(tenantId, id, { status: 'AWAITING_APPROVAL' } as any)
-    await this.audit.log({
-      tenantId, entityType: 'competition', entityId: id,
-      action: 'submitted_for_approval', actorId,
-      before: { status: 'DRAFT' }, after: { status: 'AWAITING_APPROVAL' },
-    })
-    return { data: c }
-  }
-
-  async approve(tenantId: string, id: string, actorId: string | undefined) {
-    const existing = await this.repo.findById(tenantId, id)
-    if (!existing) throw new NotFoundException('Competition not found')
-    if (existing.status !== 'AWAITING_APPROVAL') throw new BadRequestException('Competition is not awaiting approval')
+    if (existing.status !== 'DRAFT') throw new BadRequestException('Only DRAFT competitions can be published')
     const c = await this.repo.update(tenantId, id, {
       status: 'REGISTRATION_OPEN',
       approvedBy: actorId,
@@ -84,26 +71,8 @@ export class CompetitionsService {
     } as any)
     await this.audit.log({
       tenantId, entityType: 'competition', entityId: id,
-      action: 'approved', actorId,
-      before: { status: 'AWAITING_APPROVAL' }, after: { status: 'REGISTRATION_OPEN' },
-    })
-    return { data: c }
-  }
-
-  async reject(tenantId: string, id: string, actorId: string | undefined, reason: string) {
-    const existing = await this.repo.findById(tenantId, id)
-    if (!existing) throw new NotFoundException('Competition not found')
-    if (existing.status !== 'AWAITING_APPROVAL') throw new BadRequestException('Competition is not awaiting approval')
-    const c = await this.repo.update(tenantId, id, {
-      status: 'DRAFT',
-      rejectedBy: actorId,
-      rejectedAt: new Date().toISOString(),
-      rejectionReason: reason,
-    } as any)
-    await this.audit.log({
-      tenantId, entityType: 'competition', entityId: id,
-      action: 'rejected', actorId,
-      before: { status: 'AWAITING_APPROVAL' }, after: { status: 'DRAFT', reason },
+      action: 'published', actorId,
+      before: { status: 'DRAFT' }, after: { status: 'REGISTRATION_OPEN' },
     })
     return { data: c }
   }

@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Patch,
   Param,
   Body,
@@ -13,6 +14,8 @@ import { ApiTags, ApiSecurity, ApiQuery } from '@nestjs/swagger'
 import { BookingsService } from './bookings.service.js'
 import { CreateBookingDto } from './dto/create-booking.dto.js'
 import { CreateBookingAddOnDto } from './dto/create-booking-add-on.dto.js'
+import { CreateBookingParticipantDto } from './dto/create-booking-participant.dto.js'
+import { CreatePaymentSplitDto } from './dto/create-payment-split.dto.js'
 import { UpdatePaymentStatusDto } from './dto/update-payment-status.dto.js'
 import { UpdateBookingDto } from './dto/update-booking.dto.js'
 import { ApproveBookingDto, RejectBookingDto } from './dto/approve-booking.dto.js'
@@ -189,5 +192,63 @@ export class BookingsController {
   ) {
     const addOn = await this.service.createAddOn(ctx, id, dto)
     return { data: addOn }
+  }
+
+  // ─── Participants ────────────────────────────────────────────────────────────
+
+  @Get(':id/participants')
+  async listParticipants(@Param('id') id: string, @TenantCtx() ctx: TenantContext) {
+    const data = await this.service.listParticipants(ctx, id)
+    return { data }
+  }
+
+  @Post(':id/participants')
+  @HttpCode(HttpStatus.CREATED)
+  async addParticipant(
+    @Param('id') id: string,
+    @Body() dto: CreateBookingParticipantDto,
+    @TenantCtx() ctx: TenantContext,
+  ) {
+    const data = await this.service.addParticipant(ctx, id, dto)
+    return { data }
+  }
+
+  @Delete(':id/participants/:participantId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async removeParticipant(
+    @Param('id') id: string,
+    @Param('participantId') participantId: string,
+    @TenantCtx() ctx: TenantContext,
+  ) {
+    await this.service.removeParticipant(ctx, id, participantId)
+  }
+
+  // ─── Payment splits ──────────────────────────────────────────────────────────
+
+  @Get(':id/payment-splits')
+  async listPaymentSplits(@Param('id') id: string, @TenantCtx() ctx: TenantContext) {
+    const data = await this.service.listPaymentSplits(ctx, id)
+    return { data }
+  }
+
+  @Post(':id/payment-splits')
+  @HttpCode(HttpStatus.CREATED)
+  async addPaymentSplit(
+    @Param('id') id: string,
+    @Body() dto: CreatePaymentSplitDto,
+    @TenantCtx() ctx: TenantContext,
+  ) {
+    const data = await this.service.addPaymentSplit(ctx, id, dto)
+    return { data }
+  }
+
+  @Delete(':id/payment-splits/:splitId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async removePaymentSplit(
+    @Param('id') id: string,
+    @Param('splitId') splitId: string,
+    @TenantCtx() ctx: TenantContext,
+  ) {
+    await this.service.removePaymentSplit(ctx, id, splitId)
   }
 }

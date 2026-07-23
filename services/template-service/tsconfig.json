@@ -6,10 +6,10 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "baseUrl": "./src",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
     "paths": {
-      "@/*": ["./*"],
-      "experimentalDecorators": true,
-      "emitDecoratorMetadata": true
+      "@/*": ["./*"]
     }
   },
   "include": ["src/**/*"],

@@ -12,17 +12,27 @@ import { BookingsModule } from './bookings/bookings.module.js'
 import { AvailabilityModule } from './availability/availability.module.js'
 import { BookingSeriesModule } from './booking-series/booking-series.module.js'
 import { BookingRulesModule } from './booking-rules/booking-rules.module.js'
+import { PricingModule } from './pricing/pricing.module.js'
+import { SessionsModule } from './sessions/sessions.module.js'
+import { EventBusModule } from './event-bus/event-bus.module.js'
+import { RefundPoliciesModule } from './refund-policies/refund-policies.module.js'
+import { OrderModule } from './order-client/order.module.js'
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
     ScheduleModule.forRoot(),
     PrismaModule,
+    EventBusModule,
     HealthModule,
+    OrderModule,
     BookingsModule,
     AvailabilityModule,
     BookingSeriesModule,
     BookingRulesModule,
+    PricingModule,
+    SessionsModule,
+    RefundPoliciesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: TenantContextGuard },

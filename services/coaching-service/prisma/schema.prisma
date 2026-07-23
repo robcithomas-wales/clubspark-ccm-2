@@ -26,10 +26,12 @@ model Coach {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
 
-  lessonTypes  CoachLessonType[]
-  availability CoachAvailability[]
-  blocks       CoachBlock[]
-  sessions     LessonSession[]
+  lessonTypes       CoachLessonType[]
+  availability      CoachAvailability[]
+  blocks            CoachBlock[]
+  sessions          LessonSession[]
+  programmes        Programme[]
+  programmeSessions ProgrammeSession[] @relation("ProgrammeSessionCoach")
 
   @@map("coaches")
   @@schema("coaching")
@@ -106,6 +108,7 @@ model LessonSession {
   coachId            String   @map("coach_id") @db.Uuid
   lessonTypeId       String   @map("lesson_type_id") @db.Uuid
   customerId         String?  @map("customer_id") @db.Uuid  // optional link to people.persons
+  bookableUnitId     String?  @map("bookable_unit_id") @db.Uuid  // optional link to venue.bookable_units (no hard FK; enables conflict detection)
   startsAt           DateTime @map("starts_at")
   endsAt             DateTime @map("ends_at")
   status             String   @default("scheduled") // scheduled | confirmed | completed | cancelled | no_show
@@ -127,6 +130,110 @@ model LessonSession {
   @@index([customerId])
   @@index([tenantId, startsAt])
   @@index([tenantId, status])
+}
+
+// ─── Programme domain ─────────────────────────────────────────────────────────
+// Programme = structured group coaching offer (course, camp, academy).
+// LessonSession (above) remains the 1:1 appointment model — these are separate.
+
+model Programme {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  name            String
+  description     String?
+  sport           String?
+  coachId         String?  @map("coach_id") @db.Uuid
+  venueId         String?  @map("venue_id") @db.Uuid           // cross-service ref, no hard FK
+  maxParticipants Int      @default(10) @map("max_participants")
+  minParticipants Int      @default(1)  @map("min_participants")
+  price           Decimal  @default(0)  @db.Decimal(10, 2)
+  currency        String   @default("GBP")
+  enrollsFrom     DateTime? @map("enrolls_from")
+  enrollsUntil    DateTime? @map("enrolls_until")
+  status          String   @default("draft")  // draft | published | closed | ended | cancelled
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  coach      Coach?             @relation(fields: [coachId], references: [id], onDelete: SetNull)
+  sessions   ProgrammeSession[]
+  enrolments Enrolment[]
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, sport])
+  @@index([coachId])
+  @@map("programmes")
+  @@schema("coaching")
+}
+
+model ProgrammeSession {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  programmeId    String   @map("programme_id") @db.Uuid
+  coachId        String?  @map("coach_id") @db.Uuid
+  bookableUnitId String?  @map("bookable_unit_id") @db.Uuid    // cross-service ref, no hard FK
+  startsAt       DateTime @map("starts_at")
+  endsAt         DateTime @map("ends_at")
+  status         String   @default("scheduled")  // scheduled | completed | cancelled
+  notes          String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  programme   Programme  @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  coach       Coach?     @relation("ProgrammeSessionCoach", fields: [coachId], references: [id], onDelete: SetNull)
+  attendances Attendance[]
+
+  @@index([tenantId])
+  @@index([programmeId])
+  @@index([coachId])
+  @@index([tenantId, startsAt])
+  @@map("programme_sessions")
+  @@schema("coaching")
+}
+
+model Enrolment {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  programmeId String   @map("programme_id") @db.Uuid
+  customerId  String   @map("customer_id") @db.Uuid            // cross-service ref, no hard FK
+  status      String   @default("confirmed")  // pending | confirmed | cancelled | waitlisted
+  orderId     String?  @map("order_id") @db.Uuid               // cross-service ref, no hard FK
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  programme   Programme  @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  attendances Attendance[]
+
+  @@unique([programmeId, customerId])
+  @@index([tenantId])
+  @@index([programmeId])
+  @@index([customerId])
+  @@map("enrolments")
+  @@schema("coaching")
+}
+
+model Attendance {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String   @map("tenant_id") @db.Uuid
+  programmeSessionId String   @map("programme_session_id") @db.Uuid
+  enrolmentId        String   @map("enrolment_id") @db.Uuid
+  customerId         String   @map("customer_id") @db.Uuid     // denormalised for query speed
+  attended           Boolean?                                   // null = not yet recorded
+  notes              String?
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  programmeSession ProgrammeSession @relation(fields: [programmeSessionId], references: [id], onDelete: Cascade)
+  enrolment        Enrolment        @relation(fields: [enrolmentId], references: [id], onDelete: Cascade)
+
+  @@unique([programmeSessionId, enrolmentId])
+  @@index([tenantId])
+  @@index([programmeSessionId])
+  @@index([enrolmentId])
+  @@index([customerId])
+  @@map("attendances")
+  @@schema("coaching")
 }
 
 // One-off time blocks where a coach is NOT available (holiday, illness, etc.)

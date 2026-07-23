@@ -162,7 +162,7 @@ export class AnomalyRepository {
           ruleId: flag.ruleId,
           severity: flag.severity,
           description: flag.description,
-          metadata: flag.metadata,
+          metadata: flag.metadata as never,
         },
       })
       inserted++

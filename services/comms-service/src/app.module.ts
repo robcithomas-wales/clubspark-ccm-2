@@ -1,0 +1,47 @@
+import { Module, OnModuleInit, Logger } from '@nestjs/common'
+import { ConfigModule } from '@nestjs/config'
+import { ScheduleModule } from '@nestjs/schedule'
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core'
+import { configuration } from './config/configuration.js'
+import { PrismaModule } from './prisma/prisma.module.js'
+import { TenantContextGuard } from './common/guards/tenant-context.guard.js'
+import { AllExceptionsFilter } from './common/filters/http-exception.filter.js'
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor.js'
+import { HealthModule } from './health/health.module.js'
+import { EventsModule } from './events/events.module.js'
+import { TemplatesModule } from './templates/templates.module.js'
+import { MessageLogModule } from './message-log/message-log.module.js'
+import { SuppressionModule } from './suppression/suppression.module.js'
+import { CampaignsModule } from './campaigns/campaigns.module.js'
+import { AudiencesModule } from './audiences/audiences.module.js'
+import { TemplatesService } from './templates/templates.service.js'
+
+@Module({
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
+    ScheduleModule.forRoot(),
+    PrismaModule,
+    HealthModule,
+    EventsModule,
+    TemplatesModule,
+    MessageLogModule,
+    SuppressionModule,
+    CampaignsModule,
+    AudiencesModule,
+  ],
+  providers: [
+    { provide: APP_GUARD, useClass: TenantContextGuard },
+    { provide: APP_FILTER, useClass: AllExceptionsFilter },
+    { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
+  ],
+})
+export class AppModule implements OnModuleInit {
+  private readonly logger = new Logger(AppModule.name)
+
+  constructor(private readonly templates: TemplatesService) {}
+
+  async onModuleInit(): Promise<void> {
+    await this.templates.seedSystemTemplates()
+    this.logger.log('System templates seeded')
+  }
+}
