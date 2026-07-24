@@ -97,3 +97,24 @@ and the committed agent config — which is exactly what we want everyone to sha
   into a `.claude/commands/` slash command.
 - If you want a consistent review lens → add/adjust a `.claude/agents/` role.
 - Run the `service-reviewer` agent before opening a PR that touches `services/*`.
+
+## AI features & API keys
+
+Some product features call the **Anthropic API** directly — currently the in-portal
+support assistant in both the customer portal and admin portal
+(`app/api/support/chat/route.ts`), which reads `ANTHROPIC_API_KEY`.
+
+Rules:
+- **Use one key, from the ClubSpark Anthropic API organization** — never a personal
+  Anthropic account. A personal key bills an individual and will fail with
+  "credit balance too low" when that account runs dry.
+- This is a **pay-as-you-go Anthropic *API* key** (console.anthropic.com → the ClubSpark
+  API org → API Keys), which is a *different product* from the ClubSpark Claude
+  subscription that powers Claude Code / claude.ai. Having a Claude subscription does
+  not imply an API org exists — check/provision billing on the API org separately.
+- The key goes in each portal's `.env.local` (git-ignored). It is **not** an
+  `NEXT_PUBLIC_` var — it must stay server-side only; never expose it to the browser.
+- In deployed environments, source it from ClubSpark's secrets store (Azure Key Vault /
+  Octopus), not a hand-pasted value.
+
+The same ClubSpark API key can serve every AI feature across the platform.
