@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
+import { join } from 'node:path'
 import { ScheduleModule } from '@nestjs/schedule'
 import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core'
 import configuration from './config/configuration'
@@ -16,7 +17,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor'
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
+    ConfigModule.forRoot({ isGlobal: true, load: [configuration], envFilePath: join(__dirname, '..', '.env') }),
     ScheduleModule.forRoot(),
     PrismaModule,
     EventBusModule,

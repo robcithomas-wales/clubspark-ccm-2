@@ -1,5 +1,6 @@
 import { Module, OnModuleInit, Logger } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
+import { join } from 'node:path'
 import { ScheduleModule } from '@nestjs/schedule'
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core'
 import { configuration } from './config/configuration.js'
@@ -18,7 +19,7 @@ import { TemplatesService } from './templates/templates.service.js'
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
+    ConfigModule.forRoot({ isGlobal: true, load: [configuration], envFilePath: join(__dirname, '..', '.env') }),
     ScheduleModule.forRoot(),
     PrismaModule,
     HealthModule,
