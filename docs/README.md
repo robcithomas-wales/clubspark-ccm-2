@@ -8,6 +8,15 @@ Technical specifications and architectural decisions for the Club and Coach plat
 |---|---|
 | [agentic-engineering.md](agentic-engineering.md) | How we drive the repo with Claude Code — shared config, slash commands, worktrees for parallel work |
 
+## Engineering standards
+
+| Document | Description |
+|---|---|
+| [engineering/coding-standards.md](engineering/coding-standards.md) | Layering, DTO validation, ESM, Prisma, ports |
+| [engineering/security-and-data-boundaries.md](engineering/security-and-data-boundaries.md) | Multi-tenant isolation, secret handling, client/server boundary |
+| [engineering/testing-strategy.md](engineering/testing-strategy.md) | Pool-safe service tests + Playwright e2e |
+| [engineering/ai-provider-operations.md](engineering/ai-provider-operations.md) | Provisioning/operating Anthropic access for AI features |
+
 ## Architecture
 
 | Document | Description |

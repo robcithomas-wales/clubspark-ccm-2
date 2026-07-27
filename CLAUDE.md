@@ -105,6 +105,18 @@ Supabase over the network.
   before a push — otherwise the shared connection pool is exhausted and tests fail.
 - Never commit a real `.env`. Only `.env.example` is tracked.
 
+## Deployment (current vs target)
+
+**Today: everything runs locally.** Front-ends and all 15 services run on the developer's
+machine via `./scripts/run-all.sh`. The **only hosted dependency is Supabase** (database + auth).
+There is no cloud deployment of the app itself yet.
+
+🎯 **Target (near-term): Azure.** The `docker/*.Dockerfile` images and the
+`docs/architecture/azure-*` docs describe the *planned* Azure/AKS deployment — the direction of
+travel, **not** the current runtime. Secrets today live only in git-ignored local `.env` /
+`.env.local` files (plus Supabase creds); they'll move to Azure Key Vault when the platform
+deploys there.
+
 ## Conventions (follow these)
 
 - **DTO validation:** use `@IsString()` + `@IsNotEmpty()` for id fields — **do not** use
@@ -130,8 +142,24 @@ Use **git worktrees** so simultaneous agent sessions don't collide in one checko
 Helper: `./scripts/agent-worktree.sh <branch-name>` creates an isolated worktree under
 `../worktrees/`. See `docs/agentic-engineering.md` for the full team workflow.
 
+## Engineering standards (read before non-trivial work)
+
+Fuller references live in `docs/engineering/` — consult the relevant one and have the matching
+reviewer agent (below) check your change:
+
+- [`coding-standards.md`](docs/engineering/coding-standards.md) — layering, DTO rules, ESM, Prisma, ports
+- [`security-and-data-boundaries.md`](docs/engineering/security-and-data-boundaries.md) — tenant isolation, secrets, client/server boundary
+- [`testing-strategy.md`](docs/engineering/testing-strategy.md) — pool-safe service tests + Playwright e2e
+- [`ai-provider-operations.md`](docs/engineering/ai-provider-operations.md) — how AI features get an Anthropic key (ClubSpark API org, not personal)
+
 ## Agentic tooling
 
 Team workflows live in `.claude/commands/` (slash commands) and `.claude/agents/`
-(review roles). These are committed — improve them via PR rather than keeping local copies.
+(review roles) — all committed; improve them via PR rather than keeping local copies.
 Machine-local overrides go in `.claude/settings.local.json` (git-ignored).
+
+Reviewer agents (invoke before opening a PR):
+- `@service-reviewer` — NestJS service changes vs conventions
+- `@portal-reviewer` — Next.js portal changes (service URLs, client/server, secrets)
+- `@security-reviewer` — tenant isolation, secrets, auth
+- `@test-author` — write vitest tests following the fixtures + pool-safe pattern

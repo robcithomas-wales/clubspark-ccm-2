@@ -2,7 +2,7 @@
 
 > **Document purpose:** Records all architectural decisions, the target platform design, and the phased implementation plan. Used as the reference for all development work.
 >
-> **Last updated:** April 2026
+> **Last updated:** July 2026
 > **Status:** Active — Phase 0 complete. 15 microservices live across all domains. Teams, Coaching, Competitions, Rankings, Team Sport Website Pages, Comms, Integration Layer (API keys, webhooks, Xero/QuickBooks), AI Analytics (member scoring, anomaly detection, utilisation forecasting, player matching), Products & Pricing, and ClubSpark Internal Staff Portal (org registry, feature flags, impersonation, audit trail) all live. 817 automated tests (733 integration + 84 e2e). Gaps 1, 2, 4, 8 resolved; Gap 3 (Supavisor) pending config change.
 
 ---
@@ -19,7 +19,7 @@
 | 4 | **Booking access rules not evaluated** — `booking.booking_rules` CRUD exists but is not applied at booking time. Advance booking windows, max bookings per period, and time restrictions are not enforced for any live bookings. | 🟠 Medium | ✅ **Resolved** — `BookingRulesService.enforceRules()` is called in `BookingsService.create()` for all non-admin bookings. 17 integration tests covering CRUD + canBook/maxSlot/minSlot/advanceDays/org-scoped/admin-bypass. |
 | 5 | **No Redis / caching layer** — every availability check, pricing rule lookup, and membership entitlement check hits Postgres cold. | 🟠 Medium | Phase 0.5 TODO |
 | 6 | **No tenant isolation at DB level (RLS)** — tenant isolation is application-enforced only. A bug in tenant context extraction could leak cross-tenant data. | 🟠 Medium | Phase 0.5 TODO |
-| 7 | **No Docker / containerisation** — services run as bare Node processes. No Docker, no docker-compose for local dev parity. | 🟡 Low | Phase 0.5 TODO |
+| 7 | **Partial containerisation** — production `Dockerfile`s exist for 7 of the 15 services (Azure deployment prep). Local dev still runs bare Node processes via `./scripts/run-all.sh`, and there is no `docker-compose` (not needed — the DB is remote Supabase). | 🟡 Low | ⚠️ Partial — remaining 8 services need Dockerfiles before Azure |
 | 8 | **No API gateway** — no centralised rate limiting, versioning, or auth enforcement. Fine for pilot; needed before NGB integrations. | 🟡 Low | ✅ **Resolved** — `integration-service` provides API key issuance (scoped credentials for NGB consumers), webhook delivery (push notifications), and full Xero/QuickBooks OAuth 2.0 accounting integration (real-time invoice/credit note sync + nightly batch reconciliation). Centralised rate limiting remains a production TODO. |
 
 ---
@@ -72,7 +72,7 @@ The existing platform runs on ASP.NET + SQL Server. Core issues:
 
 ## 2. Current State
 
-### Services (as of March 2026)
+### Services (as of July 2026)
 
 | Service | Port | Stack | Status |
 |---|---|---|---|
@@ -89,8 +89,11 @@ The existing platform runs on ASP.NET + SQL Server. Core issues:
 | comms-service | 4012 | NestJS / TypeScript / Fastify | ✅ Live — campaigns, message log, system templates with tenant overrides |
 | integration-service | 4016 | NestJS / TypeScript / Fastify | ✅ Live — API key issuance (scoped, hashed), webhook subscriptions, delivery worker with 5-attempt retry, inbound event fan-out, Xero/QuickBooks OAuth 2.0, real-time accounting sync (payment.succeeded → invoice, refund → credit note, membership.activated → invoice), nightly batch reconciliation |
 | analytics-service | 4014 | NestJS / TypeScript / Fastify | ✅ Live — nightly member scoring: churn risk, LTV, payment default, optimal send hour; rule-based anomaly detection (4 rules, `@Cron` 03:00); utilisation forecasting with dead-slot identification (`@Cron` 02:00); player matching by ELO proximity; cross-schema raw SQL; ELO draw seeding in competition-service |
+| entitlement-service | 4013 | NestJS / TypeScript / Fastify | ✅ Live — subscription plans, entitlements, add-ons, per-org overrides |
+| order-service | 4015 | NestJS / TypeScript / Fastify | ✅ Live — products and orders (commerce / checkout) |
 | admin-portal | 3005 | Next.js / React | ✅ Live |
 | customer-portal | 3006 | Next.js / React | ✅ Live — multi-tenant via `/[slug]`, teams pages |
+| internal-portal | 3010 | Next.js / React | ✅ Live — ClubSpark staff portal: org registry, feature flags, impersonation, audit trail |
 | mobile-app | — | Expo / React Native | ✅ Live |
 
 ### Phase 0 issues (all resolved)
@@ -289,6 +292,8 @@ integration.accounting_sync_log — audit trail of all accounting sync attempts:
 
 **Decision:** Redis for application caching and pub/sub event bus locally; Azure Cache for Redis in production.
 
+> **Current state:** not yet implemented (see Known Gap 5). Reads hit Postgres directly today; the cache layer below is the target design.
+
 **Cache targets:**
 - Venue / resource / bookable unit data (TTL: 5 minutes, invalidate on update)
 - Pricing rules (TTL: 1 minute, invalidate on rule change)
@@ -299,6 +304,8 @@ integration.accounting_sync_log — audit trail of all accounting sync attempts:
 ### Event bus — Redis pub/sub → Azure Service Bus
 
 **Decision:** NestJS microservices transport. Redis pub/sub locally, Azure Service Bus in production.
+
+> **Current state:** implemented today as lightweight **HTTP fan-out** between services (see each service's `src/event-bus/`). Redis / Service Bus transport is the target, not yet wired.
 
 **Events:**
 - `booking.created` → confirmation email, inventory decrement, cache invalidation, stats refresh
@@ -440,6 +447,12 @@ This means a club using booking without membership can still configure rules. A 
 ---
 
 ## 6. Target Database Schemas
+
+> **Source of truth: the Prisma schemas.** The live, authoritative schema for each service is
+> its `services/<name>/prisma/schema.prisma` file. The SQL below is **target design** — it
+> captures intent (schema namespacing, partitioning strategy, JSONB config columns, key
+> relationships) and may lag the implemented schema. When the two disagree, **Prisma wins** —
+> update this section to match; don't read it as the current schema.
 
 ### people schema (live)
 
@@ -702,7 +715,10 @@ CREATE INDEX access_rules_config_idx ON rules.access_rules USING GIN (rule_confi
 
 ## 7. Performance Strategy
 
-### Critical: atomic booking creation (no race condition)
+> **Status legend:** ✅ implemented · ⚠️ partial · ❌ not yet · ◻️ target-only design.
+> Cross-check the Known Gaps table at the top of this doc.
+
+### Critical: atomic booking creation (no race condition) — ✅ Implemented
 
 The current check-availability → create-booking two-step has a TOCTOU race condition — two concurrent requests can both pass the availability check before either inserts. Fix: single atomic INSERT with a built-in conflict check:
 
@@ -737,7 +753,7 @@ CREATE UNIQUE INDEX bookings_no_overlap_idx
   WHERE status <> 'cancelled';
 ```
 
-### Fix N+1 in availability service (exists today)
+### Fix N+1 in availability service — ⚠️ Verify (check current `availability.repository.ts`)
 
 Current code calls `getConflictingUnits(unit.id)` in a loop — one HTTP call per unit. 10 courts = 10 HTTP calls per calendar view. Fix: load all conflicts for all units in one query:
 
@@ -751,7 +767,7 @@ WHERE unit_id = ANY($1)       -- all unit IDs for the venue
 GROUP BY unit_id
 ```
 
-### Caching targets
+### Caching targets — ❌ Not implemented (Known Gap 5)
 
 | Data | Cache key pattern | TTL | Invalidation trigger |
 |---|---|---|---|
@@ -761,7 +777,7 @@ GROUP BY unit_id
 | Customer memberships | `memberships:{customerId}` | 30 sec | membership.activated/expired |
 | Availability slots | `avail:{tenantId}:{venueId}:{date}` | 10 sec | booking.created/cancelled |
 
-### Materialized views for reporting
+### Materialized views for reporting — ◻️ Target-only
 
 Dashboard stats must never run `COUNT(*)` on live booking data:
 
@@ -780,11 +796,11 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY reporting.booking_stats;
 -- Refresh triggered by booking.created / booking.cancelled events
 ```
 
-### Connection pooling
+### Connection pooling — ⚠️ Partial (`connection_limit` set; Supavisor pooler endpoint pending, Gap 3)
 
 Use Supabase Supavisor (built-in) during pilot. Azure: PgBouncer built into PostgreSQL Flexible Server. Services connect via pooler endpoint, not directly to PostgreSQL.
 
-### Row Level Security
+### Row Level Security — ❌ Not implemented (Gap 6; tenant isolation is application-level today)
 
 Tenant isolation as defence in depth — wrong tenant_id in application code returns zero rows rather than wrong data:
 
@@ -795,7 +811,7 @@ CREATE POLICY tenant_isolation ON booking.bookings
   USING (tenant_id = current_setting('app.tenant_id')::uuid);
 ```
 
-### Fastify adapter (mandatory)
+### Fastify adapter (mandatory) — ✅ Implemented (all services)
 
 All NestJS services must use the Fastify adapter — 3x throughput vs Express default:
 
@@ -806,7 +822,7 @@ const app = await NestFactory.create<NestFastifyApplication>(
 )
 ```
 
-### Observability (required before production)
+### Observability (required before production) — ❌ Not implemented
 
 ```
 OpenTelemetry   → distributed traces across all services
@@ -841,8 +857,8 @@ The migration from Supabase to Azure is a **configuration change, not a code cha
 | Read replica | Supabase Pro replica | Flexible Server read replica |
 | Redis | Local / Redis Cloud | Azure Cache for Redis |
 | Event bus | Redis pub/sub | Azure Service Bus |
-| Container hosting | Docker locally / Render | Azure Container Apps |
-| Admin portal | Vercel / local | Azure Static Web Apps |
+| Service hosting | Local Node processes (`run-all.sh`); Dockerfiles are Azure deploy prep | Azure Container Apps |
+| Front-end portals | Local (`next dev`) | Azure Static Web Apps |
 | CDN + load balancer | — | Azure Front Door |
 | API gateway | — | Azure API Management |
 | Secrets | `.env` files | Azure Key Vault |

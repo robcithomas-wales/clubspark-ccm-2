@@ -114,7 +114,7 @@ Rules:
   not imply an API org exists — check/provision billing on the API org separately.
 - The key goes in each portal's `.env.local` (git-ignored). It is **not** an
   `NEXT_PUBLIC_` var — it must stay server-side only; never expose it to the browser.
-- In deployed environments, source it from ClubSpark's secrets store (Azure Key Vault /
-  Octopus), not a hand-pasted value.
+- The app currently runs locally, so it lives only in the git-ignored `.env.local`. When the
+  platform deploys to Azure (the near-term target), it moves to Azure Key Vault.
 
 The same ClubSpark API key can serve every AI feature across the platform.
