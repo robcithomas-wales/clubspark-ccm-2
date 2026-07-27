@@ -8,9 +8,15 @@
     "services/*"
   ],
   "scripts": {
-    "build:services": "npm run build --workspace=services/venue-service && npm run build --workspace=services/booking-service && npm run build --workspace=services/people-service && npm run build --workspace=services/membership-service && npm run build --workspace=services/coaching-service && npm run build --workspace=services/team-service && npm run build --workspace=services/comms-service && npm run build --workspace=services/integration-service && npm run build --workspace=services/analytics-service",
-    "start:services": "concurrently --names \"venue,booking,people,membership,coaching,team,comms,integration,analytics\" --prefix-colors \"blue,green,yellow,magenta,cyan,red,white,bgCyan,bgGreen\" \"node services/venue-service/dist/main.js\" \"node services/booking-service/dist/main.js\" \"node services/people-service/dist/main.js\" \"node services/membership-service/dist/main.js\" \"node services/coaching-service/dist/main.js\" \"node services/team-service/dist/main.js\" \"node services/comms-service/dist/main.js\" \"node services/integration-service/dist/main.js\" \"node services/analytics-service/dist/main.js\"",
-    "start:all": "concurrently --names \"venue,booking,people,membership,coaching,team,comms,integration,analytics,portal\" --prefix-colors \"blue,green,yellow,magenta,cyan,red,white,bgCyan,bgGreen,bgBlue\" \"node services/venue-service/dist/main.js\" \"node services/booking-service/dist/main.js\" \"node services/people-service/dist/main.js\" \"node services/membership-service/dist/main.js\" \"node services/coaching-service/dist/main.js\" \"node services/team-service/dist/main.js\" \"node services/comms-service/dist/main.js\" \"node services/integration-service/dist/main.js\" \"node services/analytics-service/dist/main.js\" \"npm run dev --workspace=admin-portal\"",
+    "build:services": "npm run build --workspace=services/template-service && npm run build --workspace=services/venue-service && npm run build --workspace=services/people-service && npm run build --workspace=services/booking-service && npm run build --workspace=services/admin-service && npm run build --workspace=services/coaching-service && npm run build --workspace=services/team-service && npm run build --workspace=services/competition-service && npm run build --workspace=services/membership-service && npm run build --workspace=services/payment-service && npm run build --workspace=services/comms-service && npm run build --workspace=services/entitlement-service && npm run build --workspace=services/analytics-service && npm run build --workspace=services/order-service && npm run build --workspace=services/integration-service",
+    "build:all": "npm run build:services && npm run build --workspace=admin-portal && npm --prefix customer-portal run build && npm --prefix internal-portal run build",
+    "test:services": "./scripts/test-services.sh",
+    "typecheck": "./scripts/typecheck.sh",
+    "prisma:generate:all": "npm run prisma:generate --workspaces --if-present",
+    "kill:services": "pkill -f 'nest start' || true; pkill -f 'dist/main.js' || true",
+    "e2e": "ADMIN_PORTAL_PORT=3005 npm run test --workspace=e2e",
+    "start:services": "./scripts/run-all.sh start --services-only",
+    "start:all": "./scripts/run-all.sh start --with-mobile",
     "dev:portal": "npm run dev --workspace=admin-portal",
     "dev:booking": "npm run dev --workspace=services/booking-service",
     "dev:venue": "npm run dev --workspace=services/venue-service",
