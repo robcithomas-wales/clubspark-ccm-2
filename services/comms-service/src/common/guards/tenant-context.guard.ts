@@ -59,6 +59,13 @@ export class TenantContextGuard implements CanActivate {
       return true
     }
 
+    // SECURITY: header-based tenant auth is a non-production convenience for
+    // integration tests + local dev ONLY. Fail-closed: disabled unless NODE_ENV
+    // is explicitly 'test' or 'development'. Production (and unset NODE_ENV)
+    // requires a verified Bearer JWT — closes the x-tenant-id impersonation hole.
+    if (process.env['NODE_ENV'] !== 'test' && process.env['NODE_ENV'] !== 'development') {
+      throw new UnauthorizedException('Authentication required')
+    }
     const tenantId = request.headers['x-tenant-id'] as string | undefined
     const organisationId = request.headers['x-organisation-id'] as string | undefined
     if (!tenantId) throw new UnauthorizedException('Authentication required')

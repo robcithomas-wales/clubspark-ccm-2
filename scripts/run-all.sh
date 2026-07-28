@@ -61,6 +61,9 @@ build_all() {
 }
 
 start_services() {
+  # Local dev: services trust the x-tenant-id header only when NODE_ENV is
+  # 'development' or 'test' (fail-closed in production — see TenantContextGuard).
+  export NODE_ENV="${NODE_ENV:-development}"
   # Make inter-service calls resolve to the canonical ports.
   export INTEGRATION_SERVICE_URL="http://localhost:4016"
   export NEXT_PUBLIC_INTEGRATION_SERVICE_URL="http://127.0.0.1:4016"
