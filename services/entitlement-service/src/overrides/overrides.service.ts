@@ -6,8 +6,8 @@ import type { UpsertOverrideDto } from './dto/upsert-override.dto.js'
 export class OverridesService {
   constructor(private readonly repo: OverridesRepository) {}
 
-  async getByOrg(organisationId: string) {
-    const override = await this.repo.findByOrg(organisationId)
+  async getByOrg(organisationId: string, tenantId: string) {
+    const override = await this.repo.findByOrg(organisationId, tenantId)
     return { data: override ?? null }
   }
 
@@ -16,8 +16,8 @@ export class OverridesService {
     return { data: result }
   }
 
-  async remove(organisationId: string) {
-    await this.repo.delete(organisationId)
+  async remove(organisationId: string, tenantId: string) {
+    await this.repo.delete(organisationId, tenantId)
     return { data: null }
   }
 }

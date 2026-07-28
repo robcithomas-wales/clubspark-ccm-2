@@ -1,4 +1,4 @@
-import { IsIn, IsOptional, IsDateString, IsUUID } from 'class-validator'
+import { IsIn, IsOptional, IsDateString, IsString, IsNotEmpty } from 'class-validator'
 
 export type CancelSeriesMode = 'all' | 'from_date' | 'single'
 
@@ -13,6 +13,7 @@ export class CancelBookingSeriesDto {
 
   /** Required when mode = single */
   @IsOptional()
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   bookingId?: string
 }

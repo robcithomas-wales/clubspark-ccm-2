@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { getSportConfig } from '../sports/sport-config.js'
 
@@ -6,7 +6,8 @@ import { getSportConfig } from '../sports/sport-config.js'
 export class StandingsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(competitionId: string, divisionId: string) {
+  async list(tenantId: string, competitionId: string, divisionId: string) {
+    await this.assertCompetitionInTenant(tenantId, competitionId)
     const standings = await this.prisma.standing.findMany({
       where: { competitionId, divisionId },
       orderBy: { position: 'asc' },
@@ -19,9 +20,11 @@ export class StandingsService {
    * Recalculate all standings for a division from verified matches.
    * Called automatically when a result is verified.
    */
-  async recalculate(competitionId: string, divisionId: string): Promise<void> {
-    const [competition, matches, entries] = await Promise.all([
-      this.prisma.competition.findFirst({ where: { id: competitionId } }),
+  async recalculate(tenantId: string, competitionId: string, divisionId: string): Promise<void> {
+    // Standings carry no tenant_id of their own, so the tenant-scoped competition is the boundary.
+    const competition = await this.assertCompetitionInTenant(tenantId, competitionId)
+
+    const [matches, entries] = await Promise.all([
       this.prisma.match.findMany({
         where: { competitionId, divisionId, status: 'COMPLETED', resultStatus: 'VERIFIED' },
       }),
@@ -29,8 +32,6 @@ export class StandingsService {
         where: { divisionId, status: 'CONFIRMED' },
       }),
     ])
-
-    if (!competition) return
 
     const sportCfg = getSportConfig(competition.sport)
     const mp = sportCfg.matchPoints
@@ -107,5 +108,15 @@ export class StandingsService {
         },
       })
     }
+  }
+
+  /**
+   * Loads the competition scoped to the caller's tenant and returns it. Standings carry no
+   * tenant_id of their own, so this is the tenant boundary and must run before any read/write.
+   */
+  private async assertCompetitionInTenant(tenantId: string, competitionId: string) {
+    const competition = await this.prisma.competition.findFirst({ where: { id: competitionId, tenantId } })
+    if (!competition) throw new NotFoundException('Competition not found')
+    return competition
   }
 }

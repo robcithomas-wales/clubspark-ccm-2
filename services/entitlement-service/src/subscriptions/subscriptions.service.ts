@@ -7,8 +7,8 @@ import type { UpdateSubscriptionDto } from './dto/update-subscription.dto.js'
 export class SubscriptionsService {
   constructor(private readonly repo: SubscriptionsRepository) {}
 
-  async getByOrg(organisationId: string) {
-    const sub = await this.repo.findByOrg(organisationId)
+  async getByOrg(organisationId: string, tenantId: string) {
+    const sub = await this.repo.findByOrg(organisationId, tenantId)
     if (!sub) throw new NotFoundException(`No subscription found for org '${organisationId}'`)
     return { data: sub }
   }
@@ -25,10 +25,10 @@ export class SubscriptionsService {
   }
 
   async update(organisationId: string, tenantId: string, dto: UpdateSubscriptionDto) {
-    const existing = await this.repo.findByOrg(organisationId)
+    const existing = await this.repo.findByOrg(organisationId, tenantId)
     if (!existing) throw new NotFoundException(`No subscription found for org '${organisationId}'`)
     await this.repo.update(organisationId, tenantId, dto)
-    const updated = await this.repo.findByOrg(organisationId)
+    const updated = await this.repo.findByOrg(organisationId, tenantId)
     return { data: updated }
   }
 }

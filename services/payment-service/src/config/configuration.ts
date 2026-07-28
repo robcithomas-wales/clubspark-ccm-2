@@ -6,6 +6,8 @@ export const configuration = () => ({
     url: process.env['DATABASE_URL'] ?? '',
     readUrl: process.env['DATABASE_READ_URL'] ?? process.env['DATABASE_URL'] ?? '',
   },
+
+  tokenEncryptionKey: process.env['TOKEN_ENCRYPTION_KEY'] ?? 'dev-encryption-key-32-bytes-here!',
 })
 
 export type AppConfig = ReturnType<typeof configuration>

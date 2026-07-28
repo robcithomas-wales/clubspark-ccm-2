@@ -7,6 +7,14 @@ import { TEST_TENANT_ID, TEST_NONEXISTENT_ID } from './fixtures/index.js'
 const HEADERS = { 'x-tenant-id': TEST_TENANT_ID }
 const JSON_HEADERS = { ...HEADERS, 'content-type': 'application/json' }
 
+// The inbound event bus receiver is service-to-service authenticated via
+// X-Internal-Secret (InternalSecretGuard). Ensure the secret is set and echoed.
+process.env['INTERNAL_SECRET'] ??= 'test-internal-secret'
+const INBOUND_HEADERS = {
+  'content-type': 'application/json',
+  'x-internal-secret': process.env['INTERNAL_SECRET'],
+}
+
 const DB_AVAILABLE = await checkDbAvailable()
 
 async function createSubscription(
@@ -46,7 +54,7 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
   it('inbound event returns { received: true }', async () => {
     const res = await request
       .post('/v1/events/inbound')
-      .set({ 'content-type': 'application/json' })
+      .set(INBOUND_HEADERS)
       .send({ type: 'booking.confirmed', tenantId: TEST_TENANT_ID, occurredAt: new Date().toISOString() })
 
     expect(res.status).toBe(201)
@@ -58,7 +66,7 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
 
     await request
       .post('/v1/events/inbound')
-      .set({ 'content-type': 'application/json' })
+      .set(INBOUND_HEADERS)
       .send({ type: 'booking.confirmed', tenantId: TEST_TENANT_ID, occurredAt: new Date().toISOString() })
 
     // Allow async dispatch to complete
@@ -77,7 +85,7 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
 
     await request
       .post('/v1/events/inbound')
-      .set({ 'content-type': 'application/json' })
+      .set(INBOUND_HEADERS)
       .send({ type: 'booking.confirmed', tenantId: TEST_TENANT_ID, occurredAt: new Date().toISOString() })
 
     await new Promise((r) => setTimeout(r, 200))
@@ -94,7 +102,7 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
 
     await request
       .post('/v1/events/inbound')
-      .set({ 'content-type': 'application/json' })
+      .set(INBOUND_HEADERS)
       .send({ type: 'booking.confirmed', tenantId: TEST_TENANT_ID, occurredAt: new Date().toISOString() })
 
     await new Promise((r) => setTimeout(r, 200))
@@ -111,7 +119,7 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
 
     await request
       .post('/v1/events/inbound')
-      .set({ 'content-type': 'application/json' })
+      .set(INBOUND_HEADERS)
       .send({ type: 'booking.confirmed', tenantId: TEST_TENANT_ID, occurredAt: new Date().toISOString() })
 
     await new Promise((r) => setTimeout(r, 300))
@@ -126,7 +134,7 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
     const sub = await createSubscription(request)
     await request
       .post('/v1/events/inbound')
-      .set({ 'content-type': 'application/json' })
+      .set(INBOUND_HEADERS)
       .send({ type: 'booking.confirmed', tenantId: TEST_TENANT_ID, occurredAt: new Date().toISOString() })
 
     await new Promise((r) => setTimeout(r, 300))

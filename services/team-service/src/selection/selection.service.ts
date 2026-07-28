@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { Injectable, NotFoundException } from '@nestjs/common'
 import { SelectionRepository } from './selection.repository.js'
 import { FixturesRepository } from '../fixtures/fixtures.repository.js'
 import type { SetSelectionDto } from './dto/set-selection.dto.js'
@@ -10,7 +10,15 @@ export class SelectionService {
     private readonly fixturesRepo: FixturesRepository,
   ) {}
 
+  private async assertFixtureInTenant(tenantId: string, teamId: string, fixtureId: string) {
+    const fixture = await this.fixturesRepo.findById(tenantId, teamId, fixtureId)
+    if (!fixture) {
+      throw new NotFoundException('Fixture not found')
+    }
+  }
+
   async getForFixture(tenantId: string, teamId: string, fixtureId: string) {
+    await this.assertFixtureInTenant(tenantId, teamId, fixtureId)
     const selections = await this.repo.getForFixture(fixtureId)
     return {
       data: selections,
@@ -24,6 +32,7 @@ export class SelectionService {
   }
 
   async setSelection(tenantId: string, teamId: string, fixtureId: string, dto: SetSelectionDto) {
+    await this.assertFixtureInTenant(tenantId, teamId, fixtureId)
     const selections = await this.repo.setSelection(fixtureId, dto.players, dto.publish ?? false)
     // Recalculate fixture lifecycle after selection change
     await this.fixturesRepo.recalculateStatus(tenantId, teamId, fixtureId)
@@ -31,6 +40,7 @@ export class SelectionService {
   }
 
   async publish(tenantId: string, teamId: string, fixtureId: string) {
+    await this.assertFixtureInTenant(tenantId, teamId, fixtureId)
     const selections = await this.repo.publish(fixtureId)
     await this.fixturesRepo.recalculateStatus(tenantId, teamId, fixtureId)
     return { data: selections }

@@ -12,18 +12,18 @@ export class WebhookDeliveriesController {
   @Get()
   @ApiOperation({ summary: 'List deliveries for a webhook subscription' })
   list(
-    @TenantCtx() _ctx: TenantContext,
+    @TenantCtx() ctx: TenantContext,
     @Query('subscriptionId') subscriptionId: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
   ) {
-    return this.service.listBySubscription(subscriptionId, page, limit)
+    return this.service.listBySubscription(ctx.tenantId, subscriptionId, page, limit)
   }
 
   @Post(':id/retry')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Re-queue a failed or dead delivery' })
-  retry(@TenantCtx() _ctx: TenantContext, @Param('id') id: string) {
-    return this.service.retry(id)
+  retry(@TenantCtx() ctx: TenantContext, @Param('id') id: string) {
+    return this.service.retry(ctx.tenantId, id)
   }
 }

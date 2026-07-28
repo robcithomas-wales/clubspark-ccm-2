@@ -50,9 +50,10 @@ export class ChargesController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Mark a charge as manually paid' })
   paid(
+    @Request() req: FastifyRequest & { tenantContext: { tenantId: string } },
     @Param('chargeId') chargeId: string,
     @Body() body: { paymentId?: string },
   ) {
-    return this.service.markChargePaid(chargeId, body.paymentId)
+    return this.service.markChargePaid(req.tenantContext.tenantId, chargeId, body.paymentId)
   }
 }

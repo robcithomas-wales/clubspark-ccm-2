@@ -205,19 +205,24 @@ export class SegmentsRepository {
 
     const whereStr = whereClauses.length > 0 ? `AND ${whereClauses.join(' AND ')}` : ''
 
-    // Delete old system-added memberships, re-insert matching people
-    await this.prisma.$executeRawUnsafe(`
+    // Delete old system-added memberships, re-insert matching people.
+    // Tenant-scoped + parameterized to avoid cross-tenant deletes and injection.
+    await this.prisma.$executeRaw`
       DELETE FROM people.segment_memberships
-      WHERE segment_id = '${segmentId}' AND added_by = 'system'
-    `)
+      WHERE segment_id = ${segmentId}::uuid
+        AND tenant_id  = ${tenantId}::uuid
+        AND added_by   = 'system'
+    `
 
+    // whereStr is built only from allow-listed columns + escaped string literals,
+    // so it stays interpolated; segmentId/tenantId are bound parameters ($1/$2).
     const inserted = await this.prisma.$executeRawUnsafe(`
       INSERT INTO people.segment_memberships (tenant_id, segment_id, person_id, added_by)
-      SELECT tenant_id, '${segmentId}'::uuid, id, 'system'
+      SELECT tenant_id, $1::uuid, id, 'system'
       FROM people.persons
-      WHERE tenant_id = '${tenantId}'::uuid ${whereStr}
+      WHERE tenant_id = $2::uuid ${whereStr}
       ON CONFLICT (segment_id, person_id) DO NOTHING
-    `)
+    `, segmentId, tenantId)
 
     await this.updateMemberCount(tenantId, segmentId)
     return inserted

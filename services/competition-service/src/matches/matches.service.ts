@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common'
 import { MatchesRepository } from './matches.repository.js'
+import { PrismaService } from '../prisma/prisma.service.js'
 import { StandingsService } from '../standings/standings.service.js'
 import { RankingsService } from '../rankings/rankings.service.js'
 import type { SubmitResultDto } from './dto/submit-result.dto.js'
@@ -9,21 +10,25 @@ import type { UpdateMatchDto } from './dto/update-match.dto.js'
 export class MatchesService {
   constructor(
     private readonly repo: MatchesRepository,
+    private readonly prisma: PrismaService,
     private readonly standingsService: StandingsService,
     private readonly rankingsService: RankingsService,
   ) {}
 
-  async list(competitionId: string, divisionId?: string, round?: number) {
+  async list(tenantId: string, competitionId: string, divisionId?: string, round?: number) {
+    await this.assertCompetitionInTenant(tenantId, competitionId)
     return { data: await this.repo.list(competitionId, divisionId, round) }
   }
 
-  async findById(competitionId: string, id: string) {
+  async findById(tenantId: string, competitionId: string, id: string) {
+    await this.assertCompetitionInTenant(tenantId, competitionId)
     const m = await this.repo.findById(id, competitionId)
     if (!m) throw new NotFoundException('Match not found')
     return { data: m }
   }
 
-  async update(competitionId: string, id: string, dto: UpdateMatchDto) {
+  async update(tenantId: string, competitionId: string, id: string, dto: UpdateMatchDto) {
+    await this.assertCompetitionInTenant(tenantId, competitionId)
     const existing = await this.repo.findById(id, competitionId)
     if (!existing) throw new NotFoundException('Match not found')
     const data: any = {}
@@ -34,7 +39,7 @@ export class MatchesService {
     if (dto.bookingId !== undefined) data.bookingId = dto.bookingId
     if (dto.status !== undefined) data.status = dto.status
     if (dto.notes !== undefined) data.notes = dto.notes
-    const m = await this.repo.update(id, data)
+    const m = await this.repo.update(id, competitionId, data)
     return { data: m }
   }
 
@@ -43,7 +48,8 @@ export class MatchesService {
    * - Players submit: sets resultStatus=SUBMITTED, awaits admin verification.
    * - Admins submit with adminVerify=true: sets resultStatus=VERIFIED immediately and recalculates standings.
    */
-  async submitResult(competitionId: string, id: string, dto: SubmitResultDto, isAdmin: boolean) {
+  async submitResult(tenantId: string, competitionId: string, id: string, dto: SubmitResultDto, isAdmin: boolean) {
+    await this.assertCompetitionInTenant(tenantId, competitionId)
     const match = await this.repo.findById(id, competitionId)
     if (!match) throw new NotFoundException('Match not found')
     if (match.status === 'COMPLETED' && match.resultStatus === 'VERIFIED') {
@@ -66,11 +72,11 @@ export class MatchesService {
       ...(verified ? { verifiedBy: dto.submittedBy ?? null, verifiedAt: now } : {}),
     }
 
-    const updated = await this.repo.update(id, data)
+    const updated = await this.repo.update(id, competitionId, data)
 
     // Trigger standing + ranking recalculation when verified
     if (verified && match.divisionId) {
-      await this.standingsService.recalculate(competitionId, match.divisionId)
+      await this.standingsService.recalculate(tenantId, competitionId, match.divisionId)
     }
     if (verified) {
       await this.rankingsService.processMatchResult({ ...match, ...updated }).catch(() => {})
@@ -82,14 +88,15 @@ export class MatchesService {
   /**
    * Admin verifies a player-submitted result.
    */
-  async verifyResult(competitionId: string, id: string, adminId?: string | null) {
+  async verifyResult(tenantId: string, competitionId: string, id: string, adminId?: string | null) {
+    await this.assertCompetitionInTenant(tenantId, competitionId)
     const match = await this.repo.findById(id, competitionId)
     if (!match) throw new NotFoundException('Match not found')
     if (match.resultStatus !== 'SUBMITTED') {
       throw new BadRequestException('Match result is not in SUBMITTED state')
     }
 
-    const updated = await this.repo.update(id, {
+    const updated = await this.repo.update(id, competitionId, {
       resultStatus: 'VERIFIED',
       status: 'COMPLETED',
       verifiedBy: adminId ?? null,
@@ -97,7 +104,7 @@ export class MatchesService {
     })
 
     if (match.divisionId) {
-      await this.standingsService.recalculate(competitionId, match.divisionId)
+      await this.standingsService.recalculate(tenantId, competitionId, match.divisionId)
     }
     await this.rankingsService.processMatchResult({ ...match, ...updated }).catch(() => {})
 
@@ -107,15 +114,25 @@ export class MatchesService {
   /**
    * Admin disputes a result (sends back for correction).
    */
-  async disputeResult(competitionId: string, id: string, adminId: string) {
+  async disputeResult(tenantId: string, competitionId: string, id: string, adminId: string) {
+    await this.assertCompetitionInTenant(tenantId, competitionId)
     const match = await this.repo.findById(id, competitionId)
     if (!match) throw new NotFoundException('Match not found')
-    const updated = await this.repo.update(id, {
+    const updated = await this.repo.update(id, competitionId, {
       resultStatus: 'DISPUTED',
       status: 'SCHEDULED',
       verifiedBy: null,
       verifiedAt: null,
     })
     return { data: updated }
+  }
+
+  /**
+   * Loads the competition scoped to the caller's tenant. Matches carry no tenant_id of their
+   * own, so this is the tenant boundary and must run before any nested read/write.
+   */
+  private async assertCompetitionInTenant(tenantId: string, competitionId: string): Promise<void> {
+    const competition = await this.prisma.competition.findFirst({ where: { id: competitionId, tenantId } })
+    if (!competition) throw new NotFoundException('Competition not found')
   }
 }

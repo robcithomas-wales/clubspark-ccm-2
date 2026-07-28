@@ -1,6 +1,9 @@
-import { Controller, Get, Param, Query, BadRequestException } from '@nestjs/common'
+import { Controller, Get, Param, Query, Req, BadRequestException } from '@nestjs/common'
 import { ApiTags, ApiQuery } from '@nestjs/swagger'
 import { EntitlementsService } from './entitlements.service.js'
+import type { TenantContext } from '../common/guards/tenant-context.guard.js'
+
+type RequestWithCtx = { tenantContext?: TenantContext }
 
 @ApiTags('entitlements')
 @Controller('v1/entitlements')
@@ -16,13 +19,15 @@ export class EntitlementsController {
   @ApiQuery({ name: 'orgId', required: true })
   @ApiQuery({ name: 'feature', required: true })
   async check(
+    @Req() req: RequestWithCtx,
     @Query('orgId') orgId: string,
     @Query('feature') feature: string,
   ) {
     if (!orgId || !feature) {
       throw new BadRequestException('orgId and feature are required')
     }
-    const result = await this.service.check(orgId, feature)
+    const { tenantId } = req.tenantContext as TenantContext
+    const result = await this.service.check(orgId, feature, tenantId)
     return { data: result }
   }
 
@@ -31,7 +36,8 @@ export class EntitlementsController {
    * Used by the portal on load to avoid per-feature round-trips.
    */
   @Get('org/:orgId')
-  getAll(@Param('orgId') orgId: string) {
-    return this.service.getAll(orgId)
+  getAll(@Req() req: RequestWithCtx, @Param('orgId') orgId: string) {
+    const { tenantId } = req.tenantContext as TenantContext
+    return this.service.getAll(orgId, tenantId)
   }
 }

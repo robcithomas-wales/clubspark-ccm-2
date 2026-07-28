@@ -10,14 +10,14 @@ export class AnomalyRepository {
   // ── Detection queries ──────────────────────────────────────────────────────
 
   async detectDormantSpikes(tenantId: string): Promise<AnomalyRuleResult[]> {
-    const rows = await this.prisma.write.$queryRawUnsafe<Array<Record<string, unknown>>>(`
+    const rows = await this.prisma.write.$queryRaw<Array<Record<string, unknown>>>`
       WITH recent_activity AS (
         SELECT
           customer_id,
           COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours') AS bookings_24h,
           MAX(created_at) FILTER (WHERE created_at < NOW() - INTERVAL '24 hours') AS last_before_spike
         FROM booking.bookings
-        WHERE tenant_id = '${tenantId}'
+        WHERE tenant_id = ${tenantId}::uuid
           AND status NOT IN ('cancelled')
           AND customer_id IS NOT NULL
         GROUP BY customer_id
@@ -29,7 +29,7 @@ export class AnomalyRepository {
       FROM recent_activity
       WHERE bookings_24h >= 5
         AND (last_before_spike IS NULL OR last_before_spike < NOW() - INTERVAL '60 days')
-    `)
+    `
 
     return rows.map(r => {
       const meta = {
@@ -49,18 +49,18 @@ export class AnomalyRepository {
   }
 
   async detectPaymentFailureSpikes(tenantId: string): Promise<AnomalyRuleResult[]> {
-    const rows = await this.prisma.write.$queryRawUnsafe<Array<Record<string, unknown>>>(`
+    const rows = await this.prisma.write.$queryRaw<Array<Record<string, unknown>>>`
       SELECT
         customer_id::text AS person_id,
         COUNT(*)::int     AS failure_count
       FROM payment.payments
-      WHERE tenant_id = '${tenantId}'
+      WHERE tenant_id = ${tenantId}::uuid
         AND status = 'failed'
         AND created_at >= NOW() - INTERVAL '24 hours'
         AND customer_id IS NOT NULL
       GROUP BY customer_id
       HAVING COUNT(*) >= 3
-    `)
+    `
 
     return rows.map(r => {
       const meta = { failureCount: Number(r['failure_count']) }
@@ -77,20 +77,20 @@ export class AnomalyRepository {
   }
 
   async detectCourtHoarding(tenantId: string): Promise<AnomalyRuleResult[]> {
-    const rows = await this.prisma.write.$queryRawUnsafe<Array<Record<string, unknown>>>(`
+    const rows = await this.prisma.write.$queryRaw<Array<Record<string, unknown>>>`
       SELECT
         customer_id::text       AS person_id,
         bookable_unit_id::text  AS unit_id,
         COUNT(*)::int           AS booking_count
       FROM booking.bookings
-      WHERE tenant_id = '${tenantId}'
+      WHERE tenant_id = ${tenantId}::uuid
         AND status NOT IN ('cancelled')
         AND starts_at >= NOW() - INTERVAL '7 days'
         AND customer_id IS NOT NULL
         AND bookable_unit_id IS NOT NULL
       GROUP BY customer_id, bookable_unit_id
       HAVING COUNT(*) >= 7
-    `)
+    `
 
     return rows.map(r => {
       const meta = { bookingCount: Number(r['booking_count']), unitId: r['unit_id'] as string }
@@ -107,18 +107,18 @@ export class AnomalyRepository {
   }
 
   async detectExtremeDurations(tenantId: string): Promise<AnomalyRuleResult[]> {
-    const rows = await this.prisma.write.$queryRawUnsafe<Array<Record<string, unknown>>>(`
+    const rows = await this.prisma.write.$queryRaw<Array<Record<string, unknown>>>`
       SELECT
         id::text           AS booking_id,
         customer_id::text  AS person_id,
         EXTRACT(EPOCH FROM (ends_at - starts_at)) / 3600.0 AS duration_hours
       FROM booking.bookings
-      WHERE tenant_id = '${tenantId}'
+      WHERE tenant_id = ${tenantId}::uuid
         AND status NOT IN ('cancelled')
         AND ends_at > starts_at
         AND EXTRACT(EPOCH FROM (ends_at - starts_at)) / 3600.0 > 6
         AND created_at >= NOW() - INTERVAL '7 days'
-    `)
+    `
 
     return rows.map(r => {
       const meta = { durationHours: Math.round(Number(r['duration_hours']) * 10) / 10 }
@@ -200,9 +200,9 @@ export class AnomalyRepository {
   }
 
   async getActiveTenantIds(): Promise<string[]> {
-    const rows = await this.prisma.read.$queryRawUnsafe<Array<{ tenant_id: string }>>(`
+    const rows = await this.prisma.read.$queryRaw<Array<{ tenant_id: string }>>`
       SELECT DISTINCT tenant_id::text FROM analytics.member_scores
-    `)
+    `
     return rows.map(r => r.tenant_id)
   }
 }

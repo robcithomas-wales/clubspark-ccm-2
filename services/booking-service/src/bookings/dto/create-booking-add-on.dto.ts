@@ -1,7 +1,8 @@
-import { IsUUID, IsDateString, IsOptional, IsNumber, IsString, Min, IsInt } from 'class-validator'
+import { IsDateString, IsOptional, IsNumber, IsString, IsNotEmpty, Min, IsInt } from 'class-validator'
 
 export class CreateBookingAddOnDto {
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   addOnId!: string
 
   @IsOptional()

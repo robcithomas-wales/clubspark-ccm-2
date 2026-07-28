@@ -7,6 +7,7 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  UnauthorizedException,
 } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import type { FastifyRequest } from 'fastify'
@@ -23,7 +24,29 @@ export class ActivitiesController {
   @SkipTenant()
   @Post('events/inbound')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async inbound(@Body() event: Record<string, unknown>) {
+  async inbound(
+    @Request() req: FastifyRequest,
+    @Body() event: Record<string, unknown>,
+  ) {
+    // SECURITY: this endpoint skips tenant auth (internal event delivery reads
+    // tenantId from the body), so it must be gated by a shared internal secret.
+    // Fail-closed: if INTERNAL_SECRET is unset, reject unless NODE_ENV is
+    // explicitly 'test' or 'development' — matching the tenant-guard pattern.
+    const expected = process.env['INTERNAL_SECRET']
+    if (!expected) {
+      if (
+        process.env['NODE_ENV'] !== 'test' &&
+        process.env['NODE_ENV'] !== 'development'
+      ) {
+        throw new UnauthorizedException('Internal event secret is not configured')
+      }
+    } else {
+      const provided = req.headers['x-internal-secret'] as string | undefined
+      if (provided !== expected) {
+        throw new UnauthorizedException('Invalid internal event secret')
+      }
+    }
+
     await this.service.handleInboundEvent(event as any)
   }
 

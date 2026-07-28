@@ -39,9 +39,9 @@ export class EntitlementsService {
    * Check whether an org has access to a feature.
    * Resolves: plan features + active add-ons that unlock the feature.
    */
-  async check(organisationId: string, featureId: string): Promise<EntitlementResult> {
-    const sub = await this.prisma.orgSubscription.findUnique({
-      where: { organisationId },
+  async check(organisationId: string, featureId: string, tenantId: string): Promise<EntitlementResult> {
+    const sub = await this.prisma.orgSubscription.findFirst({
+      where: { organisationId, tenantId },
       include: {
         plan: {
           include: { planFeatures: true },
@@ -71,6 +71,7 @@ export class EntitlementsService {
     const addonUnlock = await this.prisma.orgAddOn.findFirst({
       where: {
         organisationId,
+        tenantId,
         status: 'active',
         addOn: { featureId },
       },
@@ -91,13 +92,13 @@ export class EntitlementsService {
    * Resolve all features for an org — returns the full entitlement map.
    * Used to bootstrap the portal with a single call rather than per-feature checks.
    */
-  async getAll(organisationId: string): Promise<{ data: Record<string, EntitlementResult> }> {
+  async getAll(organisationId: string, tenantId: string): Promise<{ data: Record<string, EntitlementResult> }> {
     const features = await this.prisma.feature.findMany()
     const results: Record<string, EntitlementResult> = {}
 
     await Promise.all(
       features.map(async (f) => {
-        results[f.id] = await this.check(organisationId, f.id)
+        results[f.id] = await this.check(organisationId, f.id, tenantId)
       }),
     )
 

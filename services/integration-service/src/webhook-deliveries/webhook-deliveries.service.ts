@@ -53,7 +53,13 @@ export class WebhookDeliveriesService {
     await Promise.allSettled(due.map((d) => this.attempt(d)))
   }
 
-  async listBySubscription(subscriptionId: string, page = 1, limit = 50) {
+  async listBySubscription(tenantId: string, subscriptionId: string, page = 1, limit = 50) {
+    // Ownership check: the subscription (and therefore its deliveries) must belong
+    // to the caller's tenant. WebhookDelivery has no tenantId of its own — tenancy
+    // is derived via subscription.tenantId, so verify the subscription first.
+    const subscription = await this.subscriptionsRepo.findById(tenantId, subscriptionId)
+    if (!subscription) throw new NotFoundException(`Webhook subscription ${subscriptionId} not found`)
+
     const { data, total } = await this.deliveriesRepo.findBySubscription(
       subscriptionId,
       page,
@@ -74,8 +80,9 @@ export class WebhookDeliveriesService {
     }
   }
 
-  async retry(id: string) {
-    const delivery = await this.deliveriesRepo.findById(id)
+  async retry(tenantId: string, id: string) {
+    // Ownership check via the parent subscription's tenantId (delivery has none).
+    const delivery = await this.deliveriesRepo.findById(tenantId, id)
     if (!delivery) throw new NotFoundException(`Delivery ${id} not found`)
     await this.deliveriesRepo.resetForRetry(id)
     return { success: true }

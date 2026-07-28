@@ -1,10 +1,20 @@
 import { Injectable } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
 import { PrismaService } from '../prisma/prisma.service.js'
+import { encryptToken } from '../common/crypto/token-encryption.js'
 import type { ProviderConfig } from '../generated/prisma/index.js'
+import type { AppConfig } from '../config/configuration.js'
 
 @Injectable()
 export class ProviderConfigsRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly encryptionKey: string
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService<AppConfig, true>,
+  ) {
+    this.encryptionKey = this.config.get('tokenEncryptionKey', { infer: true })
+  }
 
   async findById(id: string): Promise<ProviderConfig | null> {
     return this.prisma.read.providerConfig.findUnique({ where: { id } })
@@ -50,10 +60,22 @@ export class ProviderConfigsRepository {
       })
     }
 
+    // Encrypt credential values at rest (AES-256-GCM). Decrypted only when a
+    // gateway client is built (see GatewayFactory).
+    const encryptedData = {
+      ...data,
+      credentials: Object.fromEntries(
+        Object.entries(data.credentials).map(([key, value]) => [
+          key,
+          encryptToken(value, this.encryptionKey),
+        ]),
+      ),
+    }
+
     return this.prisma.write.providerConfig.upsert({
       where: { tenantId_provider_currency: { tenantId, provider, currency } },
-      create: { tenantId, provider, currency, ...data },
-      update: data,
+      create: { tenantId, provider, currency, ...encryptedData },
+      update: encryptedData,
     })
   }
 

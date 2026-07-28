@@ -11,8 +11,8 @@ export class AddOnsService {
     return { data: addOns }
   }
 
-  async findByOrg(organisationId: string) {
-    const addOns = await this.repo.findByOrg(organisationId)
+  async findByOrg(organisationId: string, tenantId: string) {
+    const addOns = await this.repo.findByOrg(organisationId, tenantId)
     return { data: addOns }
   }
 
@@ -21,8 +21,8 @@ export class AddOnsService {
     return { data: result }
   }
 
-  async detach(organisationId: string, addOnId: string) {
-    await this.repo.detach(organisationId, addOnId)
+  async detach(organisationId: string, addOnId: string, tenantId: string) {
+    await this.repo.detach(organisationId, addOnId, tenantId)
     return { data: null }
   }
 }

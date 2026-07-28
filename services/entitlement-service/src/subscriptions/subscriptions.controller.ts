@@ -21,8 +21,9 @@ export class SubscriptionsController {
 
   /** Get a single org's subscription. */
   @Get('org/:orgId')
-  getByOrg(@Param('orgId') orgId: string) {
-    return this.service.getByOrg(orgId)
+  getByOrg(@Req() req: RequestWithCtx, @Param('orgId') orgId: string) {
+    const { tenantId } = req.tenantContext as TenantContext
+    return this.service.getByOrg(orgId, tenantId)
   }
 
   /** Assign (or reassign) a plan to an org. */

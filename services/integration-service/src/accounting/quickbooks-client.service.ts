@@ -54,10 +54,13 @@ export class QuickBooksClientService {
     email: string,
   ): Promise<string> {
     type Customer = { Id: string }
+    // Escape backslashes then single quotes so a crafted email cannot break out of
+    // the quoted literal in the QuickBooks query (QBQL escapes with a backslash).
+    const safeEmail = email.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
     const existing = await this.queryEntity<Customer>(
       accessToken,
       realmId,
-      `SELECT * FROM Customer WHERE PrimaryEmailAddr = '${email}' MAXRESULTS 1`,
+      `SELECT * FROM Customer WHERE PrimaryEmailAddr = '${safeEmail}' MAXRESULTS 1`,
     )
     if (existing.length > 0) return existing[0]!.Id
 

@@ -96,12 +96,14 @@ export class ChargesService {
   }
 
   async waiveCharge(tenantId: string, chargeId: string, notes?: string) {
-    const updated = await this.repo.markChargeWaived(chargeId, notes)
+    const updated = await this.repo.markChargeWaived(tenantId, chargeId, notes)
+    if (!updated) throw new NotFoundException('Charge not found')
     return { data: updated }
   }
 
-  async markChargePaid(chargeId: string, paymentId?: string) {
-    const updated = await this.repo.markChargePaid(chargeId, paymentId)
+  async markChargePaid(tenantId: string, chargeId: string, paymentId?: string) {
+    const updated = await this.repo.markChargePaid(tenantId, chargeId, paymentId)
+    if (!updated) throw new NotFoundException('Charge not found')
     return { data: updated }
   }
 }

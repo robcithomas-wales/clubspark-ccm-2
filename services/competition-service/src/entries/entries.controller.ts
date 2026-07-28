@@ -11,25 +11,42 @@ export class EntriesController {
   constructor(private readonly service: EntriesService) {}
 
   @Get()
-  list(@Param('competitionId') cId: string, @Query('divisionId') divisionId?: string) {
-    return this.service.list(cId, divisionId)
+  list(
+    @Request() req: FastifyRequest & { tenantContext: { tenantId: string } },
+    @Param('competitionId') cId: string,
+    @Query('divisionId') divisionId?: string,
+  ) {
+    return this.service.list(req.tenantContext.tenantId, cId, divisionId)
   }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  create(@Param('competitionId') cId: string, @Body() dto: CreateEntryDto) {
-    return this.service.create(cId, dto)
+  create(
+    @Request() req: FastifyRequest & { tenantContext: { tenantId: string } },
+    @Param('competitionId') cId: string,
+    @Body() dto: CreateEntryDto,
+  ) {
+    return this.service.create(req.tenantContext.tenantId, cId, dto)
   }
 
   @Patch(':id')
-  update(@Param('competitionId') cId: string, @Param('id') id: string, @Body() dto: UpdateEntryDto) {
-    return this.service.update(cId, id, dto)
+  update(
+    @Request() req: FastifyRequest & { tenantContext: { tenantId: string } },
+    @Param('competitionId') cId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateEntryDto,
+  ) {
+    return this.service.update(req.tenantContext.tenantId, cId, id, dto)
   }
 
   @Post('bulk-confirm')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Confirm all pending entries in a division' })
-  bulkConfirm(@Param('competitionId') cId: string, @Query('divisionId') divisionId: string) {
-    return this.service.bulkConfirm(cId, divisionId)
+  bulkConfirm(
+    @Request() req: FastifyRequest & { tenantContext: { tenantId: string } },
+    @Param('competitionId') cId: string,
+    @Query('divisionId') divisionId: string,
+  ) {
+    return this.service.bulkConfirm(req.tenantContext.tenantId, cId, divisionId)
   }
 }

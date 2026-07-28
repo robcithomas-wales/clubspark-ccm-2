@@ -39,7 +39,7 @@ export class ScoringRepository {
 
   async fetchPersonData(tenantId: string): Promise<PersonRawData[]> {
     // Single large cross-schema query — all aggregates per person in one pass
-    const rows = await this.prisma.write.$queryRawUnsafe<Array<Record<string, unknown>>>(`
+    const rows = await this.prisma.write.$queryRaw<Array<Record<string, unknown>>>`
       WITH
       booking_stats AS (
         SELECT
@@ -55,7 +55,7 @@ export class ScoringRepository {
                       AND b.status != 'cancelled' THEN 1 END)                   AS booking_count_12m,
           MIN(b.starts_at)                                                       AS first_booking_at
         FROM booking.bookings b
-        WHERE b.tenant_id = '${tenantId}'
+        WHERE b.tenant_id = ${tenantId}::uuid
           AND b.status != 'cancelled'
           AND b.customer_id IS NOT NULL
         GROUP BY b.customer_id
@@ -70,7 +70,7 @@ export class ScoringRepository {
           EXTRACT(EPOCH FROM (NOW() - m.activated_at)) / (30.0 * 86400.0)      AS tenure_months
         FROM membership.memberships m
         LEFT JOIN membership.membership_plans mp ON mp.id = m.plan_id
-        WHERE m.tenant_id = '${tenantId}'
+        WHERE m.tenant_id = ${tenantId}::uuid
           AND m.status = 'active'
       ),
       payment_stats AS (
@@ -80,7 +80,7 @@ export class ScoringRepository {
           COUNT(CASE WHEN p.status = 'succeeded' AND p.created_at >= NOW() - INTERVAL '12 months' THEN 1 END) AS succeeded_12m,
           EXTRACT(EPOCH FROM (NOW() - MAX(CASE WHEN p.status = 'succeeded' THEN p.updated_at END))) / 86400.0 AS days_since_last_success
         FROM payment.payments p
-        WHERE p.tenant_id = '${tenantId}'
+        WHERE p.tenant_id = ${tenantId}::uuid
         GROUP BY p.customer_id
       ),
       email_stats AS (
@@ -89,7 +89,7 @@ export class ScoringRepository {
           COUNT(*)                                                                 AS emails_received,
           COUNT(CASE WHEN ml.opened_at IS NOT NULL THEN 1 END)                    AS emails_opened
         FROM comms.message_log ml
-        WHERE ml.tenant_id = '${tenantId}'
+        WHERE ml.tenant_id = ${tenantId}::uuid
           AND ml.channel = 'email'
           AND ml.sent_at >= NOW() - INTERVAL '90 days'
           AND ml.recipient_person_id IS NOT NULL
@@ -103,7 +103,7 @@ export class ScoringRepository {
                               AND ls.payment_status = 'paid'
                              THEN ROUND(ls.price_charged * 100) END), 0)         AS coaching_revenue_12m_pence
         FROM coaching.lesson_sessions ls
-        WHERE ls.tenant_id = '${tenantId}'
+        WHERE ls.tenant_id = ${tenantId}::uuid
           AND ls.customer_id IS NOT NULL
         GROUP BY ls.customer_id
       ),
@@ -114,7 +114,7 @@ export class ScoringRepository {
           COUNT(sp.id)                                                            AS total_sessions
         FROM booking.session_participants sp
         JOIN booking.sessions s ON s.id = sp.session_id
-        WHERE s.tenant_id = '${tenantId}'
+        WHERE s.tenant_id = ${tenantId}::uuid
           AND s.starts_at >= NOW() - INTERVAL '90 days'
           AND sp.customer_id IS NOT NULL
         GROUP BY sp.customer_id
@@ -149,23 +149,22 @@ export class ScoringRepository {
       LEFT JOIN email_stats      es ON es.person_id = p.id
       LEFT JOIN coaching_stats   cs ON cs.person_id = p.id
       LEFT JOIN no_show_stats    ns ON ns.person_id = p.id
-      WHERE p.tenant_id = '${tenantId}'
+      WHERE p.tenant_id = ${tenantId}::uuid
         AND p.lifecycle_state IN ('active', 'suspended')
         AND p.merged_into_id IS NULL
-    `)
+    `
 
     // Fetch email open hours separately (array aggregation is complex inline)
-    const hourRows = await this.prisma.write.$queryRawUnsafe<Array<{ person_id: string; opened_hours: number[] }>>(
-      `SELECT recipient_person_id AS person_id,
-              array_agg(EXTRACT(HOUR FROM opened_at)::int) AS opened_hours
-       FROM comms.message_log
-       WHERE tenant_id = '${tenantId}'
-         AND channel = 'email'
-         AND opened_at IS NOT NULL
-         AND sent_at >= NOW() - INTERVAL '90 days'
-         AND recipient_person_id IS NOT NULL
-       GROUP BY recipient_person_id`
-    )
+    const hourRows = await this.prisma.write.$queryRaw<Array<{ person_id: string; opened_hours: number[] }>>`
+      SELECT recipient_person_id AS person_id,
+             array_agg(EXTRACT(HOUR FROM opened_at)::int) AS opened_hours
+      FROM comms.message_log
+      WHERE tenant_id = ${tenantId}::uuid
+        AND channel = 'email'
+        AND opened_at IS NOT NULL
+        AND sent_at >= NOW() - INTERVAL '90 days'
+        AND recipient_person_id IS NOT NULL
+      GROUP BY recipient_person_id`
 
     const hourMap = new Map<string, number[]>()
     for (const row of hourRows) {
@@ -250,9 +249,8 @@ export class ScoringRepository {
   }
 
   async getActiveTenantIds(): Promise<string[]> {
-    const rows = await this.prisma.write.$queryRawUnsafe<Array<{ tenant_id: string }>>(
-      `SELECT DISTINCT tenant_id FROM people.persons WHERE lifecycle_state IN ('active','suspended') LIMIT 200`
-    )
+    const rows = await this.prisma.write.$queryRaw<Array<{ tenant_id: string }>>`
+      SELECT DISTINCT tenant_id FROM people.persons WHERE lifecycle_state IN ('active','suspended') LIMIT 200`
     return rows.map((r) => r.tenant_id)
   }
 }

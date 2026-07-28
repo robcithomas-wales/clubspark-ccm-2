@@ -1,4 +1,4 @@
-import { IsIn, IsOptional, IsDateString, IsUUID, IsString, IsIn as IsInValidator } from 'class-validator'
+import { IsIn, IsOptional, IsDateString, IsString, IsNotEmpty, IsIn as IsInValidator } from 'class-validator'
 import { PAYMENT_STATUSES } from '../../bookings/dto/update-payment-status.dto.js'
 
 export type EditSeriesMode = 'all' | 'from_date' | 'single'
@@ -14,7 +14,8 @@ export class UpdateBookingSeriesDto {
 
   /** Required when mode = single */
   @IsOptional()
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   bookingId?: string
 
   // ─── Fields to update ───────────────────────────────────────────────────────
@@ -24,7 +25,8 @@ export class UpdateBookingSeriesDto {
   notes?: string
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   customerId?: string
 
   @IsOptional()

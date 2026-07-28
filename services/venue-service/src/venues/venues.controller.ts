@@ -86,15 +86,19 @@ export class VenuesController {
   }
 
   @Get(':id/settings')
-  async getSettings(@Param('id') id: string) {
-    const settings = await this.service.getSettings(id)
+  async getSettings(@TenantCtx() ctx: TenantContext, @Param('id') id: string) {
+    const settings = await this.service.getSettings(ctx.tenantId, id)
     return { data: settings ?? { venueId: id } }
   }
 
   @Put(':id/settings')
   @HttpCode(HttpStatus.OK)
-  async upsertSettings(@Param('id') id: string, @Body() dto: UpsertVenueSettingsDto) {
-    const settings = await this.service.upsertSettings(id, dto)
+  async upsertSettings(
+    @TenantCtx() ctx: TenantContext,
+    @Param('id') id: string,
+    @Body() dto: UpsertVenueSettingsDto,
+  ) {
+    const settings = await this.service.upsertSettings(ctx.tenantId, id, dto)
     return { data: settings }
   }
 

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { Injectable, NotFoundException } from '@nestjs/common'
 import { VenuesRepository } from './venues.repository.js'
 import { assertFeature } from '../common/entitlement.js'
 
@@ -47,11 +47,17 @@ export class VenuesService {
     return this.repo.findAll(tenantId)
   }
 
-  getSettings(venueId: string) {
+  async getSettings(tenantId: string, venueId: string) {
+    // Ensure the venue belongs to the caller's tenant before exposing its settings.
+    const venue = await this.repo.findById(tenantId, venueId)
+    if (!venue) throw new NotFoundException('Venue not found')
     return this.repo.getSettings(venueId)
   }
 
-  upsertSettings(venueId: string, data: VenueSettingsData) {
+  async upsertSettings(tenantId: string, venueId: string, data: VenueSettingsData) {
+    // Ensure the venue belongs to the caller's tenant before mutating its settings.
+    const venue = await this.repo.findById(tenantId, venueId)
+    if (!venue) throw new NotFoundException('Venue not found')
     return this.repo.upsertSettings(venueId, data)
   }
 

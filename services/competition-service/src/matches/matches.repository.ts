@@ -21,9 +21,11 @@ export class MatchesRepository {
     })
   }
 
-  async update(id: string, data: any) {
-    await this.prisma.match.update({ where: { id }, data })
-    return this.prisma.match.findFirst({ where: { id }, include: { homeEntry: true, awayEntry: true } })
+  async update(id: string, competitionId: string, data: any) {
+    // Scope the write to the (already tenant-verified) competition so a match id from
+    // another competition can never be updated via this path.
+    await this.prisma.match.updateMany({ where: { id, competitionId }, data })
+    return this.prisma.match.findFirst({ where: { id, competitionId }, include: { homeEntry: true, awayEntry: true } })
   }
 
   async getVerifiedMatchesForStandings(competitionId: string, divisionId: string) {

@@ -85,7 +85,11 @@ export class CampaignsController {
 
   @Post(':id/dispatch')
   @ApiOperation({ summary: 'Manually trigger dispatch of a draft or scheduled campaign' })
-  dispatch(@Param('id') id: string) {
+  async dispatch(@Tenant() ctx: TenantContext, @Param('id') id: string) {
+    // Verify the campaign belongs to the caller's tenant BEFORE dispatching —
+    // otherwise any authenticated user could send another tenant's campaign.
+    const campaign = await this.svc.findById(ctx.tenantId, id)
+    if (!campaign) throw new NotFoundException('Campaign not found')
     return this.svc.dispatch(id)
   }
 }

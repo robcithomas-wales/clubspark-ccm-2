@@ -7,7 +7,7 @@ export class ForecastingRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async getSlotHistory(tenantId: string, weeksBack = 8): Promise<SlotHistoryRow[]> {
-    const rows = await this.prisma.write.$queryRawUnsafe<Array<Record<string, unknown>>>(`
+    const rows = await this.prisma.write.$queryRaw<Array<Record<string, unknown>>>`
       WITH weekly_slots AS (
         SELECT
           b.bookable_unit_id                              AS unit_id,
@@ -15,9 +15,9 @@ export class ForecastingRepository {
           EXTRACT(HOUR FROM b.starts_at)::int            AS hour_slot,
           DATE_TRUNC('week', b.starts_at)                AS booking_week
         FROM booking.bookings b
-        WHERE b.tenant_id = '${tenantId}'
+        WHERE b.tenant_id = ${tenantId}::uuid
           AND b.status NOT IN ('cancelled', 'no_show')
-          AND b.starts_at >= NOW() - INTERVAL '${weeksBack} weeks'
+          AND b.starts_at >= NOW() - make_interval(weeks => ${weeksBack}::int)
           AND b.bookable_unit_id IS NOT NULL
       ),
       slot_weeks AS (
@@ -34,10 +34,10 @@ export class ForecastingRepository {
         day_of_week,
         hour_slot,
         booked_weeks::int,
-        ${weeksBack}            AS total_weeks
+        ${weeksBack}::int      AS total_weeks
       FROM slot_weeks
       ORDER BY unit_id, day_of_week, hour_slot
-    `)
+    `
 
     return rows.map(r => ({
       unitId: r['unit_id'] as string,
@@ -125,23 +125,23 @@ export class ForecastingRepository {
 
   // Returns person IDs who have booked this unit in the last 6 months
   async getPreviousBookers(tenantId: string, unitId: string): Promise<string[]> {
-    const rows = await this.prisma.write.$queryRawUnsafe<Array<{ person_id: string }>>(`
+    const rows = await this.prisma.write.$queryRaw<Array<{ person_id: string }>>`
       SELECT DISTINCT b.customer_id AS person_id
       FROM booking.bookings b
-      WHERE b.tenant_id = '${tenantId}'
-        AND b.bookable_unit_id = '${unitId}'
+      WHERE b.tenant_id = ${tenantId}::uuid
+        AND b.bookable_unit_id = ${unitId}::uuid
         AND b.status NOT IN ('cancelled')
         AND b.starts_at >= NOW() - INTERVAL '6 months'
         AND b.customer_id IS NOT NULL
       LIMIT 200
-    `)
+    `
     return rows.map(r => r.person_id)
   }
 
   async getActiveTenantIds(): Promise<string[]> {
-    const rows = await this.prisma.read.$queryRawUnsafe<Array<{ tenant_id: string }>>(`
+    const rows = await this.prisma.read.$queryRaw<Array<{ tenant_id: string }>>`
       SELECT DISTINCT tenant_id::text FROM analytics.member_scores
-    `)
+    `
     return rows.map(r => r.tenant_id)
   }
 }

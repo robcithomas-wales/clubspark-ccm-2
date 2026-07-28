@@ -45,8 +45,12 @@ export class WebhookDeliveriesRepository {
     return { data, total }
   }
 
-  async findById(id: string): Promise<WebhookDelivery | null> {
-    return this.prisma.read.webhookDelivery.findUnique({ where: { id } })
+  async findById(tenantId: string, id: string): Promise<WebhookDelivery | null> {
+    // Scope by the parent subscription's tenantId — WebhookDelivery has no tenantId
+    // column, so ownership must be enforced through the subscription relation.
+    return this.prisma.read.webhookDelivery.findFirst({
+      where: { id, subscription: { tenantId } },
+    })
   }
 
   async updateStatus(

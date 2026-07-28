@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import { randomBytes } from 'crypto'
+import { createHmac, randomBytes, timingSafeEqual } from 'crypto'
 import { OAuthConnectionsRepository } from './oauth-connections.repository.js'
 import { encryptToken, decryptToken } from '../common/crypto/token-encryption.js'
 import type { AppConfig } from '../config/configuration.js'
@@ -15,19 +15,60 @@ const QB_TOKEN_URL = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer'
 @Injectable()
 export class OAuthConnectionsService {
   private readonly encryptionKey: string
+  private readonly stateSecret: string
 
   constructor(
     private readonly repo: OAuthConnectionsRepository,
     private readonly config: ConfigService<AppConfig, true>,
   ) {
     this.encryptionKey = config.get('tokenEncryptionKey', { infer: true })
+    this.stateSecret = config.get('oauthStateSecret', { infer: true })
+    // Fail closed: without a signing secret we cannot prevent tenantId tampering
+    // on the OAuth callback, so refuse to start rather than sign with nothing.
+    if (!this.stateSecret) {
+      throw new Error('OAUTH_STATE_SECRET is not configured')
+    }
+  }
+
+  // ── OAuth state signing ────────────────────────────────────────────────────
+  // The `state` round-trips the tenantId through the provider's browser redirect.
+  // It is HMAC-signed so a forged/tampered callback cannot inject an arbitrary
+  // tenantId. The signature is embedded in the (still base64url-JSON) state.
+
+  private stateHmac(tenantId: string, nonce: string): string {
+    return createHmac('sha256', this.stateSecret).update(`${tenantId}.${nonce}`).digest('hex')
+  }
+
+  private signState(tenantId: string): string {
+    const nonce = randomBytes(16).toString('hex')
+    const sig = this.stateHmac(tenantId, nonce)
+    return Buffer.from(JSON.stringify({ tenantId, nonce, sig })).toString('base64url')
+  }
+
+  private verifyState(state: string): string {
+    let parsed: { tenantId?: string; nonce?: string; sig?: string }
+    try {
+      parsed = JSON.parse(Buffer.from(state, 'base64url').toString())
+    } catch {
+      throw new BadRequestException('Invalid OAuth state')
+    }
+    const { tenantId, nonce, sig } = parsed
+    if (!tenantId || !nonce || !sig) throw new BadRequestException('Invalid OAuth state')
+
+    const expected = this.stateHmac(tenantId, nonce)
+    const sigBuf = Buffer.from(sig)
+    const expBuf = Buffer.from(expected)
+    if (sigBuf.length !== expBuf.length || !timingSafeEqual(sigBuf, expBuf)) {
+      throw new BadRequestException('OAuth state signature mismatch')
+    }
+    return tenantId
   }
 
   // ── Xero ─────────────────────────────────────────────────────────────────
 
   buildXeroAuthUrl(tenantId: string): string {
     const xero = this.config.get('xero', { infer: true })
-    const state = Buffer.from(JSON.stringify({ tenantId, nonce: randomBytes(8).toString('hex') })).toString('base64url')
+    const state = this.signState(tenantId)
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: xero.clientId,
@@ -39,7 +80,7 @@ export class OAuthConnectionsService {
   }
 
   async handleXeroCallback(code: string, state: string) {
-    const { tenantId } = JSON.parse(Buffer.from(state, 'base64url').toString())
+    const tenantId = this.verifyState(state)
     const xero = this.config.get('xero', { infer: true })
 
     const tokenRes = await fetch(XERO_TOKEN_URL, {
@@ -108,7 +149,7 @@ export class OAuthConnectionsService {
 
   buildQuickBooksAuthUrl(tenantId: string): string {
     const qb = this.config.get('quickbooks', { infer: true })
-    const state = Buffer.from(JSON.stringify({ tenantId, nonce: randomBytes(8).toString('hex') })).toString('base64url')
+    const state = this.signState(tenantId)
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: qb.clientId,
@@ -120,7 +161,7 @@ export class OAuthConnectionsService {
   }
 
   async handleQuickBooksCallback(code: string, state: string, realmId: string) {
-    const { tenantId } = JSON.parse(Buffer.from(state, 'base64url').toString())
+    const tenantId = this.verifyState(state)
     const qb = this.config.get('quickbooks', { infer: true })
 
     const res = await fetch(QB_TOKEN_URL, {

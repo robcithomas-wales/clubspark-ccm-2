@@ -1,6 +1,7 @@
-import { Controller, Post, Body, Logger } from '@nestjs/common'
-import { ApiTags, ApiOperation } from '@nestjs/swagger'
+import { Controller, Post, Body, Logger, UseGuards } from '@nestjs/common'
+import { ApiTags, ApiOperation, ApiSecurity } from '@nestjs/swagger'
 import { SkipTenant } from '../common/decorators/skip-tenant.decorator.js'
+import { InternalSecretGuard } from '../common/guards/internal-secret.guard.js'
 import { WebhookDeliveriesService } from '../webhook-deliveries/webhook-deliveries.service.js'
 import { AccountingSyncService } from '../accounting-sync/accounting-sync.service.js'
 import type { DomainEvent } from './domain-events.js'
@@ -17,6 +18,8 @@ export class EventsController {
 
   @Post('inbound')
   @SkipTenant()
+  @UseGuards(InternalSecretGuard)
+  @ApiSecurity('internal-secret')
   @ApiOperation({ summary: 'Inbound domain event (pilot: HTTP; production: Azure Service Bus)' })
   async inbound(@Body() event: DomainEvent): Promise<{ received: boolean }> {
     this.logger.log(`[Inbound] ${event.type} — tenant ${event.tenantId}`)

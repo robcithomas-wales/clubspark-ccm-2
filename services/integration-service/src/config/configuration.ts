@@ -11,6 +11,10 @@ export const configuration = () => ({
 
   tokenEncryptionKey: process.env['TOKEN_ENCRYPTION_KEY'] ?? 'dev-encryption-key-32-bytes-here!',
 
+  // HMAC secret used to sign/verify OAuth `state` so a callback cannot inject an
+  // arbitrary (unauthenticated) tenantId. Generate with: openssl rand -hex 32
+  oauthStateSecret: process.env['OAUTH_STATE_SECRET'] ?? 'dev-oauth-state-secret-change-me',
+
   xero: {
     clientId: process.env['XERO_CLIENT_ID'] ?? '',
     clientSecret: process.env['XERO_CLIENT_SECRET'] ?? '',

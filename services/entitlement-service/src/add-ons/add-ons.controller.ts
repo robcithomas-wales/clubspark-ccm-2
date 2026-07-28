@@ -19,8 +19,9 @@ export class AddOnsController {
 
   /** List active add-ons for an org. */
   @Get('org/:orgId')
-  findByOrg(@Param('orgId') orgId: string) {
-    return this.service.findByOrg(orgId)
+  findByOrg(@Req() req: RequestWithCtx, @Param('orgId') orgId: string) {
+    const { tenantId } = req.tenantContext as TenantContext
+    return this.service.findByOrg(orgId, tenantId)
   }
 
   /** Attach an add-on to an org. */
@@ -32,7 +33,12 @@ export class AddOnsController {
 
   /** Detach (cancel) an add-on from an org. */
   @Delete('org/:orgId/:addOnId')
-  detach(@Param('orgId') orgId: string, @Param('addOnId') addOnId: string) {
-    return this.service.detach(orgId, addOnId)
+  detach(
+    @Req() req: RequestWithCtx,
+    @Param('orgId') orgId: string,
+    @Param('addOnId') addOnId: string,
+  ) {
+    const { tenantId } = req.tenantContext as TenantContext
+    return this.service.detach(orgId, addOnId, tenantId)
   }
 }

@@ -12,21 +12,31 @@ export class MatchesController {
 
   @Get()
   list(
+    @Request() req: FastifyRequest & { tenantContext: { tenantId: string } },
     @Param('competitionId') cId: string,
     @Query('divisionId') divisionId?: string,
     @Query('round') round?: number,
   ) {
-    return this.service.list(cId, divisionId, round ? Number(round) : undefined)
+    return this.service.list(req.tenantContext.tenantId, cId, divisionId, round ? Number(round) : undefined)
   }
 
   @Get(':id')
-  findOne(@Param('competitionId') cId: string, @Param('id') id: string) {
-    return this.service.findById(cId, id)
+  findOne(
+    @Request() req: FastifyRequest & { tenantContext: { tenantId: string } },
+    @Param('competitionId') cId: string,
+    @Param('id') id: string,
+  ) {
+    return this.service.findById(req.tenantContext.tenantId, cId, id)
   }
 
   @Patch(':id')
-  update(@Param('competitionId') cId: string, @Param('id') id: string, @Body() dto: UpdateMatchDto) {
-    return this.service.update(cId, id, dto)
+  update(
+    @Request() req: FastifyRequest & { tenantContext: { tenantId: string } },
+    @Param('competitionId') cId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateMatchDto,
+  ) {
+    return this.service.update(req.tenantContext.tenantId, cId, id, dto)
   }
 
   @Post(':id/result')
@@ -40,7 +50,7 @@ export class MatchesController {
   ) {
     // For now treat all portal users as admin; player submission via mobile uses different route
     const isAdmin = true
-    return this.service.submitResult(cId, id, dto, isAdmin)
+    return this.service.submitResult(req.tenantContext.tenantId, cId, id, dto, isAdmin)
   }
 
   @Post(':id/result/verify')
@@ -51,7 +61,7 @@ export class MatchesController {
     @Param('competitionId') cId: string,
     @Param('id') id: string,
   ) {
-    return this.service.verifyResult(cId, id, null)
+    return this.service.verifyResult(req.tenantContext.tenantId, cId, id, null)
   }
 
   @Post(':id/result/dispute')
@@ -62,6 +72,6 @@ export class MatchesController {
     @Param('competitionId') cId: string,
     @Param('id') id: string,
   ) {
-    return this.service.disputeResult(cId, id, 'admin')
+    return this.service.disputeResult(req.tenantContext.tenantId, cId, id, 'admin')
   }
 }

@@ -13,8 +13,9 @@ export class OverridesController {
 
   /** Get the pricing override for an org (null if none set). */
   @Get('org/:orgId')
-  getByOrg(@Param('orgId') orgId: string) {
-    return this.service.getByOrg(orgId)
+  getByOrg(@Req() req: RequestWithCtx, @Param('orgId') orgId: string) {
+    const { tenantId } = req.tenantContext as TenantContext
+    return this.service.getByOrg(orgId, tenantId)
   }
 
   /** Set or replace the pricing override for an org. */
@@ -26,7 +27,8 @@ export class OverridesController {
 
   /** Remove the pricing override for an org. */
   @Delete('org/:orgId')
-  remove(@Param('orgId') orgId: string) {
-    return this.service.remove(orgId)
+  remove(@Req() req: RequestWithCtx, @Param('orgId') orgId: string) {
+    const { tenantId } = req.tenantContext as TenantContext
+    return this.service.remove(orgId, tenantId)
   }
 }

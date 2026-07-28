@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Logger } from '@nestjs/common'
+import { Controller, Post, Body, Headers, Logger, UnauthorizedException } from '@nestjs/common'
 import { ApiTags, ApiOperation } from '@nestjs/swagger'
 import { SkipTenant } from '../common/guards/tenant-context.guard.js'
 import { NotificationsService } from '../notifications/notifications.service.js'
@@ -45,15 +45,40 @@ export class EventsController {
 
   /**
    * Receives a domain event from any publisher service.
-   * Authentication is skipped — this endpoint is internal-network only.
+   * Tenant auth is skipped (internal service-to-service call), but the endpoint
+   * is protected by a shared internal secret. tenantId is read from the event
+   * body — that is inherent to internal event delivery; the secret is the guard.
    * In production this is replaced by the Azure Service Bus subscription listener.
    */
   @Post('inbound')
   @SkipTenant()
   @ApiOperation({ summary: 'Inbound domain event (pilot: HTTP; production: Azure Service Bus)' })
-  async inbound(@Body() event: DomainEvent): Promise<{ received: boolean }> {
+  async inbound(
+    @Headers('x-internal-secret') providedSecret: string | undefined,
+    @Body() event: DomainEvent,
+  ): Promise<{ received: boolean }> {
+    this.assertInternalSecret(providedSecret)
     this.logger.log(`[EventBus INBOUND] ${event.type} — tenant ${event.tenantId}`)
     await this.notifications.handle(event)
     return { received: true }
+  }
+
+  /**
+   * Fail-closed internal-secret check. If INTERNAL_SECRET is set, the
+   * request must present a matching x-internal-secret header. If it is unset,
+   * the request is rejected UNLESS running under test/development — matching the
+   * tenant-guard fail-closed pattern so production can never accept unauthed events.
+   */
+  private assertInternalSecret(providedSecret?: string): void {
+    const expected = process.env['INTERNAL_SECRET']
+    if (!expected) {
+      if (process.env['NODE_ENV'] !== 'test' && process.env['NODE_ENV'] !== 'development') {
+        throw new UnauthorizedException('Internal event secret is not configured')
+      }
+      return
+    }
+    if (providedSecret !== expected) {
+      throw new UnauthorizedException('Invalid internal event secret')
+    }
   }
 }

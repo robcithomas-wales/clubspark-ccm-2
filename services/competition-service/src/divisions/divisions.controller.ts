@@ -10,17 +10,30 @@ export class DivisionsController {
   constructor(private readonly service: DivisionsService) {}
 
   @Get()
-  list(@Param('competitionId') competitionId: string) { return this.service.list(competitionId) }
+  list(
+    @Request() req: FastifyRequest & { tenantContext: { tenantId: string } },
+    @Param('competitionId') competitionId: string,
+  ) {
+    return this.service.list(req.tenantContext.tenantId, competitionId)
+  }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  create(@Param('competitionId') competitionId: string, @Body() dto: CreateDivisionDto) {
-    return this.service.create(competitionId, dto)
+  create(
+    @Request() req: FastifyRequest & { tenantContext: { tenantId: string } },
+    @Param('competitionId') competitionId: string,
+    @Body() dto: CreateDivisionDto,
+  ) {
+    return this.service.create(req.tenantContext.tenantId, competitionId, dto)
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param('competitionId') competitionId: string, @Param('id') id: string) {
-    return this.service.delete(competitionId, id)
+  remove(
+    @Request() req: FastifyRequest & { tenantContext: { tenantId: string } },
+    @Param('competitionId') competitionId: string,
+    @Param('id') id: string,
+  ) {
+    return this.service.delete(req.tenantContext.tenantId, competitionId, id)
   }
 }

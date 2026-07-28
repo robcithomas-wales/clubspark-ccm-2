@@ -79,24 +79,28 @@ export class ChargesRepository {
     })
   }
 
-  async markChargePaid(chargeId: string, paymentId?: string) {
-    return this.prisma.charge.update({
-      where: { id: chargeId },
+  async markChargePaid(tenantId: string, chargeId: string, paymentId?: string) {
+    const result = await this.prisma.charge.updateMany({
+      where: { id: chargeId, chargeRun: { tenantId } },
       data: {
         status: 'paid',
         paidAt: new Date(),
         paymentId: paymentId ?? null,
       },
     })
+    if (result.count === 0) return null
+    return this.prisma.charge.findFirst({ where: { id: chargeId, chargeRun: { tenantId } } })
   }
 
-  async markChargeWaived(chargeId: string, notes?: string) {
-    return this.prisma.charge.update({
-      where: { id: chargeId },
+  async markChargeWaived(tenantId: string, chargeId: string, notes?: string) {
+    const result = await this.prisma.charge.updateMany({
+      where: { id: chargeId, chargeRun: { tenantId } },
       data: {
         status: 'waived',
         notes,
       },
     })
+    if (result.count === 0) return null
+    return this.prisma.charge.findFirst({ where: { id: chargeId, chargeRun: { tenantId } } })
   }
 }

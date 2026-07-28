@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { ForbiddenException, Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service.js'
 import type { AttachAddOnDto } from './dto/attach-add-on.dto.js'
 
@@ -10,15 +10,24 @@ export class AddOnsRepository {
     return this.prisma.addOn.findMany({ orderBy: { id: 'asc' } })
   }
 
-  async findByOrg(organisationId: string) {
+  async findByOrg(organisationId: string, tenantId: string) {
     return this.prisma.orgAddOn.findMany({
-      where: { organisationId, status: 'active' },
+      where: { organisationId, tenantId, status: 'active' },
       include: { addOn: true },
       orderBy: { createdAt: 'asc' },
     })
   }
 
   async attach(tenantId: string, dto: AttachAddOnDto) {
+    // (organisationId, addOnId) is globally unique, so an upsert keyed on it
+    // alone could hit another tenant's row. Reject if it belongs elsewhere.
+    const existing = await this.prisma.orgAddOn.findUnique({
+      where: { organisationId_addOnId: { organisationId: dto.organisationId, addOnId: dto.addOnId } },
+      select: { tenantId: true },
+    })
+    if (existing && existing.tenantId !== tenantId) {
+      throw new ForbiddenException(`Organisation '${dto.organisationId}' does not belong to this tenant`)
+    }
     return this.prisma.orgAddOn.upsert({
       where: { organisationId_addOnId: { organisationId: dto.organisationId, addOnId: dto.addOnId } },
       create: {
@@ -32,9 +41,9 @@ export class AddOnsRepository {
     })
   }
 
-  async detach(organisationId: string, addOnId: string) {
+  async detach(organisationId: string, addOnId: string, tenantId: string) {
     return this.prisma.orgAddOn.updateMany({
-      where: { organisationId, addOnId },
+      where: { organisationId, addOnId, tenantId },
       data: { status: 'cancelled' },
     })
   }
