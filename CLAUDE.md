@@ -165,3 +165,9 @@ Reviewer agents (invoke before opening a PR):
 - `@security-reviewer` — tenant isolation, secrets, auth
 - `@test-author` — write vitest tests following the fixtures + pool-safe pattern
 - `@architecture-reviewer` — structural integrity vs the recorded architecture (boundaries, layering, principles); use for new services / cross-service / structural changes
+
+Adding a service? Use `/new-service <name> <port> [schema]` (wraps `scripts/new-service.sh`) —
+it clones `template-service` and registers the service in the port table, `build:services`, and
+`run-all.sh`. Then `./scripts/check-service.sh <name>` (or `--all`) verifies blueprint
+compliance — the standard service shape plus the fail-closed tenant guard and cwd-independent env
+loading. `@architecture-reviewer` runs this checker as its first pass.

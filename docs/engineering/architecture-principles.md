@@ -44,7 +44,10 @@ file is the tight, rule-based version: each item is something a change could *br
 7. **Standard service shape** — a new service mirrors the existing NestJS layout (`config/`,
    `prisma/`, `common/` guards+filters+interceptors, `health/`, URI-versioned controllers) and is
    registered everywhere it must be: the canonical port table in `CLAUDE.md`, `build:services`,
-   and `scripts/run-all.sh`.
+   and `scripts/run-all.sh`. This is **mechanically enforced** by `./scripts/check-service.sh`
+   (run `--all` or `<name>`), which also verifies the fail-closed tenant guard and cwd-independent
+   env loading; scaffold new services with `./scripts/new-service.sh` (or `/new-service`) so they
+   start compliant.
 
 ## Keeping the record honest
 
