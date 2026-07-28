@@ -29,6 +29,10 @@ file is the tight, rule-based version: each item is something a change could *br
 3. **Cross-service communication is explicit** — via the event bus (currently HTTP fan-out in
    each service's `src/event-bus/`) or a documented API call. **Never** a shared database, and
    never an in-process dependency between two services.
+   - Internal / service-to-service HTTP endpoints (event-bus `/v1/events/inbound`, internal
+     admin routes) are authenticated with the shared `INTERNAL_SECRET` (`X-Internal-Secret`),
+     fail-closed in production. A new `@SkipTenant` cross-service endpoint that isn't secret-
+     gated is a structural break. (Detail: `security-and-data-boundaries.md`.)
 4. **Multi-tenancy is structural** — tenant/organisation context comes from the Supabase JWT /
    `x-tenant-id` headers and scopes every tenant-data query. (Query-level detail is enforced by
    `security-reviewer`; the *reviewer here* flags structural breaks — e.g. a new global table.)
