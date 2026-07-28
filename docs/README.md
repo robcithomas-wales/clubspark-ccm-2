@@ -12,6 +12,7 @@ Technical specifications and architectural decisions for the Club and Coach plat
 
 | Document | Description |
 |---|---|
+| [engineering/architecture-principles.md](engineering/architecture-principles.md) | Enforceable architectural invariants — service boundaries, layering, module independence |
 | [engineering/coding-standards.md](engineering/coding-standards.md) | Layering, DTO validation, ESM, Prisma, ports |
 | [engineering/security-and-data-boundaries.md](engineering/security-and-data-boundaries.md) | Multi-tenant isolation, secret handling, client/server boundary |
 | [engineering/testing-strategy.md](engineering/testing-strategy.md) | Pool-safe service tests + Playwright e2e |

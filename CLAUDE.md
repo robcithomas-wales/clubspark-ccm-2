@@ -147,6 +147,7 @@ Helper: `./scripts/agent-worktree.sh <branch-name>` creates an isolated worktree
 Fuller references live in `docs/engineering/` — consult the relevant one and have the matching
 reviewer agent (below) check your change:
 
+- [`architecture-principles.md`](docs/engineering/architecture-principles.md) — enforceable architectural invariants (service boundaries, layering, module independence)
 - [`coding-standards.md`](docs/engineering/coding-standards.md) — layering, DTO rules, ESM, Prisma, ports
 - [`security-and-data-boundaries.md`](docs/engineering/security-and-data-boundaries.md) — tenant isolation, secrets, client/server boundary
 - [`testing-strategy.md`](docs/engineering/testing-strategy.md) — pool-safe service tests + Playwright e2e
@@ -163,3 +164,4 @@ Reviewer agents (invoke before opening a PR):
 - `@portal-reviewer` — Next.js portal changes (service URLs, client/server, secrets)
 - `@security-reviewer` — tenant isolation, secrets, auth
 - `@test-author` — write vitest tests following the fixtures + pool-safe pattern
+- `@architecture-reviewer` — structural integrity vs the recorded architecture (boundaries, layering, principles); use for new services / cross-service / structural changes
