@@ -165,6 +165,7 @@ Reviewer agents (invoke before opening a PR):
 - `@security-reviewer` — tenant isolation, secrets, auth
 - `@test-author` — write vitest tests following the fixtures + pool-safe pattern
 - `@architecture-reviewer` — structural integrity vs the recorded architecture (boundaries, layering, principles); use for new services / cross-service / structural changes
+- `@product-reviewer` — spec conformance vs `docs/specs/` + `docs/reference/platform-features.md` (does the change deliver what we said, without silent scope drift)
 
 Adding a service? Use `/new-service <name> <port> [schema]` (wraps `scripts/new-service.sh`) —
 it clones `template-service` and registers the service in the port table, `build:services`, and
