@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { SubscriptionsRepository } from './subscriptions.repository.js'
 import type { AssignPlanDto } from './dto/assign-plan.dto.js'
 import type { UpdateSubscriptionDto } from './dto/update-subscription.dto.js'
@@ -20,6 +20,10 @@ export class SubscriptionsService {
 
   /** Assign (or reassign) a plan to an org. Idempotent — safe to call repeatedly. */
   async assign(tenantId: string, dto: AssignPlanDto) {
+    const existing = await this.repo.findOwner(dto.organisationId)
+    if (existing && existing.tenantId !== tenantId) {
+      throw new ForbiddenException(`Organisation '${dto.organisationId}' does not belong to this tenant`)
+    }
     const sub = await this.repo.upsert(tenantId, dto)
     return { data: sub }
   }

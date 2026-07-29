@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { ForbiddenException, Injectable } from '@nestjs/common'
 import { OverridesRepository } from './overrides.repository.js'
 import type { UpsertOverrideDto } from './dto/upsert-override.dto.js'
 
@@ -12,6 +12,10 @@ export class OverridesService {
   }
 
   async upsert(tenantId: string, dto: UpsertOverrideDto) {
+    const existing = await this.repo.findOwner(dto.organisationId)
+    if (existing && existing.tenantId !== tenantId) {
+      throw new ForbiddenException(`Organisation '${dto.organisationId}' does not belong to this tenant`)
+    }
     const result = await this.repo.upsert(tenantId, dto)
     return { data: result }
   }

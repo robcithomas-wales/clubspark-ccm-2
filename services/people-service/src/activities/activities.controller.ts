@@ -7,46 +7,32 @@ import {
   Query,
   HttpCode,
   HttpStatus,
-  UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common'
-import { ApiTags } from '@nestjs/swagger'
+import { ApiTags, ApiSecurity } from '@nestjs/swagger'
 import type { FastifyRequest } from 'fastify'
 import { Request } from '@nestjs/common'
 import { ActivitiesService } from './activities.service.js'
 import { SkipTenant } from '../common/decorators/skip-tenant.decorator.js'
+import { InternalSecretGuard } from '../common/guards/internal-secret.guard.js'
 
 @ApiTags('activities')
 @Controller()
 export class ActivitiesController {
   constructor(private readonly service: ActivitiesService) {}
 
-  /** Inbound domain events from booking-service, membership-service, etc. */
+  /**
+   * Inbound domain events from booking-service, membership-service, etc.
+   * SECURITY: skips tenant auth (internal event delivery reads tenantId from the
+   * body), so it is gated by the shared internal secret via InternalSecretGuard
+   * (fail-closed in production).
+   */
   @SkipTenant()
+  @UseGuards(InternalSecretGuard)
+  @ApiSecurity('internal-secret')
   @Post('events/inbound')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async inbound(
-    @Request() req: FastifyRequest,
-    @Body() event: Record<string, unknown>,
-  ) {
-    // SECURITY: this endpoint skips tenant auth (internal event delivery reads
-    // tenantId from the body), so it must be gated by a shared internal secret.
-    // Fail-closed: if INTERNAL_SECRET is unset, reject unless NODE_ENV is
-    // explicitly 'test' or 'development' — matching the tenant-guard pattern.
-    const expected = process.env['INTERNAL_SECRET']
-    if (!expected) {
-      if (
-        process.env['NODE_ENV'] !== 'test' &&
-        process.env['NODE_ENV'] !== 'development'
-      ) {
-        throw new UnauthorizedException('Internal event secret is not configured')
-      }
-    } else {
-      const provided = req.headers['x-internal-secret'] as string | undefined
-      if (provided !== expected) {
-        throw new UnauthorizedException('Invalid internal event secret')
-      }
-    }
-
+  async inbound(@Body() event: Record<string, unknown>) {
     await this.service.handleInboundEvent(event as any)
   }
 
