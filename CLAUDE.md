@@ -159,15 +159,30 @@ Team workflows live in `.claude/commands/` (slash commands) and `.claude/agents/
 (review roles) — all committed; improve them via PR rather than keeping local copies.
 Machine-local overrides go in `.claude/settings.local.json` (git-ignored).
 
-**Prefer the codified path.** When a request maps to an existing command in `.claude/commands/`,
-follow that command's workflow rather than improvising an equivalent — even if the user asked in
-plain English and didn't type the `/command`. Examples: "add/create a new service" → `/new-service`;
-"add an endpoint to <service>" → `/new-endpoint`; "get the tests green for <service>" →
-`/service-test`; "safely push / push this up" → `/safe-push`; "spin everything up locally" →
-`/setup-local`. Say which command you're following, then run it. Two caveats: (1) sanity-check the
-request against reality first — e.g. don't scaffold a service that already exists (extend it with
-`/new-endpoint` instead); (2) if no command fits, do the work directly. Being explicit with the
-`/command` is always the most reliable trigger.
+Slash commands (`.claude/commands/`) — the codified everyday workflows:
+
+| Command | For |
+|---|---|
+| `/setup-local` | Bootstrap a checkout — install, `.env` wiring, Prisma generate |
+| `/new-service <name> <port> [schema]` | Scaffold a blueprint-compliant service (wraps `new-service.sh`) |
+| `/new-endpoint <service> <verb> <path>` | Add an endpoint following the service's existing patterns |
+| `/schema-change <service> <change>` | Evolve a Prisma schema — edit → generate → migrate → test |
+| `/wire-event <service> <event> <consumers>` | Add a cross-service event the fail-closed event-bus way |
+| `/new-portal-page <portal> <feature>` | Add a Next.js page following client/server + service-URL rules |
+| `/new-spec <feature>` | Scaffold a `docs/specs/` spec in the standard shape |
+| `/debug-service <service>` | Triage a service that won't start / misbehaves locally |
+| `/review [target]` | Dispatch the right reviewer agents for what changed |
+| `/open-pr` | Full pre-PR gate: branch, kill services, lint, test, review, PR |
+| `/safe-push` | Lint + kill services + test, then push a feature branch |
+| `/service-test <service>` | Run and green a service's vitest suite |
+
+**Prefer the codified path.** When a request maps to one of the commands above, follow that
+command's workflow rather than improvising an equivalent — even if the user asked in plain English
+and didn't type the `/command` (e.g. "add a new service" → `/new-service`; "get the tests green" →
+`/service-test`; "push this up" → `/safe-push`). Say which command you're following, then run it.
+Two caveats: (1) sanity-check the request against reality first — e.g. don't scaffold a service
+that already exists (extend it with `/new-endpoint` instead); (2) if no command fits, do the work
+directly. Being explicit with the `/command` is always the most reliable trigger.
 
 Reviewer agents (invoke before opening a PR):
 - `@service-reviewer` — NestJS service changes vs conventions

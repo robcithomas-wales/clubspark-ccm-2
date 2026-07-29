@@ -1,3 +1,8 @@
+---
+description: Scaffold a new blueprint-compliant NestJS service and register it platform-wide
+argument-hint: <name> <port> [schema]
+---
+
 Scaffold a new blueprint-compliant NestJS service called `$1` on port `$2` (schema `$3`,
 defaults to `$1`).
 
