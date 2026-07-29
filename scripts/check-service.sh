@@ -3,7 +3,8 @@
 # check-service.sh — deterministic architecture-compliance check for services.
 #
 # Enforces the "standard service shape" (docs/engineering/architecture-principles.md #7),
-# platform registration, and two security invariants we hardened in the audit. Fast and
+# platform registration, and the tenant-guard invariants: the x-tenant-id fallback must be
+# fail-closed, and health routes must be exempt so probes still work. Fast and
 # CI-friendly; the architecture-reviewer agent runs this as its first, deterministic pass
 # before doing judgement-based review.
 #
@@ -52,14 +53,25 @@ check_one() {
     errs="$errs\n      ✗ tenant-context.guard.ts: x-tenant-id fallback not fail-closed (missing NODE_ENV gate)"
   fi
 
-  # 5. Registered platform-wide
+  # 5. Health routes exempt from the tenant guard (probes send no JWT/tenant header)
+  #    The guard is global and fail-closed, so a health controller without @SkipTenant()
+  #    returns 401 and every liveness/readiness probe fails. Matches both layouts:
+  #    SkipTenant imported from common/decorators/ or re-exported by the guard itself.
+  #    Anchored to a decorator on its own line so a leftover import or a mention in a
+  #    doc comment can't satisfy the check (both start with 'import'/'*' before the @).
+  h="$dir/src/health/health.controller.ts"
+  if [ -f "$h" ] && ! grep -qE '^[[:space:]]*@SkipTenant\(\)' "$h"; then
+    errs="$errs\n      ✗ health.controller.ts: missing @SkipTenant() — probes will get 401 from TenantContextGuard"
+  fi
+
+  # 6. Registered platform-wide
   grep -q "| $svc " "$ROOT/CLAUDE.md" 2>/dev/null || errs="$errs\n      ✗ not in CLAUDE.md port table"
   node -e "const s=(require('$ROOT/package.json').scripts||{})['build:services']||''; process.exit(s.indexOf('services/$svc')>=0?0:1)" 2>/dev/null \
     || errs="$errs\n      ✗ not in build:services (package.json)"
   grep '^SERVICES=' "$ROOT/scripts/run-all.sh" 2>/dev/null | grep -qE "[\" ]$name:" \
     || errs="$errs\n      ✗ not in run-all.sh SERVICES"
 
-  # 6. Recommended (warn only)
+  # 7. Recommended (warn only)
   [ -f "$dir/.env.example" ] || warns="$warns\n      ⚠ .env.example missing (recommended)"
 
   if [ -z "$errs" ]; then

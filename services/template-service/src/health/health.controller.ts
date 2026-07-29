@@ -1,13 +1,16 @@
 import { Controller, Get } from '@nestjs/common'
 import { ApiTags, ApiOperation } from '@nestjs/swagger'
 import { PrismaService } from '../prisma/prisma.service.js'
+import { SkipTenant } from '../common/decorators/skip-tenant.decorator.js'
 
 /**
  * Health check endpoints — used by Azure Container Apps readiness/liveness probes.
- * No authentication required on these routes.
+ * No authentication required on these routes: @SkipTenant() exempts the whole
+ * controller from TenantContextGuard, which otherwise fail-closes with a 401.
  */
 @ApiTags('health')
 @Controller('health')
+@SkipTenant()
 export class HealthController {
   constructor(private readonly prisma: PrismaService) {}
 
