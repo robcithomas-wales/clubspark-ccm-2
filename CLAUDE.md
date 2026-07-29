@@ -159,6 +159,16 @@ Team workflows live in `.claude/commands/` (slash commands) and `.claude/agents/
 (review roles) — all committed; improve them via PR rather than keeping local copies.
 Machine-local overrides go in `.claude/settings.local.json` (git-ignored).
 
+**Prefer the codified path.** When a request maps to an existing command in `.claude/commands/`,
+follow that command's workflow rather than improvising an equivalent — even if the user asked in
+plain English and didn't type the `/command`. Examples: "add/create a new service" → `/new-service`;
+"add an endpoint to <service>" → `/new-endpoint`; "get the tests green for <service>" →
+`/service-test`; "safely push / push this up" → `/safe-push`; "spin everything up locally" →
+`/setup-local`. Say which command you're following, then run it. Two caveats: (1) sanity-check the
+request against reality first — e.g. don't scaffold a service that already exists (extend it with
+`/new-endpoint` instead); (2) if no command fits, do the work directly. Being explicit with the
+`/command` is always the most reliable trigger.
+
 Reviewer agents (invoke before opening a PR):
 - `@service-reviewer` — NestJS service changes vs conventions
 - `@portal-reviewer` — Next.js portal changes (service URLs, client/server, secrets)
