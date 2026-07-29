@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service.js'
 import type { AssignPlanDto } from './dto/assign-plan.dto.js'
 import type { UpdateSubscriptionDto } from './dto/update-subscription.dto.js'
@@ -28,16 +28,17 @@ export class SubscriptionsRepository {
     })
   }
 
-  async upsert(tenantId: string, dto: AssignPlanDto) {
-    // organisationId is globally unique, so an upsert keyed on it alone could
-    // hit another tenant's row. Reject if the org already belongs elsewhere.
-    const existing = await this.prisma.orgSubscription.findUnique({
-      where: { organisationId: dto.organisationId },
+  // organisationId is globally unique, so an upsert keyed on it alone could
+  // hit another tenant's row. The service uses this to reject an org that
+  // already belongs elsewhere before upserting.
+  async findOwner(organisationId: string) {
+    return this.prisma.orgSubscription.findUnique({
+      where: { organisationId },
       select: { tenantId: true },
     })
-    if (existing && existing.tenantId !== tenantId) {
-      throw new ForbiddenException(`Organisation '${dto.organisationId}' does not belong to this tenant`)
-    }
+  }
+
+  async upsert(tenantId: string, dto: AssignPlanDto) {
     return this.prisma.orgSubscription.upsert({
       where: { organisationId: dto.organisationId },
       create: {

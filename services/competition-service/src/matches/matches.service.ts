@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common'
 import { MatchesRepository } from './matches.repository.js'
-import { PrismaService } from '../prisma/prisma.service.js'
+import { CompetitionsRepository } from '../competitions/competitions.repository.js'
 import { StandingsService } from '../standings/standings.service.js'
 import { RankingsService } from '../rankings/rankings.service.js'
 import type { SubmitResultDto } from './dto/submit-result.dto.js'
@@ -10,7 +10,7 @@ import type { UpdateMatchDto } from './dto/update-match.dto.js'
 export class MatchesService {
   constructor(
     private readonly repo: MatchesRepository,
-    private readonly prisma: PrismaService,
+    private readonly competitionsRepo: CompetitionsRepository,
     private readonly standingsService: StandingsService,
     private readonly rankingsService: RankingsService,
   ) {}
@@ -132,7 +132,7 @@ export class MatchesService {
    * own, so this is the tenant boundary and must run before any nested read/write.
    */
   private async assertCompetitionInTenant(tenantId: string, competitionId: string): Promise<void> {
-    const competition = await this.prisma.competition.findFirst({ where: { id: competitionId, tenantId } })
+    const competition = await this.competitionsRepo.findById(tenantId, competitionId)
     if (!competition) throw new NotFoundException('Competition not found')
   }
 }

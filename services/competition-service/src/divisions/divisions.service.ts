@@ -1,13 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { DivisionsRepository } from './divisions.repository.js'
-import { PrismaService } from '../prisma/prisma.service.js'
+import { CompetitionsRepository } from '../competitions/competitions.repository.js'
 import type { CreateDivisionDto } from './dto/create-division.dto.js'
 
 @Injectable()
 export class DivisionsService {
   constructor(
     private readonly repo: DivisionsRepository,
-    private readonly prisma: PrismaService,
+    private readonly competitionsRepo: CompetitionsRepository,
   ) {}
 
   async list(tenantId: string, competitionId: string) {
@@ -33,7 +33,7 @@ export class DivisionsService {
    * their own, so this is the tenant boundary and must run before any read/write.
    */
   private async assertCompetitionInTenant(tenantId: string, competitionId: string): Promise<void> {
-    const competition = await this.prisma.competition.findFirst({ where: { id: competitionId, tenantId } })
+    const competition = await this.competitionsRepo.findById(tenantId, competitionId)
     if (!competition) throw new NotFoundException('Competition not found')
   }
 }
