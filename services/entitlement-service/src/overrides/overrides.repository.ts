@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service.js'
 import type { UpsertOverrideDto } from './dto/upsert-override.dto.js'
 
@@ -10,16 +10,17 @@ export class OverridesRepository {
     return this.prisma.orgPlanOverride.findFirst({ where: { organisationId, tenantId } })
   }
 
-  async upsert(tenantId: string, dto: UpsertOverrideDto) {
-    // organisationId is globally unique, so an upsert keyed on it alone could
-    // hit another tenant's row. Reject if the org already belongs elsewhere.
-    const existing = await this.prisma.orgPlanOverride.findUnique({
-      where: { organisationId: dto.organisationId },
+  // organisationId is globally unique, so an upsert keyed on it alone could
+  // hit another tenant's row. The service uses this to reject an org that
+  // already belongs elsewhere before upserting.
+  async findOwner(organisationId: string) {
+    return this.prisma.orgPlanOverride.findUnique({
+      where: { organisationId },
       select: { tenantId: true },
     })
-    if (existing && existing.tenantId !== tenantId) {
-      throw new ForbiddenException(`Organisation '${dto.organisationId}' does not belong to this tenant`)
-    }
+  }
+
+  async upsert(tenantId: string, dto: UpsertOverrideDto) {
     return this.prisma.orgPlanOverride.upsert({
       where: { organisationId: dto.organisationId },
       create: {
