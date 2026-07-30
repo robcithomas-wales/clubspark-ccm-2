@@ -1,0 +1,134 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# A newer push to the same branch supersedes an in-flight run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────
+  # Build — the strongest signal we can get without a database.
+  # ─────────────────────────────────────────────────────────────────────────
+  build:
+    name: Build all services
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # Prisma clients are git-ignored, so nothing compiles until they exist.
+      - name: Generate Prisma clients
+        run: npm run prisma:generate:all
+
+      - name: Build all 15 services
+        run: npm run build:services
+
+      - name: Typecheck
+        run: npm run typecheck
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Lint — changed files only.
+  #
+  # `npm run lint` currently reports ~15k pre-existing problems (mostly Prettier
+  # formatting). Gating on the whole repo would mean a red build forever, and
+  # mass-reformatting would produce an unreviewable diff that collides with
+  # everyone's in-flight work. Linting only what the PR touches stops NEW
+  # problems without demanding that cleanup first.
+  #
+  # When the backlog reaches zero, swap this for plain `npm run lint`.
+  # ─────────────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint changed files
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need the base commit to diff against
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Show which files will be linted
+        run: |
+          BASE="${{ github.event.pull_request.base.sha || 'HEAD~1' }}"
+          echo "BASE=$BASE" >> "$GITHUB_ENV"
+          git diff --name-only --diff-filter=ACMR "$BASE" HEAD -- '*.ts' '*.tsx' \
+            | grep -v -E '(generated|dist|node_modules)/' \
+            | sed 's/^/  /' || echo "  (none)"
+
+      # Null-delimited + xargs so filenames survive word-splitting, and so that
+      # xargs is the LAST command in the pipeline — its exit status is the step's,
+      # which is what makes a lint failure actually fail the job. `-r` makes an
+      # empty changed-file set a no-op rather than linting the entire repo.
+      - name: Lint changed files
+        run: |
+          git diff -z --name-only --diff-filter=ACMR "$BASE" HEAD -- '*.ts' '*.tsx' \
+            | grep -zv -E '(generated|dist|node_modules)/' \
+            | xargs -0 -r npx eslint
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Tests — integration suites against a real Postgres.
+  #
+  # These are NOT unit tests: they need a migrated database. Without one, every
+  # suite is skipped by `describe.runIf(DB_AVAILABLE)` and vitest exits 0 —
+  # a green tick having verified nothing. ci-require-db.mjs makes that state
+  # fail loudly instead.
+  #
+  # Requires a DATABASE_URL repository secret. See docs/engineering/ci.md.
+  # ─────────────────────────────────────────────────────────────────────────
+  test:
+    name: Service integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Generate Prisma clients
+        run: npm run prisma:generate:all
+
+      - name: Fail if no test database is configured or reachable
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: node scripts/ci-require-db.mjs
+
+      # Sequential by design — the suites share one pgbouncer pool and
+      # parallelising them exhausts the connection limit (see CLAUDE.md).
+      - name: Run all service suites
+        env:
+          NODE_ENV: test
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          INTERNAL_SECRET: ci-internal-secret
+        run: npm run test:services
