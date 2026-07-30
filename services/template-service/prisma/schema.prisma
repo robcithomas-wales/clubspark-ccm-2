@@ -17,19 +17,29 @@ datasource db {
   schemas  = ["public"] // Replace with service schema: ["booking"] or ["venue"] etc.
 }
 
-// ─── Add your models here ────────────────────────────────────────────────────
-// Example:
+// ─── Models ──────────────────────────────────────────────────────────────────
 //
-// model Booking {
-//   id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-//   tenantId    String   @map("tenant_id") @db.Uuid
-//   startsAt    DateTime @map("starts_at")
-//   endsAt      DateTime @map("ends_at")
-//   status      String   @default("active")
-//   createdAt   DateTime @default(now()) @map("created_at")
-//   updatedAt   DateTime @updatedAt @map("updated_at")
+// REPLACE ExampleRecord with your service's real models, then update the
+// `schemas` list above to your service's schema name.
 //
-//   @@map("bookings")
-//   @@schema("booking")
-//   @@index([tenantId, startsAt, endsAt], name: "bookings_availability_idx")
-// }
+// This placeholder is deliberately a real model rather than a comment: Prisma
+// fails with "You don't have any models defined in your schema.prisma" when a
+// schema has none, which breaks `npm run prisma:generate:all` on a clean clone
+// and means every service scaffolded from this template starts out unable to
+// generate. Keep at least one model here.
+//
+// Note it is not backed by a migration — nothing creates this table. That is
+// fine: `prisma generate` never touches the database. Do not run
+// `prisma migrate` against template-service.
+
+model ExampleRecord {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("example_records")
+  @@schema("public")
+  @@index([tenantId])
+}
