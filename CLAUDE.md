@@ -131,6 +131,15 @@ deploys there.
   from the service's seed data.
 - **Prisma client is generated** (git-ignored under `**/prisma/generated/` and
   `**/src/generated/`) — run `prisma:generate` after install or schema changes.
+- **Schema changes go through migrations — never `prisma db push`** against a shared database.
+  `db push` records nothing, and it is why six services once had tables that existed only in the
+  live database and the platform could not rebuild its own schema. Each service owns one baseline
+  plus its later migrations, and its own `_prisma_migrations` table (the connection pins
+  `?schema=<service>`). `npm run migrate:all` builds a database from empty; `npm run check:drift`
+  proves migrations still match `schema.prisma`. CI runs both on a throwaway Postgres every PR.
+  ⚠️ Prisma migrate **hangs** on Supabase's transaction pooler (6543) — it needs the session
+  connection (5432), which is what `DIRECT_DATABASE_URL` / `directUrl` is for. Full detail:
+  [`docs/engineering/database-migrations.md`](docs/engineering/database-migrations.md).
 - **TypeScript ESM:** services import with explicit `.js` extensions (e.g.
   `./app.module.js`). Match the existing style.
 - **API versioning:** URI-based (`enableVersioning({ type: VersioningType.URI })`);

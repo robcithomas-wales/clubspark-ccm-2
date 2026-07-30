@@ -10,6 +10,9 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  // Migrations and introspection need a session-mode connection. Supabase's
+  // transaction pooler (port 6543) silently HANGS on DDL; port 5432 works.
+  directUrl = env("DIRECT_DATABASE_URL")
   schemas  = ["payment"]
 }
 
