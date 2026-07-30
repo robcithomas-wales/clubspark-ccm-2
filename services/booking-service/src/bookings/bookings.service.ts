@@ -421,4 +421,18 @@ export class BookingsService {
     if (!deleted) throw new NotFoundException('Payment split not found')
   }
 
+  // ─── Internal (service-to-service) ───────────────────────────────────────────
+
+  /**
+   * Re-points this tenant's bookings from one customer id to another.
+   *
+   * Takes a bare tenantId rather than a TenantContext: the caller is another
+   * service authenticated by the internal secret, so there is no JWT-derived
+   * context — see the controller for why.
+   */
+  async reassignCustomer(tenantId: string, fromCustomerId: string, toCustomerId: string) {
+    const updated = await this.repo.reassignCustomer(tenantId, fromCustomerId, toCustomerId)
+    return { updated }
+  }
+
 }

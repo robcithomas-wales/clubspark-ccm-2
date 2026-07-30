@@ -21,8 +21,11 @@ Verified against the code (not the docs):
   "One schema per service" is **namespacing inside a single database**, not separate databases.
 - **Cross-schema coupling in core paths.** `booking-service` reads `venue.*`, `people.*`,
   `auth.*` and `coaching.*` directly via SQL JOINs (availability, pricing, booking reads) — not
-  just the sanctioned read-only analytics exception. This **contradicts invariants #1 (sole
-  writer) and #3 (never a shared database)** in `architecture-principles.md`.
+  just the sanctioned read-only analytics exception. Worse, `people-service` **writes** into
+  `booking.*` and `membership.*` in a single distributed transaction (customer merge / `rehome`).
+  This **contradicts invariants #1 (sole writer) and #3 (never a shared database)** in
+  `architecture-principles.md`. Full site-by-site list:
+  [`cross-schema-coupling-inventory.md`](cross-schema-coupling-inventory.md).
 - **Lossy internal event bus.** `EventBus.publish()` is called as `void publish(...)` (unawaited)
   and swallows delivery errors, with no outbox, retry, or dead-letter. Internal domain events can
   be permanently lost. (integration-service *does* have a durable outbound-webhook queue, but it

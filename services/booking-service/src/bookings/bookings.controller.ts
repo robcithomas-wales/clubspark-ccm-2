@@ -9,8 +9,11 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  UseGuards,
+  Headers,
+  BadRequestException,
 } from '@nestjs/common'
-import { ApiTags, ApiSecurity, ApiQuery } from '@nestjs/swagger'
+import { ApiTags, ApiSecurity, ApiQuery, ApiExcludeEndpoint } from '@nestjs/swagger'
 import { BookingsService } from './bookings.service.js'
 import { CreateBookingDto } from './dto/create-booking.dto.js'
 import { CreateBookingAddOnDto } from './dto/create-booking-add-on.dto.js'
@@ -20,7 +23,10 @@ import { UpdatePaymentStatusDto } from './dto/update-payment-status.dto.js'
 import { UpdateBookingDto } from './dto/update-booking.dto.js'
 import { ApproveBookingDto, RejectBookingDto } from './dto/approve-booking.dto.js'
 import { BulkCancelBookingsDto } from './dto/bulk-cancel-bookings.dto.js'
+import { ReassignCustomerDto } from './dto/reassign-customer.dto.js'
 import { TenantCtx, type TenantContext } from '../common/decorators/tenant-context.decorator.js'
+import { SkipTenant } from '../common/decorators/skip-tenant.decorator.js'
+import { InternalSecretGuard } from '../common/guards/internal-secret.guard.js'
 
 @ApiTags('bookings')
 @ApiSecurity('tenant-id')
@@ -250,5 +256,32 @@ export class BookingsController {
     @TenantCtx() ctx: TenantContext,
   ) {
     await this.service.removePaymentSplit(ctx, id, splitId)
+  }
+
+  /**
+   * Service-to-service only: re-point this tenant's bookings from one customer id
+   * to another. Called by people-service when merging two person records.
+   *
+   * `@SkipTenant()` because a service-to-service caller has no end-user JWT to
+   * present — the tenant guard would reject it outside test/dev. Authentication
+   * is therefore entirely `InternalSecretGuard` (fail-closed except under test),
+   * and the tenant is taken from the explicit `x-tenant-id` header, matching the
+   * platform's existing internal-endpoint pattern (integration-service
+   * events/inbound, comms-service).
+   *
+   * Idempotent — safe to retry.
+   */
+  @Post('internal/reassign-customer')
+  @SkipTenant()
+  @UseGuards(InternalSecretGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiExcludeEndpoint()
+  async reassignCustomer(
+    @Headers('x-tenant-id') tenantId: string | undefined,
+    @Body() dto: ReassignCustomerDto,
+  ) {
+    if (!tenantId) throw new BadRequestException('x-tenant-id header is required')
+    const data = await this.service.reassignCustomer(tenantId, dto.fromCustomerId, dto.toCustomerId)
+    return { data }
   }
 }

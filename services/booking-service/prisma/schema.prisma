@@ -1,7 +1,10 @@
 // ClubSpark — Booking Service Prisma Schema
 // Owns: booking.bookings, booking.booking_add_ons, booking.booking_rules,
 //       booking.pricing_rules, booking.sessions, booking.session_participants
-// Read-only: venue.bookable_units, venue.resources, venue.unit_conflicts
+//
+// Models ONLY the booking schema. Cross-schema reads (venue.*, people.*, auth.*,
+// coaching.*) are raw SQL and are being removed — see
+// docs/architecture/cross-schema-coupling-inventory.md.
 
 generator client {
   provider        = "prisma-client-js"
@@ -12,7 +15,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  schemas  = ["booking", "venue"]
+  schemas  = ["booking"]
 }
 
 // ─── booking schema (owned) ───────────────────────────────────────────────────
@@ -377,30 +380,13 @@ model BookingPaymentSplit {
   @@index([tenantId, bookingId])
 }
 
-// ─── venue schema (read-only — for validation + availability) ─────────────────
-
-model BookableUnit {
-  id              String  @id @db.Uuid
-  tenantId        String  @map("tenant_id") @db.Uuid
-  venueId         String  @map("venue_id") @db.Uuid
-  resourceId      String  @map("resource_id") @db.Uuid
-  name            String
-  unitType        String  @map("unit_type")
-  sortOrder       Int     @default(0) @map("sort_order")
-  capacity        Int?
-  isActive        Boolean @map("is_active")
-  isOptionalExtra Boolean @default(false) @map("is_optional_extra")
-
-  @@map("bookable_units")
-  @@schema("venue")
-}
-
-// Read-only — only hasLighting is needed for lighting surcharge calculation
-model Resource {
-  id          String   @id @db.Uuid
-  tenantId    String   @map("tenant_id") @db.Uuid
-  hasLighting Boolean? @map("has_lighting")
-
-  @@map("resources")
-  @@schema("venue")
-}
+// ─── venue schema ─────────────────────────────────────────────────────────────
+//
+// Deliberately NOT modelled here. venue.bookable_units / venue.resources are owned
+// by venue-service; booking-service reaches them only through raw SQL today, and
+// that coupling is being removed — see WO-1.1 in docs/roadmap/phase-1-backlog.md.
+//
+// Do not re-add them as models: including another service's tables in this schema
+// makes `prisma migrate` believe it owns them (it would emit DROP TABLE against
+// venue's real data if the models were ever removed while "venue" stayed in the
+// datasource `schemas` list above).

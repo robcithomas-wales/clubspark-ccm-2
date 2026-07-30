@@ -21,6 +21,34 @@
 | 6 | **No tenant isolation at DB level (RLS)** — tenant isolation is application-enforced only. A bug in tenant context extraction could leak cross-tenant data. | 🟠 Medium | Phase 0.5 TODO |
 | 7 | **Partial containerisation** — production `Dockerfile`s exist for 7 of the 15 services (Azure deployment prep). Local dev still runs bare Node processes via `./scripts/run-all.sh`, and there is no `docker-compose` (not needed — the DB is remote Supabase). | 🟡 Low | ⚠️ Partial — remaining 8 services need Dockerfiles before Azure |
 | 8 | **No API gateway** — no centralised rate limiting, versioning, or auth enforcement. Fine for pilot; needed before NGB integrations. | 🟡 Low | ✅ **Resolved** — `integration-service` provides API key issuance (scoped credentials for NGB consumers), webhook delivery (push notifications), and full Xero/QuickBooks OAuth 2.0 accounting integration (real-time invoice/credit note sync + nightly batch reconciliation). Centralised rate limiting remains a production TODO. |
+| 9 | **Shared-database coupling blocks regionalization** — services namespace inside one physical Postgres, and core paths cross those boundaries: booking-service JOINs `venue.*`/`people.*`/`auth.*`/`coaching.*`, and people-service used to *write* `booking.*`/`membership.*`. Data residency (EU/US/AU) is impossible while a single query or transaction spans schemas. | 🔴 High | ⚠️ **Partial** — the cross-service **write** is removed (see *Internal service-to-service endpoints* below) and the cross-schema FK `membership.memberships → people.persons` is dropped. Booking's cross-schema **reads** remain: WO-1.1 / WO-1.2(a) in [`../roadmap/phase-1-backlog.md`](../roadmap/phase-1-backlog.md). Full site list: [`cross-schema-coupling-inventory.md`](cross-schema-coupling-inventory.md). |
+| 10 | **Live schema drifts from the migration files** — four cross-schema foreign keys and two orphaned schemas (`identity`, `crm`) exist in the database but appear in no migration. Any schema audit that reads only `prisma/migrations/` will be wrong. | 🟠 Medium | ⚠️ **Open** — the one blocking FK is dropped; the rest are on empty legacy tables. A full live-vs-migrations reconciliation is not yet done. |
+
+---
+
+## Internal service-to-service endpoints
+
+Some state changes must fan out to the services that own the affected rows. Where the event bus is
+not available (people-service has no event bus, and the transactional outbox is WO-2.1), services
+call each other over HTTP using a **fail-closed internal endpoint** pattern:
+
+- Path shape `POST /<resource>/internal/<action>` on the **owning** service, so each service remains
+  the sole writer of its own schema (invariant #1).
+- Marked `@SkipTenant()` — a service-to-service caller has no end-user JWT, and `TenantContextGuard`
+  rejects header-only auth outside test/dev. Authentication is `InternalSecretGuard`
+  (`X-Internal-Secret` vs `INTERNAL_SECRET`, constant-time, fail-closed except `NODE_ENV=test`), and
+  the tenant is taken from the explicit `x-tenant-id` header and enforced in every query.
+- Excluded from Swagger; **idempotent** and **reversible**, so callers can retry and compensate.
+
+> ⚠️ Note on paths: booking-service enables URI versioning with **no `defaultVersion`** and most of
+> its controllers declare no version, so its routes are served **unversioned** (`/bookings`, not
+> `/v1/bookings`); only `refund-policies` and `pricing-rules` opt in to `/v1`. membership-service
+> enables no versioning at all. Callers must not assume a `/v1` prefix.
+
+First use: **customer merge.** `people-service` moves its own `people.persons` row, then calls
+`POST /bookings/internal/reassign-customer` and `POST /memberships/internal/reassign-customer`,
+compensating in reverse if any step fails. This replaced a single cross-schema transaction that used
+`SET LOCAL session_replication_role = replica` to disable integrity enforcement.
 
 ---
 
