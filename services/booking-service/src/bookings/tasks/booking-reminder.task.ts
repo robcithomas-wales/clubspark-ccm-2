@@ -23,7 +23,16 @@ export class BookingReminderTask {
 
   @Cron(CronExpression.EVERY_HOUR)
   async sendReminders() {
-    const bookings = await this.repo.findDueReminders()
+    let bookings: Awaited<ReturnType<BookingsRepository['findDueReminders']>>
+    try {
+      bookings = await this.repo.findDueReminders()
+    } catch (err) {
+      // Never let the lookup reject unhandled — an unhandled rejection here is
+      // silent, and a broken query would stop reminders indefinitely unnoticed.
+      this.logger.error({ err: String(err) }, 'Failed to load bookings due for reminder')
+      return
+    }
+
     if (bookings.length === 0) return
 
     this.logger.log({ count: bookings.length }, 'Sending booking reminders')

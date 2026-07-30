@@ -10,12 +10,28 @@ import {
   Req,
   HttpCode,
   HttpStatus,
+  UseGuards,
+  Headers,
+  BadRequestException,
 } from '@nestjs/common'
-import { IsString, IsArray, IsOptional, ArrayMinSize } from 'class-validator'
+import { IsString, IsArray, IsOptional, IsNotEmpty, ArrayMinSize } from 'class-validator'
+import { InternalSecretGuard } from '../common/guards/internal-secret.guard'
+import { SkipTenant } from '../common/decorators/skip-tenant.decorator'
 import { MembershipsService } from './memberships.service'
 import { CreateMembershipDto } from './dto/create-membership.dto'
 import { UpdateMembershipDto } from './dto/update-membership.dto'
 import { TransitionMembershipDto } from './dto/transition-membership.dto'
+
+/** Body for the internal customer-merge hook. */
+class ReassignCustomerDto {
+  @IsString()
+  @IsNotEmpty()
+  fromCustomerId!: string
+
+  @IsString()
+  @IsNotEmpty()
+  toCustomerId!: string
+}
 
 class BulkTransitionDto {
   @IsArray()
@@ -164,5 +180,31 @@ export class MembershipsController {
   async remove(@Req() req: any, @Param('id') id: string) {
     const { tenantId, organisationId } = req.tenantContext
     await this.service.remove(tenantId, organisationId, id)
+  }
+
+  /**
+   * Service-to-service only: re-point this tenant's memberships from one customer
+   * id to another. Called by people-service when merging two person records.
+   *
+   * `@SkipTenant()` because a service-to-service caller has no end-user JWT to
+   * present — the tenant guard would reject it outside test/dev. Authentication
+   * is therefore entirely `InternalSecretGuard` (fail-closed except under test),
+   * and the tenant comes from the explicit `x-tenant-id` header.
+   *
+   * Deliberately tenant-wide, NOT scoped to an organisation: a person is a
+   * tenant-level entity, so a merge must move their memberships in every
+   * organisation. This is the one method in this controller that is not
+   * organisation-scoped. Idempotent — safe to retry.
+   */
+  @Post('internal/reassign-customer')
+  @SkipTenant()
+  @UseGuards(InternalSecretGuard)
+  @HttpCode(HttpStatus.OK)
+  reassignCustomer(
+    @Headers('x-tenant-id') tenantId: string | undefined,
+    @Body() dto: ReassignCustomerDto,
+  ) {
+    if (!tenantId) throw new BadRequestException('x-tenant-id header is required')
+    return this.service.reassignCustomer(tenantId, dto.fromCustomerId, dto.toCustomerId)
   }
 }

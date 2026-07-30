@@ -56,31 +56,30 @@ export class CustomersRepository {
     })
   }
 
-  async rehome(tenantId: string, oldId: string, newId: string) {
-    // Update the customer ID and cascade to bookings + memberships across schemas.
-    // FK checks are disabled for this transaction to avoid ordering constraints.
-    await this.prisma.$transaction([
-      this.prisma.$executeRaw`SET LOCAL session_replication_role = replica`,
-      this.prisma.$executeRaw`
-        UPDATE booking.bookings
-        SET customer_id = ${newId}::uuid
-        WHERE customer_id = ${oldId}::uuid
-          AND tenant_id = ${tenantId}::uuid
-      `,
-      this.prisma.$executeRaw`
-        UPDATE membership.memberships
-        SET customer_id = ${newId}::uuid
-        WHERE customer_id = ${oldId}::uuid
-          AND tenant_id = ${tenantId}::uuid
-      `,
-      this.prisma.$executeRaw`
-        UPDATE people.persons
-        SET id = ${newId}::uuid
-        WHERE id = ${oldId}::uuid
-          AND tenant_id = ${tenantId}::uuid
-      `,
-    ])
-    return this.prisma.customer.findFirst({ where: { tenantId, id: newId } })
+  /**
+   * Re-points a person row from one id to another, within this service's own schema.
+   *
+   * This used to also UPDATE booking.bookings and membership.memberships directly,
+   * in one local transaction, with `SET LOCAL session_replication_role = replica`
+   * to switch off FK enforcement. That was wrong three ways: it wrote to tables
+   * people-service does not own, it assumed all three schemas share one database
+   * (impossible under the regional split), and it required a privilege the app role
+   * should never hold. Those other-service updates are now API calls orchestrated
+   * by CustomersService.rehome; this method owns only people.persons.
+   *
+   * The child rows (person_activities, segment_memberships) follow automatically —
+   * their FKs are ON UPDATE CASCADE as of migration 20260729_person_fk_on_update_cascade.
+   *
+   * Returns the number of person rows moved (0 if oldId wasn't present), so the
+   * caller can treat a repeat call as a no-op rather than an error.
+   */
+  async rehomePersonOnly(tenantId: string, oldId: string, newId: string): Promise<number> {
+    return this.prisma.$executeRaw`
+      UPDATE people.persons
+      SET id = ${newId}::uuid
+      WHERE id = ${oldId}::uuid
+        AND tenant_id = ${tenantId}::uuid
+    `
   }
 
   async create(tenantId: string, dto: CreateCustomerDto) {

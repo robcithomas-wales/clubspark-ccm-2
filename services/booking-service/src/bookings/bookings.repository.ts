@@ -221,6 +221,27 @@ export class BookingsRepository {
     return rows.length > 0
   }
 
+  /**
+   * Re-points every booking from one customer id to another, within a tenant.
+   *
+   * Owned here because booking.bookings belongs to booking-service; people-service
+   * used to UPDATE this table directly across schemas, which blocks the regional
+   * split (see docs/architecture/cross-schema-coupling-inventory.md).
+   *
+   * Idempotent by construction: the WHERE clause matches the *old* id, so a repeat
+   * call after a successful one matches nothing and reports 0. That is what makes
+   * it safe for the caller to retry.
+   */
+  async reassignCustomer(tenantId: string, fromCustomerId: string, toCustomerId: string): Promise<number> {
+    return this.prisma.write.$executeRaw`
+      UPDATE booking.bookings
+      SET customer_id = ${toCustomerId}::uuid,
+          updated_at  = now()
+      WHERE tenant_id   = ${tenantId}::uuid
+        AND customer_id = ${fromCustomerId}::uuid
+    `
+  }
+
   async findBookableUnit(tenantId: string, bookableUnitId: string) {
     const rows = await this.prisma.read.$queryRaw<{
       id: string; tenantId: string; venueId: string; resourceId: string;
@@ -915,9 +936,12 @@ export class BookingsRepository {
         v.name                   AS "venueName",
         r.name                   AS "resourceName"
       FROM booking.bookings b
-      LEFT JOIN people.people p   ON p.id = b.customer_id
-      LEFT JOIN venue.venues v    ON v.id = b.venue_id::uuid
-      LEFT JOIN venue.resources r ON r.id = b.resource_id::uuid
+      -- Every join is tenant-qualified. Nothing validates that a booking's
+      -- customer_id belongs to the booking's tenant, so an unqualified join would
+      -- resolve another tenant's person and email them about this booking.
+      LEFT JOIN people.persons p  ON p.id = b.customer_id  AND p.tenant_id = b.tenant_id
+      LEFT JOIN venue.venues v    ON v.id = b.venue_id::uuid  AND v.tenant_id = b.tenant_id
+      LEFT JOIN venue.resources r ON r.id = b.resource_id::uuid AND r.tenant_id = b.tenant_id
       WHERE b.status IN ('active', 'pending')
         AND b.reminder_sent_at IS NULL
         AND b.starts_at >= ${windowStart}::timestamptz

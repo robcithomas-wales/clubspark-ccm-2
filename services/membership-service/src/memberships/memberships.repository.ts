@@ -525,4 +525,31 @@ export class MembershipsRepository {
       householdId: rest.ownerType === 'household' ? rest.ownerId : null,
     }
   }
+
+  /**
+   * Re-points every membership from one customer id to another, within a tenant.
+   *
+   * Owned here because membership.memberships belongs to membership-service;
+   * people-service used to UPDATE this table directly across schemas, which blocks
+   * the regional split (see docs/architecture/cross-schema-coupling-inventory.md).
+   *
+   * Idempotent by construction: the filter matches the *old* id, so a repeat call
+   * after a successful one matches nothing and reports 0.
+   *
+   * NOTE: deliberately scoped by tenant ONLY, unlike every other method here which
+   * also filters by organisationId. A person is a tenant-level entity, so merging
+   * two person records must move their memberships across every organisation in
+   * the tenant — leaving some behind would strand them on a dead customer id.
+   */
+  async reassignCustomer(
+    tenantId: string,
+    fromCustomerId: string,
+    toCustomerId: string,
+  ): Promise<number> {
+    const result = await this.prisma.membership.updateMany({
+      where: { tenantId, customerId: fromCustomerId },
+      data: { customerId: toCustomerId },
+    })
+    return result.count
+  }
 }

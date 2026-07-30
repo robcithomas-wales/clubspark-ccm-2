@@ -14,6 +14,9 @@ export const configuration = () => ({
   membershipService: {
     url: process.env['MEMBERSHIP_SERVICE_URL'] ?? 'http://localhost:4010',
   },
+
+  /** Shared secret for service-to-service calls (see InternalSecretGuard). */
+  internalSecret: process.env['INTERNAL_SECRET'] ?? '',
 })
 
 export type AppConfig = ReturnType<typeof configuration>

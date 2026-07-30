@@ -414,4 +414,10 @@ export class MembershipsService {
     })
     return { data: m }
   }
+
+  /** Re-points this tenant's memberships from one customer id to another. */
+  async reassignCustomer(tenantId: string, fromCustomerId: string, toCustomerId: string) {
+    const updated = await this.repo.reassignCustomer(tenantId, fromCustomerId, toCustomerId)
+    return { data: { updated } }
+  }
 }
