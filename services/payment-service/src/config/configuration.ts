@@ -1,12 +1,14 @@
 /**
  * Resolve a required secret. Uses the env var when set; in dev/test only, falls back to a
- * throwaway default so local work isn't blocked. In production a missing secret throws at
- * bootstrap (fail-closed) — never a committed default that silently weakens encryption.
+ * throwaway default so local work isn't blocked. Anywhere else (staging, production, or an
+ * unset NODE_ENV) a missing secret throws at bootstrap (fail-closed) — never a committed
+ * default that silently weakens encryption. Deny-list polarity matches the tenant and
+ * internal-secret guards.
  */
 const requireSecret = (value: string | undefined, name: string, devFallback: string): string => {
   if (value) return value
-  if (process.env['NODE_ENV'] === 'production') {
-    throw new Error(`${name} must be set in production`)
+  if (process.env['NODE_ENV'] !== 'development' && process.env['NODE_ENV'] !== 'test') {
+    throw new Error(`${name} must be set outside development/test`)
   }
   return devFallback
 }
