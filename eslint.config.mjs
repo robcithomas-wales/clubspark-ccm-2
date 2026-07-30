@@ -13,6 +13,10 @@ export default [
       '**/coverage/**',
       '**/*.js',         // during migration — JS files in old services are not linted yet
       '**/prisma/migrations/**',
+      // Generated Prisma clients — build output, git-ignored, and ~254MB of .ts across
+      // 14 services (one index.d.ts is 1.1MB). Type-aware linting them exhausted the
+      // 4GB V8 heap and made `npm run lint` fail outright rather than slowly.
+      '**/generated/**',
     ],
   },
 
