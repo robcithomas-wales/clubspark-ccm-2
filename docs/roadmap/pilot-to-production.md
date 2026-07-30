@@ -1,121 +1,160 @@
 # Pilot → Production Roadmap
 
-> **Status:** Proposed
-> **Date:** 2026-07-29
+> **Status:** Active
+> **Date:** 2026-07-29 · **Revised:** 2026-07-30
 > **Audience:** CTOO, engineering leadership
-> **Horizon:** ~6 months to the first production-ready region.
-> **Companion:** [`../architecture/scalability-and-multi-region.md`](../architecture/scalability-and-multi-region.md)
+> **Companion ADR:** [`../architecture/scalability-and-multi-region.md`](../architecture/scalability-and-multi-region.md)
+> **Live coupling inventory:** [`../architecture/cross-schema-coupling-inventory.md`](../architecture/cross-schema-coupling-inventory.md)
 
-This is the plan to take the pilot to a production-ready **single region on Azure**, built so that
-adding EU/US/AU regions later is *deploy-and-route*, not rewrite. It is grounded in a code-evidenced
-readiness review (2026-07-29). Effort tags: **S** ≈ days, **M** ≈ 1–2 weeks, **L** ≈ 3–6 weeks.
+## The goal, stated plainly
 
-## Guiding principle
+Build a **SaaS MVP we can confidently sell**, serving customers in **one region**, on a codebase whose
+**structure is already correct for multi-region**. Data residency (EU/US/AU) is a hard legal
+requirement, so multi-region is not a "maybe later" — it is a certainty we are deliberately deferring
+the *deployment* of, not the *design* of.
 
-Do the **structural, expensive-to-retrofit** work while the system is still small. Everything below
-Phase 1 §1 depends on removing the shared-database coupling first — sequence accordingly.
+**Non-negotiable:** we do not accept months of structural refactoring later. Anything expensive to
+retrofit gets done before feature development resumes. Anything cheap to add later, we defer.
 
----
+## How to decide what's in scope: one-way vs two-way doors
 
-## Phase 0 — Decisions & honesty (weeks 0–2)
+The whole plan reduces to one test — **if we get this wrong, how expensive is it to change once we
+have customers and features on top?**
 
-- [ ] **Ratify the target architecture** (regional silos + global control plane) and the data
-  classification (global vs regional). *(S)*
-- [ ] **Make the architecture docs honest.** booking-service JOINs `venue.*`/`people.*`/`auth.*`,
-  contradicting invariants #1/#3. Either log these as findings to remove (Phase 1 §1) or amend the
-  invariants to admit the coupling with an explicit TODO. *(S)*
-- [ ] **Close the security follow-ups** already logged this cycle: event publishers must send
-  `X-Internal-Secret` once `INTERNAL_SECRET` is set; converge competition
-  entries/standings/messages/draw/submissions onto `CompetitionsRepository`; fix the pre-existing
-  `integration webhook-deliveries` async-timing test. *(M)*
+- **One-way door** — reshapes data ownership, service boundaries, or how services talk. Retrofitting
+  means touching every feature built since. **These are in scope now, without exception.**
+- **Two-way door** — additive infrastructure that sits alongside the code. Adding it later costs the
+  same as adding it now. **These are deliberately deferred.**
 
-## Phase 1 — Structural foundations (months 1–3)
-
-**§1. Decouple the shared database (KEYSTONE — blocks multi-region). (L, highest priority)**
-- [ ] Remove booking-service's cross-schema reads of `venue.*`, `people.*`, `auth.*`. Replace with
-  API calls to the owning service, or a **booking-owned read model/projection** for hot-path
-  availability (maintained from events).
-- [ ] Restore the sole-writer invariant; each service's schema becomes independently relocatable.
-- [ ] *Acceptance:* no service queries another service's schema except the documented read-only
-  analytics exception; grep for cross-schema table names in each service's SQL is clean.
-
-**§2. Reliable eventing — transactional outbox + Azure Service Bus. (L)**
-- [ ] Replace `void publish()` + swallowed errors with the **outbox pattern**: write the event in
-  the same DB transaction as the state change; a relay ships it to Service Bus with retry.
-- [ ] Consumers become Service Bus subscribers (the code already anticipates this); enforce
-  idempotency + dead-letter. *Acceptance:* a forced subscriber outage loses **zero** events.
-
-**§3. Caching + real read/write split. (M)**
-- [ ] Introduce **Redis** (Azure Cache for Redis) for hot reads (availability, entitlements,
-  pricing, sessions). *(M)*
-- [ ] Wire the **read replica** that is currently dead config (`readUrl` used only in template);
-  route reads to it. Revisit `connection_limit=1` for AKS replica counts. *(S)*
-- [ ] *Acceptance:* p95 read latency and DB connection headroom validated under load (Phase 2 §4).
-
-**§4. Fix horizontal-scaling correctness — cron multi-fire. (M)**
-- [ ] In-process `@Cron` jobs (analytics scoring/anomaly/forecast, booking expiry/reminder,
-  membership expiry, integration webhook worker) fire on **every** replica. Add leader election /
-  a distributed lock, or externalize to a single scheduler. *Acceptance:* jobs run exactly once at
-  N>1 replicas.
-
-**§5. Observability. (M)**
-- [ ] OpenTelemetry tracing + **correlation/request IDs** propagated across services (add to the
-  shared `common/`), exported to Azure Monitor / App Insights; centralized structured logs.
-- [ ] Keep the existing liveness `/health` + readiness `/health/db` probes for AKS. *Acceptance:*
-  a cross-service request is traceable end-to-end.
-
-## Phase 2 — Platform hardening (months 3–5)
-
-**§1. Edge & gateway. (M)** Azure Front Door + API Management / ingress: routing, TLS, WAF, and
-**rate limiting** (`@nestjs/throttler` per-service + gateway-level) — none exists today.
-
-**§2. Identity off Supabase. (L)** Move auth to **Microsoft Entra External ID / Azure AD B2C**
-(region-aware). Propagate the **caller's** tenant on service-to-service calls (today some use a
-fixed default tenant — an isolation smell). *Acceptance:* no Supabase JWKS dependency; s2s calls
-carry real tenant context.
-
-**§3. Delivery — CI/CD + IaC. (L)** Pipelines (build/test/scan/deploy to AKS); **IaC** (Bicep or
-Terraform) for AKS, Postgres, Redis, Service Bus, Front Door; **secrets in Azure Key Vault** (the
-`requireSecret` fail-closed work this cycle already assumes real secret provisioning).
-
-**§4. Load & performance testing. (M)** Model 50k users; validate the cache + read-split +
-connection budget; find the real ceiling before customers do.
-
-**§5. Service-granularity decision. (M)** Resolve booking↔venue↔people: once §1 (Phase 1) removes
-the DB coupling, decide whether they stay three deployables or recombine. The other services
-(competition/team/coaching/comms/payment/order/admin/entitlement) are genuinely independent and
-can stay as-is.
-
-## Phase 3 — Region-ready (months 5–6)
-
-- [ ] **Global control plane:** tenant registry (`tenant → home_region`), region-aware routing via
-  Front Door, global reference data. *(L)*
-- [ ] **Residency mechanics** designed and validated end-to-end with **one** region live (region
-  assignment at onboarding, sticky home region, migration runbook). *(M)*
-- [ ] **Per-region operations:** backups, DR, runbooks, on-call. *(M)*
-
-## Designed-for-later (post-6-months)
-
-- Activate region 2/3 by deploying the same blueprint and routing by home region.
-- Cross-region concerns: global reporting/analytics over region-isolated data; tenants operating
-  in multiple regions.
+The insight that makes this affordable: **multi-region readiness is overwhelmingly about data
+ownership and communication patterns, not infrastructure.** Regional silos, Front Door, per-region
+Postgres — those are deployment concerns we can stand up in weeks when we need them. What we cannot
+do cheaply later is unpick services that read each other's tables. So we fix the boundaries now and
+buy the infrastructure later.
 
 ---
 
-## Dependency order (do not reorder the first three)
+## Status — what is already done
 
-1. **Decouple the shared DB** (Phase 1 §1) — unblocks per-service and per-region databases.
-2. **Outbox + Service Bus** (Phase 1 §2) — reliable state propagation once services are decoupled.
-3. **Cache + read-split + cron fix** (Phase 1 §3–§4) — throughput + scaling correctness.
-4. Then edge, identity, CI/CD, load-testing (Phase 2), then regionalization (Phase 3).
+| Item | Why it was a one-way door | State |
+|---|---|---|
+| **Cross-service *writes* removed** | A distributed transaction cannot span regional databases. No workaround exists | ✅ Verified: no service writes another's schema |
+| **Cross-schema FK dropped** (`membership.memberships → people.persons`) | A DB-level FK physically prevents separate regional databases | ✅ Applied + verified |
+| **Coupling inventory** | You cannot plan a decouple you haven't measured | ✅ Verified against the live DB |
+| **Integrity bypass removed** (`session_replication_role`) | Needed a privilege the app role must never hold | ✅ Gone |
 
-## Risk register (top structural risks)
+Two live bugs surfaced and fixed on the way: booking reminders had never sent, and customer financial
+profiles always reported zero.
+
+---
+
+## Gate 1 — must complete before feature development resumes
+
+Everything here is a one-way door. Estimated **6–8 weeks**.
+
+### G1.0 — CI, first (S)
+No CI exists, and the pre-push test hook is **not committed** — it lives only on one machine. With a
+second engineer, nothing prevents broken code reaching `main`.
+
+Build + test + lint on every PR; commit the hook; protect `main`.
+
+*Why first:* it is the thing that stops the team regressing everything below.
+
+### G1.1 — Finish the decouple (L)
+**22 cross-schema read references across 7 foreign tables** remain in booking-service
+(`venue.resources`, `people.persons`, `venue.bookable_units`, `venue.venues`,
+`coaching.lesson_sessions`, `auth.users`, `venue.unit_conflicts`).
+
+Hot paths (availability, pricing, create) get a **booking-owned projection**; occasional reads
+(dashboards, reports) become **API calls**. Decision already taken: projection — an API hop per
+availability cell is untenable.
+
+*Why now:* this is the last genuinely blocking structural item. Every feature built on top of a
+cross-schema JOIN is another feature to rewrite later.
+
+### G1.2 — Transactional outbox (L)
+7 fire-and-forget publish sites; events can vanish silently. Once services are decoupled, async
+messaging *is* the consistency mechanism — and G1.1's projections depend on it.
+
+*Why now:* retrofitting delivery guarantees under features that already assume them is far worse than
+building them first.
+
+### G1.3 — Tenant → region as a first-class concept (M)
+No `home_region` exists anywhere. Add it to the tenant registry **now, with one region**, and make
+every service resolve tenant context through it.
+
+*Why now:* this is the cheapest item on the list today and one of the most expensive later — it
+touches every request path. One region simply means every tenant resolves to the same value.
+
+### G1.4 — Data classification: global vs regional (S)
+Decide per entity which data is regional (all customer/PII — the default) and which is global (tenant
+registry, plan catalogue, platform config). Write it down and enforce it in review.
+
+*Why now:* pure thinking, near-zero cost. Getting it wrong means migrating live customer data across
+a legal boundary.
+
+### G1.5 — Cron leader election (M)
+**10 scheduled jobs across 6 services**, all unguarded — they fire on *every* replica. Until this is
+fixed the platform cannot run more than one replica of anything without duplicate charges, duplicate
+emails and duplicate reminders.
+
+*Why now:* it is a correctness bug, not a scaling nicety. "Production-ready" and "single replica
+only" are incompatible.
+
+### G1.6 — Identity decision (S to decide, L to execute)
+Auth is Supabase JWKS — single-region. **Decide now** whether to move to Microsoft Entra External ID.
+Execution can land in Gate 2, but the decision shapes every auth touchpoint.
+
+---
+
+## Gate 2 — alongside feature development
+
+Two-way doors. Add when needed; no structural penalty for waiting.
+
+- **Redis caching** — availability, entitlements, pricing. Additive.
+- **Read replica** — currently dead config (`read === write`). Wiring is a config change.
+- **Observability** — OpenTelemetry, correlation IDs, Azure Monitor.
+- **Edge & gateway** — Front Door, WAF, rate limiting (none today).
+- **CI/CD + IaC** — pipelines, Bicep/Terraform, Key Vault.
+- **Load testing** — model 50k users; find the ceiling before customers do.
+- **Identity migration execution** — per the G1.6 decision.
+- **Service granularity** — once G1.1 removes the DB coupling, revisit whether booking/venue/people
+  stay three deployables.
+
+---
+
+## Gate 3 — activating region two
+
+Deliberately deferred. If Gate 1 is done properly this is **deploy-and-route, not rewrite**.
+
+- Global control plane: tenant registry, region-aware routing via Front Door.
+- Residency mechanics validated end-to-end with one region live.
+- Per-region operations: backups, DR, runbooks, on-call.
+- Cross-region concerns: global reporting over region-isolated data; tenants operating in two regions.
+
+---
+
+## Dependency order
+
+1. **G1.0 CI** — protects everything after it.
+2. **G1.1 decouple** — unblocks per-service and per-region databases.
+3. **G1.2 outbox** — the consistency mechanism the projections rely on.
+4. **G1.3/G1.4/G1.5** — parallelisable once the above are moving.
+
+## Risk register
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| Shared DB + cross-schema JOINs not removed | Multi-region impossible; residency unachievable | Phase 1 §1 first, before any region work |
-| Lossy internal events | Silent loss of payment/booking/membership state | Outbox (Phase 1 §2) |
-| Cron multi-fire at >1 replica | Duplicate charges/reminders/jobs | Leader election (Phase 1 §4) |
-| No cache + `connection_limit=1` + dead read-replica | Throughput ceiling far below 50k | Redis + read-split (Phase 1 §3) |
-| Supabase single-region auth | Blocks multi-region identity | Entra/B2C (Phase 2 §2) |
-| No tracing across 15 services | Blind to cross-region latency/failures | OpenTelemetry (Phase 1 §5) |
+| Features built on cross-schema JOINs | Every one needs rewriting before regions | **G1.1 before feature work** |
+| No CI with a growing team | Silent regression of the work just completed | **G1.0 first** |
+| Cron multi-fire at >1 replica | Duplicate charges, emails, reminders | G1.5 |
+| Lossy internal events | Silent loss of payment/booking/membership state | G1.2 |
+| No tenant→region concept | Retrofitting touches every request path | G1.3 |
+| Supabase single-region identity | Blocks multi-region auth | G1.6 |
+| Live schema drifts from migrations | Audits from `prisma/migrations/` are wrong | Reconciliation — see inventory §5 |
+
+## What we are explicitly NOT doing before MVP
+
+Standing up regions two and three; building the global control plane; migrating identity; Front Door
+and WAF; Redis. All are two-way doors. Saying so explicitly is what keeps Gate 1 to 6–8 weeks instead
+of six months.

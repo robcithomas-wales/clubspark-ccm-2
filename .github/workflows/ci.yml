@@ -1,0 +1,220 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# A newer push to the same branch supersedes an in-flight run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────
+  # Build — the strongest signal we can get without a database.
+  # ─────────────────────────────────────────────────────────────────────────
+  build:
+    name: Build all services
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # Prisma clients are git-ignored, so nothing compiles until they exist.
+      - name: Generate Prisma clients
+        run: npm run prisma:generate:all
+
+      - name: Build all 15 services
+        run: npm run build:services
+
+      - name: Typecheck
+        run: npm run typecheck
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Lint — changed files only.
+  #
+  # `npm run lint` currently reports ~15k pre-existing problems (mostly Prettier
+  # formatting). Gating on the whole repo would mean a red build forever, and
+  # mass-reformatting would produce an unreviewable diff that collides with
+  # everyone's in-flight work. Linting only what the PR touches stops NEW
+  # problems without demanding that cleanup first.
+  #
+  # When the backlog reaches zero, swap this for plain `npm run lint`.
+  # ─────────────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint changed files
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need the base commit to diff against
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Show which files will be linted
+        run: |
+          BASE="${{ github.event.pull_request.base.sha || 'HEAD~1' }}"
+          echo "BASE=$BASE" >> "$GITHUB_ENV"
+          git diff --name-only --diff-filter=ACMR "$BASE" HEAD -- '*.ts' '*.tsx' \
+            | grep -v -E '(generated|dist|node_modules)/' \
+            | sed 's/^/  /' || echo "  (none)"
+
+      # Null-delimited + xargs so filenames survive word-splitting, and so that
+      # xargs is the LAST command in the pipeline — its exit status is the step's,
+      # which is what makes a lint failure actually fail the job. `-r` makes an
+      # empty changed-file set a no-op rather than linting the entire repo.
+      - name: Lint changed files
+        run: |
+          git diff -z --name-only --diff-filter=ACMR "$BASE" HEAD -- '*.ts' '*.tsx' \
+            | grep -zv -E '(generated|dist|node_modules)/' \
+            | xargs -0 -r npx eslint
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Schema — can the repository build a database from nothing?
+  #
+  # This is the property that makes multi-region possible: a new regional
+  # database is created by replaying migrations. Until 2026-07-30 it was false —
+  # six services had models but no migrations, because `prisma db push` applies
+  # a schema without recording one.
+  #
+  # Runs against a throwaway Postgres container, so it needs no secrets and
+  # cannot touch real data. It also verifies each service's migrations still
+  # reproduce its schema.prisma, which is what catches future `db push` use.
+  # ─────────────────────────────────────────────────────────────────────────
+  schema:
+    name: Migrations build a database from scratch
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: clubspark_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # No pooler in front of a local container, so both URLs are the same.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/clubspark_ci
+      DIRECT_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/clubspark_ci
+      SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/clubspark_shadow
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Generate Prisma clients
+        run: npm run prisma:generate:all
+
+      - name: Create the shadow database
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d clubspark_ci \
+            -c 'CREATE DATABASE clubspark_shadow'
+
+      - name: Apply every service's migrations to an empty database
+        run: ./scripts/migrate-all.sh
+
+      # Report-only for now, deliberately.
+      #
+      # The baselines faithfully reproduce the database (proven by the step above
+      # and by the test job). But the `schema.prisma` FILES drifted from the
+      # database during the `db push` era — in both directions — so this check
+      # currently reports differences for most services.
+      #
+      # Making it blocking today would mean a permanently red build for a
+      # pre-existing condition, which teaches everyone to ignore CI. Reconciling
+      # each schema.prisma against reality is real work with product judgement in
+      # it (which side is correct?), tracked separately.
+      #
+      # ⚠️ Flip this to blocking (delete continue-on-error) as soon as the
+      # reconciliation lands — that is what stops `db push` drift returning.
+      - name: Verify migrations still reproduce every schema.prisma (report-only)
+        continue-on-error: true
+        run: ./scripts/check-migration-drift.sh
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Tests — integration suites against the database the schema job just proved
+  # we can build. No hosted CI database, no shared credentials, and no chance of
+  # one run interfering with another or with development data.
+  #
+  # These are NOT unit tests: without a database every suite is skipped by
+  # `describe.runIf(DB_AVAILABLE)` and vitest exits 0 — a green tick having
+  # verified nothing. ci-require-db.mjs makes that state fail loudly.
+  # ─────────────────────────────────────────────────────────────────────────
+  test:
+    name: Service integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: clubspark_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/clubspark_ci
+      DIRECT_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/clubspark_ci
+      INTERNAL_SECRET: ci-internal-secret
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Generate Prisma clients
+        run: npm run prisma:generate:all
+
+      - name: Build the schema
+        run: ./scripts/migrate-all.sh
+
+      - name: Fail if the database is not reachable
+        run: node scripts/ci-require-db.mjs
+
+      # Sequential by design — the suites share a connection pool and
+      # parallelising them exhausts the limit (see CLAUDE.md).
+      - name: Run all service suites
+        run: npm run test:services

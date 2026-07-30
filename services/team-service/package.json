@@ -1,7 +1,7 @@
 {
   "name": "@clubspark/team-service",
   "version": "1.0.0",
-  "description": "ClubSpark team service — teams, rosters, fixtures, availability, selection and match fees",
+  "description": "ClubSpark team service \u2014 teams, rosters, fixtures, availability, selection and match fees",
   "private": true,
   "scripts": {
     "build": "nest build",
@@ -11,7 +11,6 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "prisma:generate": "prisma generate",
-    "prisma:push": "prisma db push",
     "prisma:studio": "prisma studio"
   },
   "dependencies": {

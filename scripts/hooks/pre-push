@@ -1,0 +1,50 @@
+#!/bin/sh
+#
+# Shared pre-push hook — committed, so every clone gets it.
+#
+# Installed by the root `prepare` script (npm install sets core.hooksPath to
+# scripts/hooks). Previously this lived only in .git/hooks on one machine, so
+# nobody else had a test gate at all.
+#
+# Two rules encoded here (both learned the hard way — see CLAUDE.md):
+#   1. Kill running services first. They hold Supabase connections; leaving them
+#      up exhausts the pooled connection limit and the suites fail with
+#      "Can't reach database" or hook timeouts that look like real failures.
+#   2. Run services sequentially, never in parallel, for the same reason.
+#
+# Skip in an emergency with: git push --no-verify
+#
+set -u
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT" || exit 1
+
+# Services whose suites gate a push. Keep in sync with the suites that
+# actually have tests; CI runs the full set via scripts/test-services.sh.
+SERVICES="booking-service membership-service venue-service people-service admin-service"
+
+echo "→ Killing running services to free the DB connection pool..."
+pkill -f "nest start" 2>/dev/null || true
+pkill -f "dist/main.js" 2>/dev/null || true
+sleep 2
+
+failed=""
+for svc in $SERVICES; do
+  echo "→ Testing $svc..."
+  if ! ( cd "$ROOT/services/$svc" && npm test --silent ); then
+    failed="$failed $svc"
+    # Keep going: one report of everything broken beats fixing them one push
+    # at a time.
+  fi
+  sleep 3   # let pooled connections drain between suites
+done
+
+if [ -n "$failed" ]; then
+  echo ""
+  echo "✗ Push blocked — failing suites:$failed"
+  echo "  Re-run one with: npm test --workspace=services/<name>"
+  echo "  Override (use sparingly): git push --no-verify"
+  exit 1
+fi
+
+echo "✓ All pre-push suites passed."

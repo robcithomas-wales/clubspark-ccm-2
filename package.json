@@ -8,6 +8,7 @@
     "services/*"
   ],
   "scripts": {
+    "prepare": "git config core.hooksPath scripts/hooks || true",
     "build:services": "npm run build --workspace=services/template-service && npm run build --workspace=services/venue-service && npm run build --workspace=services/people-service && npm run build --workspace=services/booking-service && npm run build --workspace=services/admin-service && npm run build --workspace=services/coaching-service && npm run build --workspace=services/team-service && npm run build --workspace=services/competition-service && npm run build --workspace=services/membership-service && npm run build --workspace=services/payment-service && npm run build --workspace=services/comms-service && npm run build --workspace=services/entitlement-service && npm run build --workspace=services/analytics-service && npm run build --workspace=services/order-service && npm run build --workspace=services/integration-service",
     "build:all": "npm run build:services && npm run build --workspace=admin-portal && npm --prefix customer-portal run build && npm --prefix internal-portal run build",
     "test:services": "./scripts/test-services.sh",
@@ -30,7 +31,9 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\""
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\"",
+    "migrate:all": "./scripts/migrate-all.sh",
+    "check:drift": "./scripts/check-migration-drift.sh"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.0.0",
