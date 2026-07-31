@@ -5,46 +5,39 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Migrations and introspection need a session-mode connection. Supabase's
+  // transaction pooler (port 6543) silently HANGS on DDL; port 5432 works.
   // Migrations and introspection need a session-mode connection. Supabase's
   // transaction pooler (port 6543) silently HANGS on DDL; port 5432 works.
   directUrl = env("DIRECT_DATABASE_URL")
-  schemas  = ["analytics"]
+  schemas   = ["analytics"]
 }
 
 model MemberScore {
-  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId      String   @map("tenant_id") @db.Uuid
-  personId      String   @map("person_id") @db.Uuid
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String   @map("tenant_id") @db.Uuid
+  personId           String   @map("person_id") @db.Uuid
+  churnRisk          Int      @default(0) @map("churn_risk")
+  churnBand          String   @default("low") @map("churn_band")
+  churnFactors       Json     @default("{}") @map("churn_factors")
+  ltvScore           Int      @default(0) @map("ltv_score")
+  ltvFactors         Json     @default("{}") @map("ltv_factors")
+  defaultRisk        Int      @default(0) @map("default_risk")
+  defaultBand        String   @default("low") @map("default_band")
+  defaultFactors     Json     @default("{}") @map("default_factors")
+  optimalSendHour    Int?     @map("optimal_send_hour")
+  sendHourConfidence Float?   @map("send_hour_confidence")
+  computedAt         DateTime @map("computed_at") @db.Timestamptz(6)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  // Churn risk: 0 (low) – 100 (high)
-  churnRisk     Int      @default(0) @map("churn_risk")
-  churnBand     String   @default("low") @map("churn_band")   // low | medium | high
-  churnFactors  Json     @default("{}") @map("churn_factors")
-
-  // Estimated annual value in pence
-  ltvScore      Int      @default(0) @map("ltv_score")
-  ltvFactors    Json     @default("{}") @map("ltv_factors")
-
-  // Payment default risk: 0 (low) – 100 (high)
-  defaultRisk   Int      @default(0) @map("default_risk")
-  defaultBand   String   @default("low") @map("default_band") // low | medium | high
-  defaultFactors Json    @default("{}") @map("default_factors")
-
-  // Optimal comms send hour (0-23 UTC), null = insufficient data
-  optimalSendHour    Int?   @map("optimal_send_hour")
-  sendHourConfidence Float? @map("send_hour_confidence")
-
-  computedAt    DateTime @map("computed_at")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-
-  @@unique([tenantId, personId])
-  @@index([tenantId, churnRisk])
-  @@index([tenantId, defaultRisk])
-  @@schema("analytics")
+  @@unique([tenantId, personId], map: "member_scores_tenant_person_key")
+  @@index([tenantId, churnRisk], map: "member_scores_tenant_churn_idx")
+  @@index([tenantId, defaultRisk], map: "member_scores_tenant_default_idx")
   @@map("member_scores")
+  @@schema("analytics")
 }
 
 model ForecastSlot {
@@ -56,12 +49,12 @@ model ForecastSlot {
   predictedOccupancy Float    @map("predicted_occupancy")
   historicalWeeks    Int      @default(0) @map("historical_weeks")
   isDeadSlot         Boolean  @default(false) @map("is_dead_slot")
-  computedAt         DateTime @default(now()) @map("computed_at")
+  computedAt         DateTime @default(now()) @map("computed_at") @db.Timestamptz(6)
 
   @@unique([tenantId, unitId, forecastDate, hourSlot])
-  @@index([tenantId, forecastDate, isDeadSlot])
-  @@schema("analytics")
+  @@index([tenantId, forecastDate, isDeadSlot], map: "forecast_slots_tenant_date_dead_idx")
   @@map("forecast_slots")
+  @@schema("analytics")
 }
 
 model AnomalyFlag {
@@ -74,12 +67,12 @@ model AnomalyFlag {
   severity    String
   description String
   metadata    Json      @default("{}")
-  resolvedAt  DateTime? @map("resolved_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
+  resolvedAt  DateTime? @map("resolved_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  @@index([tenantId, resolvedAt])
-  @@index([tenantId, personId])
-  @@index([tenantId, ruleId])
-  @@schema("analytics")
+  @@index([tenantId, personId], map: "anomaly_flags_tenant_person_idx")
+  @@index([tenantId, resolvedAt], map: "anomaly_flags_tenant_resolved_idx")
+  @@index([tenantId, ruleId], map: "anomaly_flags_tenant_rule_idx")
   @@map("anomaly_flags")
+  @@schema("analytics")
 }

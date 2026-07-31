@@ -4,132 +4,115 @@
 
 generator client {
   provider        = "prisma-client-js"
-  previewFeatures = ["multiSchema"]
   output          = "../src/generated/prisma"
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Migrations and introspection need a session-mode connection. Supabase's
+  // transaction pooler (port 6543) silently HANGS on DDL; port 5432 works.
   // Migrations and introspection need a session-mode connection. Supabase's
   // transaction pooler (port 6543) silently HANGS on DDL; port 5432 works.
   directUrl = env("DIRECT_DATABASE_URL")
-  schemas  = ["admin"]
+  schemas   = ["admin"]
 }
 
 model AdminUser {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId    String   @map("user_id")       // auth provider subject (supabase UUID / azure object_id)
+  userId    String   @map("user_id")
   tenantId  String   @map("tenant_id") @db.Uuid
-  role      String                         // super | bookings | membership | website | coaching | reports
+  role      String
   isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  @@unique([userId, tenantId])
+  @@unique([userId, tenantId], map: "uq_admin_users_user_tenant")
+  @@index([tenantId], map: "idx_admin_users_tenant")
+  @@index([userId], map: "idx_admin_users_user")
   @@map("admin_users")
   @@schema("admin")
-  @@index([tenantId])
-  @@index([userId])
 }
 
-// ── Internal staff tooling ────────────────────────────────────────────────────
-
-// Cross-tenant registry of all club/coach organisations on the platform.
-// One row per tenant — populated at sign-up and kept up to date by the platform.
 model Organisation {
-  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId         String   @unique @map("tenant_id") @db.Uuid
-  name             String
-  slug             String?  @unique
-  sport            String?
-  region           String?
-  // trial | starter | pro | enterprise
-  plan             String   @default("trial")
-  // active | suspended | churned
-  status           String   @default("active")
-  paymentConnected Boolean  @default(false) @map("payment_connected")
-  // 0-100 completion of the onboarding checklist
-  onboardingPct    Int      @default(0) @map("onboarding_pct")
-  adminEmail       String?  @map("admin_email")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at")
-
-  featureFlags         FeatureFlag[]
+  id                    String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId              String                 @unique @map("tenant_id") @db.Uuid
+  name                  String
+  slug                  String?                @unique
+  sport                 String?
+  region                String?
+  plan                  String                 @default("trial")
+  status                String                 @default("active")
+  paymentConnected      Boolean                @default(false) @map("payment_connected")
+  onboardingPct         Int                    @default(0) @map("onboarding_pct")
+  adminEmail            String?                @map("admin_email")
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  featureFlags          FeatureFlag[]
   impersonationSessions ImpersonationSession[]
 
+  @@index([plan], map: "idx_organisations_plan")
+  @@index([region], map: "idx_organisations_region")
+  @@index([status], map: "idx_organisations_status")
   @@map("organisations")
   @@schema("admin")
-  @@index([status])
-  @@index([plan])
-  @@index([region])
 }
 
-// Per-tenant feature flag overrides. Flags not present here fall back to global defaults.
 model FeatureFlag {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId       String   @map("tenant_id") @db.Uuid
-  // e.g. "coaching", "competitions", "smart_access", "analytics_ai"
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String       @map("tenant_id") @db.Uuid
   flag           String
-  enabled        Boolean  @default(false)
-  overrideReason String?  @map("override_reason")
-  // Clubspark staff user ID who set this
-  setBy          String?  @map("set_by")
-  setByEmail     String?  @map("set_by_email")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
+  enabled        Boolean      @default(false)
+  overrideReason String?      @map("override_reason")
+  setBy          String?      @map("set_by")
+  setByEmail     String?      @map("set_by_email")
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organisation   Organisation @relation(fields: [tenantId], references: [tenantId], onDelete: NoAction, onUpdate: NoAction, map: "fk_feature_flags_tenant")
 
-  organisation Organisation @relation(fields: [tenantId], references: [tenantId])
-
-  @@unique([tenantId, flag])
+  @@unique([tenantId, flag], map: "uq_feature_flags_tenant_flag")
+  @@index([flag], map: "idx_feature_flags_flag")
+  @@index([tenantId], map: "idx_feature_flags_tenant")
   @@map("feature_flags")
   @@schema("admin")
-  @@index([tenantId])
-  @@index([flag])
 }
 
-// Immutable audit trail of all Clubspark internal staff actions.
 model AuditLog {
   id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   staffId    String   @map("staff_id")
   staffEmail String?  @map("staff_email")
-  // Nullable for system-level events not scoped to a single tenant
   tenantId   String?  @map("tenant_id") @db.Uuid
-  // Dot-namespaced: organisation.viewed | flag.enabled | flag.disabled |
-  // impersonation.started | impersonation.ended | account.suspended
   action     String
   targetType String?  @map("target_type")
   targetId   String?  @map("target_id")
   meta       Json     @default("{}")
-  createdAt  DateTime @default(now()) @map("created_at")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
+  @@index([action], map: "idx_audit_logs_action")
+  @@index([staffId, createdAt(sort: Desc)], map: "idx_audit_logs_staff_time")
+  @@index([tenantId, createdAt(sort: Desc)], map: "idx_audit_logs_tenant_time")
+  @@index([createdAt(sort: Desc)], map: "idx_audit_logs_time")
   @@map("audit_logs")
   @@schema("admin")
-  @@index([staffId, createdAt(sort: Desc)])
-  @@index([tenantId, createdAt(sort: Desc)])
-  @@index([action])
-  @@index([createdAt(sort: Desc)])
 }
 
-// Active and historical impersonation sessions. Every session is logged.
 model ImpersonationSession {
-  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  staffId      String    @map("staff_id")
-  staffEmail   String?   @map("staff_email")
-  tenantId     String    @map("tenant_id") @db.Uuid
-  targetUserId String    @map("target_user_id")
-  targetEmail  String?   @map("target_email")
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  staffId      String       @map("staff_id")
+  staffEmail   String?      @map("staff_email")
+  tenantId     String       @map("tenant_id") @db.Uuid
+  targetUserId String       @map("target_user_id")
+  targetEmail  String?      @map("target_email")
   reason       String
-  startedAt    DateTime  @default(now()) @map("started_at")
-  endedAt      DateTime? @map("ended_at")
-  // active | ended
-  status       String    @default("active")
+  startedAt    DateTime     @default(now()) @map("started_at") @db.Timestamptz(6)
+  endedAt      DateTime?    @map("ended_at") @db.Timestamptz(6)
+  status       String       @default("active")
+  organisation Organisation @relation(fields: [tenantId], references: [tenantId], onDelete: NoAction, onUpdate: NoAction, map: "fk_impersonation_tenant")
 
-  organisation Organisation @relation(fields: [tenantId], references: [tenantId])
-
+  @@index([staffId, startedAt(sort: Desc)], map: "idx_impersonation_staff_time")
+  @@index([status], map: "idx_impersonation_status")
+  @@index([tenantId], map: "idx_impersonation_tenant")
   @@map("impersonation_sessions")
   @@schema("admin")
-  @@index([staffId, startedAt(sort: Desc)])
-  @@index([tenantId])
-  @@index([status])
 }

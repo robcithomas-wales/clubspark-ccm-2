@@ -5,31 +5,32 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Migrations and introspection need a session-mode connection. Supabase's
+  // transaction pooler (port 6543) silently HANGS on DDL; port 5432 works.
   // Migrations and introspection need a session-mode connection. Supabase's
   // transaction pooler (port 6543) silently HANGS on DDL; port 5432 works.
   directUrl = env("DIRECT_DATABASE_URL")
-  schemas  = ["integration"]
+  schemas   = ["integration"]
 }
 
 model ApiKey {
-  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId  String    @map("tenant_id") @db.Uuid
+  id        String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String        @map("tenant_id") @db.Uuid
   name      String
-  keyHash   String    @unique @map("key_hash")
-  scopes    String[]
-  isActive  Boolean   @default(true) @map("is_active")
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
-
-  usage ApiKeyUsage[]
+  keyHash   String        @unique @map("key_hash")
+  scopes    String[]      @default([])
+  isActive  Boolean       @default(true) @map("is_active")
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime?     @map("deleted_at") @db.Timestamptz(6)
+  usage     ApiKeyUsage[]
 
   @@index([tenantId])
   @@index([keyHash])
-  @@schema("integration")
   @@map("api_keys")
+  @@schema("integration")
 }
 
 model ApiKeyUsage {
@@ -37,32 +38,30 @@ model ApiKeyUsage {
   apiKeyId     String   @map("api_key_id") @db.Uuid
   endpoint     String
   responseCode Int      @map("response_code")
-  timestamp    DateTime
-  createdAt    DateTime @default(now()) @map("created_at")
-
-  apiKey ApiKey @relation(fields: [apiKeyId], references: [id])
+  timestamp    DateTime @db.Timestamptz(6)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  apiKey       ApiKey   @relation(fields: [apiKeyId], references: [id])
 
   @@index([apiKeyId, timestamp])
-  @@schema("integration")
   @@map("api_key_usage")
+  @@schema("integration")
 }
 
 model WebhookSubscription {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId    String   @map("tenant_id") @db.Uuid
+  id          String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String            @map("tenant_id") @db.Uuid
   name        String
-  eventTypes  String[] @map("event_types")
-  endpointUrl String   @map("endpoint_url")
-  secretHash  String   @map("secret_hash")
-  isActive    Boolean  @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  deliveries WebhookDelivery[]
+  eventTypes  String[]          @default([]) @map("event_types")
+  endpointUrl String            @map("endpoint_url")
+  secretHash  String            @map("secret_hash")
+  isActive    Boolean           @default(true) @map("is_active")
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deliveries  WebhookDelivery[]
 
   @@index([tenantId, isActive])
-  @@schema("integration")
   @@map("webhook_subscriptions")
+  @@schema("integration")
 }
 
 model WebhookDelivery {
@@ -72,17 +71,75 @@ model WebhookDelivery {
   payload        Json
   status         WebhookDeliveryStatus @default(pending)
   attempts       Int                   @default(0)
-  nextRetryAt    DateTime?             @map("next_retry_at")
+  nextRetryAt    DateTime?             @map("next_retry_at") @db.Timestamptz(6)
   responseCode   Int?                  @map("response_code")
   responseBody   String?               @map("response_body")
-  createdAt      DateTime              @default(now()) @map("created_at")
-  updatedAt      DateTime              @updatedAt @map("updated_at")
-
-  subscription WebhookSubscription @relation(fields: [subscriptionId], references: [id])
+  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime              @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  subscription   WebhookSubscription   @relation(fields: [subscriptionId], references: [id])
 
   @@index([status, nextRetryAt])
-  @@schema("integration")
   @@map("webhook_deliveries")
+  @@schema("integration")
+}
+
+model OAuthConnection {
+  id               String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String              @map("tenant_id") @db.Uuid
+  provider         String
+  providerTenantId String?             @map("provider_tenant_id")
+  accessToken      String              @map("access_token")
+  refreshToken     String              @map("refresh_token")
+  tokenExpiry      DateTime            @map("token_expiry") @db.Timestamptz(6)
+  scopes           String[]            @default([])
+  connectedAt      DateTime            @default(now()) @map("connected_at") @db.Timestamptz(6)
+  updatedAt        DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  disconnectedAt   DateTime?           @map("disconnected_at") @db.Timestamptz(6)
+  syncLogs         AccountingSyncLog[]
+
+  @@unique([tenantId, provider], map: "oauth_connections_tenant_provider_key")
+  @@index([tenantId])
+  @@map("oauth_connections")
+  @@schema("integration")
+}
+
+model AccountingSettings {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String   @unique @map("tenant_id") @db.Uuid
+  provider           String
+  revenueAccountCode String   @map("revenue_account_code")
+  taxRateId          String?  @map("tax_rate_id")
+  invoiceMode        String   @default("AUTHORISED") @map("invoice_mode")
+  currencyCode       String   @default("GBP") @map("currency_code")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("accounting_settings")
+  @@schema("integration")
+}
+
+model AccountingSyncLog {
+  id           String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  connectionId String               @map("connection_id") @db.Uuid
+  tenantId     String               @map("tenant_id") @db.Uuid
+  eventType    String               @map("event_type")
+  sourceId     String               @map("source_id")
+  sourceType   String               @map("source_type")
+  providerRef  String?              @map("provider_ref")
+  status       AccountingSyncStatus @default(pending)
+  attempts     Int                  @default(0)
+  errorMessage String?              @map("error_message")
+  nextRetryAt  DateTime?            @map("next_retry_at") @db.Timestamptz(6)
+  syncedAt     DateTime?            @map("synced_at") @db.Timestamptz(6)
+  createdAt    DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  connection   OAuthConnection      @relation(fields: [connectionId], references: [id])
+
+  @@unique([connectionId, sourceId, eventType], map: "accounting_sync_log_connection_source_event_key")
+  @@index([status, nextRetryAt])
+  @@index([tenantId, sourceId])
+  @@map("accounting_sync_log")
+  @@schema("integration")
 }
 
 enum WebhookDeliveryStatus {
@@ -92,67 +149,6 @@ enum WebhookDeliveryStatus {
   dead
 
   @@schema("integration")
-}
-
-model OAuthConnection {
-  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId     String    @map("tenant_id") @db.Uuid
-  provider     String    // 'xero' | 'quickbooks'
-  providerTenantId String? @map("provider_tenant_id") // Xero tenantId / QBO realmId
-  accessToken  String    @map("access_token")  // encrypted at rest
-  refreshToken String    @map("refresh_token") // encrypted at rest
-  tokenExpiry  DateTime  @map("token_expiry")
-  scopes       String[]
-  connectedAt  DateTime  @default(now()) @map("connected_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
-  disconnectedAt DateTime? @map("disconnected_at")
-
-  syncLogs AccountingSyncLog[]
-
-  @@unique([tenantId, provider])
-  @@index([tenantId])
-  @@schema("integration")
-  @@map("oauth_connections")
-}
-
-model AccountingSettings {
-  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId         String   @unique @map("tenant_id") @db.Uuid
-  provider         String   // 'xero' | 'quickbooks'
-  revenueAccountCode String @map("revenue_account_code")  // e.g. '200' in Xero
-  taxRateId        String?  @map("tax_rate_id")            // provider tax rate reference
-  invoiceMode      String   @default("AUTHORISED") @map("invoice_mode") // 'DRAFT' | 'AUTHORISED'
-  currencyCode     String   @default("GBP") @map("currency_code")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
-
-  @@schema("integration")
-  @@map("accounting_settings")
-}
-
-model AccountingSyncLog {
-  id             String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  connectionId   String              @map("connection_id") @db.Uuid
-  tenantId       String              @map("tenant_id") @db.Uuid
-  eventType      String              @map("event_type")
-  sourceId       String              @map("source_id")       // paymentId / membershipId etc.
-  sourceType     String              @map("source_type")     // 'payment' | 'membership'
-  providerRef    String?             @map("provider_ref")    // Xero invoice ID etc.
-  status         AccountingSyncStatus @default(pending)
-  attempts       Int                 @default(0)
-  errorMessage   String?             @map("error_message")
-  nextRetryAt    DateTime?           @map("next_retry_at")
-  syncedAt       DateTime?           @map("synced_at")
-  createdAt      DateTime            @default(now()) @map("created_at")
-  updatedAt      DateTime            @updatedAt @map("updated_at")
-
-  connection OAuthConnection @relation(fields: [connectionId], references: [id])
-
-  @@unique([connectionId, sourceId, eventType])
-  @@index([status, nextRetryAt])
-  @@index([tenantId, sourceId])
-  @@schema("integration")
-  @@map("accounting_sync_log")
 }
 
 enum AccountingSyncStatus {
