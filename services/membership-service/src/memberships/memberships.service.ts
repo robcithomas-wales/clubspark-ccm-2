@@ -10,6 +10,7 @@ import { EventBusService } from '../event-bus/event-bus.service'
 import { CreateMembershipDto } from './dto/create-membership.dto'
 import { UpdateMembershipDto } from './dto/update-membership.dto'
 import { TransitionMembershipDto } from './dto/transition-membership.dto'
+import { OutboxRepository } from '../outbox/outbox.repository'
 
 /**
  * Compute an end date from a start date based on plan duration/billing settings.
@@ -56,6 +57,7 @@ export class MembershipsService {
 
   constructor(
     private readonly repo: MembershipsRepository,
+    private readonly outbox: OutboxRepository,
     private readonly plansRepo: MembershipPlansRepository,
     private readonly eventBus: EventBusService,
   ) {}
@@ -248,6 +250,9 @@ export class MembershipsService {
     if (rule.to === 'lapsed')    timestamps['lapsedAt']    = now
     if (rule.to === 'expired')   timestamps['expiredAt']   = now
 
+    // The domain event is recorded in the SAME transaction as the status change
+    // (MR-2), so a membership can never activate without its event, or emit one
+    // for a transition that rolled back. OutboxRelay delivers it.
     const m = await this.repo.transition(
       id,
       rule.to,
@@ -255,40 +260,35 @@ export class MembershipsService {
       existing.status,
       dto.reason ?? null,
       actorEmail,
+      async (tx, updated) => {
+        const base = {
+          tenantId,
+          occurredAt: new Date().toISOString(),
+          membershipId: updated.id,
+          personId: updated.customerId ?? '',
+          personEmail: '',      // TODO: hydrate from people-service (see MR-1's PeopleClient)
+          personFirstName: '',
+          planName: updated.plan?.name ?? '',
+        }
+        if (rule.to === 'active') {
+          await this.outbox.enqueue(tx, {
+            ...base,
+            type: 'membership.activated',
+            startsAt: updated.startDate ?? '',
+            expiresAt: updated.endDate ?? undefined,
+          } as never)
+        } else if (rule.to === 'expired') {
+          await this.outbox.enqueue(tx, {
+            ...base,
+            type: 'membership.expired',
+            expiredAt: updated.expiredAt?.toISOString() ?? new Date().toISOString(),
+          } as never)
+        }
+      },
     )
 
-    // Publish domain events for comms-service
-    // TODO: populate personEmail + personFirstName from people-service lookup by m.customerId
-    const personEmail = ''  // TODO: fetch from people-service
-    const personFirstName = ''
-    const planName = (m as any).plan?.name ?? ''
-
-    if (rule.to === 'active') {
-      void this.eventBus.publish({
-        type: 'membership.activated',
-        tenantId,
-        occurredAt: new Date().toISOString(),
-        membershipId: m.id,
-        personId: m.customerId ?? '',
-        personEmail,
-        personFirstName,
-        planName,
-        startsAt: m.startDate ?? '',
-        expiresAt: m.endDate ?? undefined,
-      })
-    } else if (rule.to === 'expired') {
-      void this.eventBus.publish({
-        type: 'membership.expired',
-        tenantId,
-        occurredAt: new Date().toISOString(),
-        membershipId: m.id,
-        personId: m.customerId ?? '',
-        personEmail,
-        personFirstName,
-        planName,
-        expiredAt: (m as any).expiredAt?.toISOString() ?? new Date().toISOString(),
-      })
-    }
+    // membership.activated / membership.expired are recorded in the outbox inside
+    // the transition transaction above — no fire-and-forget publish here.
 
     return { data: m }
   }

@@ -4,9 +4,10 @@ import { MembershipsService } from './memberships.service'
 import { MembershipsRepository } from './memberships.repository'
 import { MembershipPlansModule } from '../membership-plans/membership-plans.module'
 import { MembershipExpiryTask } from './tasks/membership-expiry.task'
+import { OutboxModule } from '../outbox/outbox.module'
 
 @Module({
-  imports: [MembershipPlansModule],
+  imports: [OutboxModule, MembershipPlansModule],
   controllers: [MembershipsController],
   providers: [MembershipsService, MembershipsRepository, MembershipExpiryTask],
 })

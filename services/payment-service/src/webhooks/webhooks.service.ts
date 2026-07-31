@@ -4,12 +4,14 @@ import { ProviderConfigsRepository } from '../provider-configs/provider-configs.
 import { PaymentsRepository } from '../payments/payments.repository.js'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { EventBusService } from '../event-bus/event-bus.service.js'
+import { OutboxRepository } from '../outbox/outbox.repository.js'
 
 @Injectable()
 export class WebhooksService {
   private readonly logger = new Logger(WebhooksService.name)
 
   constructor(
+    private readonly outbox: OutboxRepository,
     private readonly prisma: PrismaService,
     private readonly providerConfigsRepo: ProviderConfigsRepository,
     private readonly paymentsRepo: PaymentsRepository,
@@ -102,53 +104,65 @@ export class WebhooksService {
 
     switch (type) {
       case 'payment.succeeded':
-        await this.paymentsRepo.updateStatus(payment.id, 'succeeded')
+        await this.paymentsRepo.updateStatus(payment.id, 'succeeded', undefined, async (tx, updated) => {
+          await this.outbox.enqueue(tx, {
+            type: 'payment.succeeded',
+            tenantId: updated.tenantId,
+            occurredAt: new Date().toISOString(),
+            paymentId: updated.id,
+            personId: updated.customerId ?? '',
+            personEmail: '',      // TODO: hydrate from people-service (MR-1's PeopleClient)
+            personFirstName: '',
+            amount: Number(updated.amount ?? 0),
+            currency: updated.currency ?? 'GBP',
+            description: 'Payment',
+          } as never)
+        })
         this.logger.log(`Payment ${payment.id} succeeded`)
         // TODO: populate personEmail + personFirstName from people-service lookup
-        void this.eventBus.publish({
-          type: 'payment.succeeded',
-          tenantId: payment.tenantId,
-          occurredAt: new Date().toISOString(),
-          paymentId: payment.id,
-          personId: payment.customerId ?? '',
-          personEmail: '',      // TODO: fetch from people-service
-          personFirstName: '',
-          amount: Number(payment.amount ?? 0),
-          currency: payment.currency ?? 'GBP',
-          description: 'Payment',
-        })
+        // payment.succeeded is recorded in the outbox inside updateStatus's transaction.
         break
 
       case 'payment.failed':
-        await this.paymentsRepo.updateStatus(payment.id, 'failed')
-        this.logger.log(`Payment ${payment.id} failed`)
-        void this.eventBus.publish({
-          type: 'payment.failed',
-          tenantId: payment.tenantId,
-          occurredAt: new Date().toISOString(),
-          paymentId: payment.id,
-          personId: payment.customerId ?? '',
-          personEmail: '',      // TODO: fetch from people-service
-          personFirstName: '',
-          amount: Number(payment.amount ?? 0),
-          currency: payment.currency ?? 'GBP',
-          description: 'Payment',
+        await this.paymentsRepo.updateStatus(payment.id, 'failed', undefined, async (tx, updated) => {
+          await this.outbox.enqueue(tx, {
+            type: 'payment.failed',
+            tenantId: updated.tenantId,
+            occurredAt: new Date().toISOString(),
+            paymentId: updated.id,
+            personId: updated.customerId ?? '',
+            personEmail: '',      // TODO: hydrate from people-service (MR-1's PeopleClient)
+            personFirstName: '',
+            amount: Number(updated.amount ?? 0),
+            currency: updated.currency ?? 'GBP',
+            description: 'Payment',
+          } as never)
         })
+        this.logger.log(`Payment ${payment.id} failed`)
+        // payment.failed is recorded in the outbox inside updateStatus's transaction.
         break
 
       case 'payment.refunded':
         this.logger.log(`Refund confirmed for payment ${payment.id}`)
-        void this.eventBus.publish({
-          type: 'payment.refund_issued',
-          tenantId: payment.tenantId,
-          occurredAt: new Date().toISOString(),
-          paymentId: payment.id,
-          personId: payment.customerId ?? '',
-          personEmail: '',      // TODO: fetch from people-service
-          personFirstName: '',
-          amount: Number(payment.amount ?? 0),
-          currency: payment.currency ?? 'GBP',
-          description: 'Refund',
+        // Unlike succeeded/failed, this branch changes no payment state — the
+        // refund is recorded by the gateway, not here — so there is no
+        // transaction to be atomic with. The event still goes through the outbox
+        // so it is durable and retried rather than fire-and-forget; it just
+        // cannot carry the "commits with the state change" guarantee the other
+        // two do. Worth revisiting if refunds ever update the payment row.
+        await this.prisma.write.$transaction(async (tx) => {
+          await this.outbox.enqueue(tx, {
+            type: 'payment.refund_issued',
+            tenantId: payment.tenantId,
+            occurredAt: new Date().toISOString(),
+            paymentId: payment.id,
+            personId: payment.customerId ?? '',
+            personEmail: '',      // TODO: hydrate from people-service (MR-1's PeopleClient)
+            personFirstName: '',
+            amount: Number(payment.amount ?? 0),
+            currency: payment.currency ?? 'GBP',
+            description: 'Refund',
+          } as never)
         })
         break
     }

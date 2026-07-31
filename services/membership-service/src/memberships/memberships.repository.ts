@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common'
+import { Prisma } from '../generated/prisma'
 import { PrismaService } from '../prisma/prisma.service'
 
 /**
@@ -166,6 +167,12 @@ export class MembershipsRepository {
     return this.format(m)
   }
 
+  /**
+   * @param withinTx runs inside the same transaction as the status change, with
+   *   the updated membership — used to record the domain event in the outbox so
+   *   the state change and its event commit together (MR-2). Uses the interactive
+   *   transaction form for that reason; the array form gives no handle to hook.
+   */
   async transition(
     id: string,
     toStatus: string,
@@ -173,17 +180,20 @@ export class MembershipsRepository {
     fromStatus: string,
     reason: string | null,
     createdBy: string | null,
+    withinTx?: (tx: Prisma.TransactionClient, membership: { id: string; tenantId: string; customerId: string | null; startDate: Date | null; endDate: Date | null; expiredAt?: Date | null; plan?: { name?: string } | null }) => Promise<void>,
   ) {
-    const [m] = await this.prisma.$transaction([
-      this.prisma.membership.update({
+    const m = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.membership.update({
         where: { id },
         data: { status: toStatus, ...timestamps },
         include: { plan: { select: { name: true, ownershipType: true, membershipType: true, price: true, currency: true, pricingModel: true } } },
-      }),
-      this.prisma.membershipLifecycleEvent.create({
+      })
+      await tx.membershipLifecycleEvent.create({
         data: { membershipId: id, fromStatus, toStatus, reason, createdBy },
-      }),
-    ])
+      })
+      if (withinTx) await withinTx(tx, updated as never)
+      return updated
+    })
     return this.format(m)
   }
 
