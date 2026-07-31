@@ -26,8 +26,11 @@ CREATE TABLE IF NOT EXISTS membership.event_outbox (
   next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- The relay's only query: undelivered rows that are due, oldest first.
--- Partial index so it stays small — delivered rows are the vast majority.
+-- Serves the relay's only query: undelivered rows that are due, oldest first.
+--
+-- A partial index (WHERE published_at IS NULL) would be tighter, but Prisma cannot
+-- express one, so the schema-drift gate would flag it forever. A composite index
+-- serves the same predicate and keeps datamodel and database in agreement, which
+-- is worth more than the marginal size saving.
 CREATE INDEX IF NOT EXISTS event_outbox_pending_idx
-  ON membership.event_outbox (next_attempt_at)
-  WHERE published_at IS NULL;
+  ON membership.event_outbox (published_at, next_attempt_at);
