@@ -20,7 +20,11 @@ import { AccountingSyncModule } from './accounting-sync/accounting-sync.module.j
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, load: [configuration], envFilePath: join(__dirname, '..', '.env') }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      load: [configuration],
+      envFilePath: join(__dirname, '..', '.env'),
+    }),
     // Scheduled jobs are not registered under test.
     //
     // Several suites assert on state that a @Cron owns — the webhook-delivery

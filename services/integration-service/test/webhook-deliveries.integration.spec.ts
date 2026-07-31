@@ -52,10 +52,11 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
   })
 
   it('inbound event returns { received: true }', async () => {
-    const res = await request
-      .post('/v1/events/inbound')
-      .set(INBOUND_HEADERS)
-      .send({ type: 'booking.confirmed', tenantId: TEST_TENANT_ID, occurredAt: new Date().toISOString() })
+    const res = await request.post('/v1/events/inbound').set(INBOUND_HEADERS).send({
+      type: 'booking.confirmed',
+      tenantId: TEST_TENANT_ID,
+      occurredAt: new Date().toISOString(),
+    })
 
     expect(res.status).toBe(201)
     expect(res.body.received).toBe(true)
@@ -64,10 +65,11 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
   it('inbound event creates delivery rows for matching active subscriptions', async () => {
     const sub = await createSubscription(request)
 
-    await request
-      .post('/v1/events/inbound')
-      .set(INBOUND_HEADERS)
-      .send({ type: 'booking.confirmed', tenantId: TEST_TENANT_ID, occurredAt: new Date().toISOString() })
+    await request.post('/v1/events/inbound').set(INBOUND_HEADERS).send({
+      type: 'booking.confirmed',
+      tenantId: TEST_TENANT_ID,
+      occurredAt: new Date().toISOString(),
+    })
 
     // Allow async dispatch to complete
     await new Promise((r) => setTimeout(r, 200))
@@ -89,10 +91,11 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
   it('inbound event does not create deliveries for non-matching event type', async () => {
     const sub = await createSubscription(request, { eventTypes: ['membership.activated'] })
 
-    await request
-      .post('/v1/events/inbound')
-      .set(INBOUND_HEADERS)
-      .send({ type: 'booking.confirmed', tenantId: TEST_TENANT_ID, occurredAt: new Date().toISOString() })
+    await request.post('/v1/events/inbound').set(INBOUND_HEADERS).send({
+      type: 'booking.confirmed',
+      tenantId: TEST_TENANT_ID,
+      occurredAt: new Date().toISOString(),
+    })
 
     await new Promise((r) => setTimeout(r, 200))
 
@@ -104,12 +107,16 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
 
   it('inbound event does not create deliveries for inactive subscriptions', async () => {
     const sub = await createSubscription(request)
-    await request.patch(`/v1/webhook-subscriptions/${sub.id}`).set(JSON_HEADERS).send({ isActive: false })
-
     await request
-      .post('/v1/events/inbound')
-      .set(INBOUND_HEADERS)
-      .send({ type: 'booking.confirmed', tenantId: TEST_TENANT_ID, occurredAt: new Date().toISOString() })
+      .patch(`/v1/webhook-subscriptions/${sub.id}`)
+      .set(JSON_HEADERS)
+      .send({ isActive: false })
+
+    await request.post('/v1/events/inbound').set(INBOUND_HEADERS).send({
+      type: 'booking.confirmed',
+      tenantId: TEST_TENANT_ID,
+      occurredAt: new Date().toISOString(),
+    })
 
     await new Promise((r) => setTimeout(r, 200))
 
@@ -123,10 +130,11 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
     const sub1 = await createSubscription(request, { name: 'Sub 1' })
     const sub2 = await createSubscription(request, { name: 'Sub 2' })
 
-    await request
-      .post('/v1/events/inbound')
-      .set(INBOUND_HEADERS)
-      .send({ type: 'booking.confirmed', tenantId: TEST_TENANT_ID, occurredAt: new Date().toISOString() })
+    await request.post('/v1/events/inbound').set(INBOUND_HEADERS).send({
+      type: 'booking.confirmed',
+      tenantId: TEST_TENANT_ID,
+      occurredAt: new Date().toISOString(),
+    })
 
     await new Promise((r) => setTimeout(r, 300))
 
@@ -138,16 +146,15 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
 
   it('lists deliveries by subscriptionId with pagination', async () => {
     const sub = await createSubscription(request)
-    await request
-      .post('/v1/events/inbound')
-      .set(INBOUND_HEADERS)
-      .send({ type: 'booking.confirmed', tenantId: TEST_TENANT_ID, occurredAt: new Date().toISOString() })
+    await request.post('/v1/events/inbound').set(INBOUND_HEADERS).send({
+      type: 'booking.confirmed',
+      tenantId: TEST_TENANT_ID,
+      occurredAt: new Date().toISOString(),
+    })
 
     await new Promise((r) => setTimeout(r, 300))
 
-    const res = await request
-      .get(`/v1/webhook-deliveries?subscriptionId=${sub.id}`)
-      .set(HEADERS)
+    const res = await request.get(`/v1/webhook-deliveries?subscriptionId=${sub.id}`).set(HEADERS)
 
     expect(res.status).toBe(200)
     expect(res.body.data).toHaveLength(1)
@@ -178,7 +185,9 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
   })
 
   it('returns 404 on retry of non-existent delivery', async () => {
-    const res = await request.post(`/v1/webhook-deliveries/${TEST_NONEXISTENT_ID}/retry`).set(HEADERS)
+    const res = await request
+      .post(`/v1/webhook-deliveries/${TEST_NONEXISTENT_ID}/retry`)
+      .set(HEADERS)
     expect(res.status).toBe(404)
   })
 })

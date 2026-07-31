@@ -19,7 +19,11 @@ import { TemplatesService } from './templates/templates.service.js'
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, load: [configuration], envFilePath: join(__dirname, '..', '.env') }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      load: [configuration],
+      envFilePath: join(__dirname, '..', '.env'),
+    }),
     // Scheduled jobs are not registered under test.
     //
     // Several suites assert on state that a @Cron owns — the webhook-delivery
