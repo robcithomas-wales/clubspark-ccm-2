@@ -37,5 +37,18 @@ done
 echo ""
 echo "Summary: $pass passed, $skip skipped, $fail failed"
 echo "(services are now stopped — run ./scripts/run-all.sh start to bring the stack back up)"
-[ -n "$failed" ] && { echo "Failed:$failed"; exit 1; }
+
+if [ -n "$failed" ]; then
+  # Print the failing output. Without this the log only exists inside the runner
+  # and a CI failure is undiagnosable — you get "FAIL: <service>" and nothing else.
+  for name in $failed; do
+    echo ""
+    echo "───────── $name — failing output ─────────"
+    # The vitest summary and the assertion detail both live near the end.
+    tail -80 "$LOGDIR/test-$name.log" 2>/dev/null || echo "(no log captured)"
+  done
+  echo ""
+  echo "Failed:$failed"
+  exit 1
+fi
 exit 0

@@ -8,13 +8,19 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  Headers,
+  UseGuards,
+  BadRequestException,
 } from '@nestjs/common'
-import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger'
+import { ApiTags, ApiOperation, ApiQuery, ApiExcludeEndpoint } from '@nestjs/swagger'
 import type { FastifyRequest } from 'fastify'
 import { Request } from '@nestjs/common'
 import { CustomersService } from './customers.service.js'
 import { CreateCustomerDto } from './dto/create-customer.dto.js'
 import { UpdateCustomerDto } from './dto/update-customer.dto.js'
+import { BatchPeopleDto } from './dto/batch-people.dto.js'
+import { SkipTenant } from '../common/decorators/skip-tenant.decorator.js'
+import { InternalSecretGuard } from '../common/guards/internal-secret.guard.js'
 
 @ApiTags('people')
 @Controller('people')
@@ -36,6 +42,30 @@ export class CustomersController {
   ) {
     const safeLimit = Math.min(Number(limit), 100)
     return this.service.list(req.tenantContext.tenantId, Number(page), safeLimit, search, lifecycle)
+  }
+
+  /**
+   * Service-to-service only: display fields for many people at once.
+   *
+   * Exists so other services can stop JOINing `people.persons` in their own SQL —
+   * impossible once schemas live in separate regional databases. Booking uses this
+   * to hydrate customer names on booking lists, which is why it is a batch: a
+   * per-row lookup would be an N+1 across a paginated page.
+   *
+   * `@SkipTenant()` because a service-to-service caller has no end-user JWT;
+   * InternalSecretGuard is the sole authenticator and the tenant comes from the
+   * explicit header. Every query is still tenant-scoped.
+   *
+   * POST rather than GET: id lists routinely exceed a sane query-string length.
+   */
+  @Post('internal/batch')
+  @SkipTenant()
+  @UseGuards(InternalSecretGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiExcludeEndpoint()
+  batchByIds(@Headers('x-tenant-id') tenantId: string | undefined, @Body() dto: BatchPeopleDto) {
+    if (!tenantId) throw new BadRequestException('x-tenant-id header is required')
+    return this.service.findManyByIds(tenantId, dto.ids)
   }
 
   @Get(':id')

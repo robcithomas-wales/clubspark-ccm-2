@@ -4,9 +4,10 @@ import { BookingSeriesService } from './booking-series.service.js'
 import { BookingSeriesRepository } from './booking-series.repository.js'
 import { BookingsRepository } from '../bookings/bookings.repository.js'
 import { AvailabilityModule } from '../availability/availability.module.js'
+import { PeopleModule } from '../people/people.module.js'
 
 @Module({
-  imports: [AvailabilityModule],
+  imports: [PeopleModule, AvailabilityModule],
   controllers: [BookingSeriesController],
   providers: [BookingSeriesService, BookingSeriesRepository, BookingsRepository],
 })

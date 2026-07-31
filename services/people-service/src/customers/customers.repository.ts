@@ -40,6 +40,27 @@ export class CustomersRepository {
     return { customers, total }
   }
 
+  /**
+   * Display fields for many people at once, scoped to one tenant.
+   *
+   * Exists so other services can stop JOINing `people.persons` directly. Booking
+   * used to read this table (and Supabase's `auth.users`) inside its own SQL,
+   * which is impossible once the two schemas live in separate regional databases
+   * — see docs/architecture/cross-schema-coupling-inventory.md.
+   *
+   * Batch rather than per-id: the booking list is paginated, so a per-row lookup
+   * would be an N+1 across the whole page.
+   *
+   * Returns only what callers actually render: name, email, phone.
+   */
+  async findManyByIds(tenantId: string, ids: string[]) {
+    if (ids.length === 0) return []
+    return this.prisma.customer.findMany({
+      where: { tenantId, id: { in: ids } },
+      select: { id: true, firstName: true, lastName: true, email: true, phone: true },
+    })
+  }
+
   async findById(tenantId: string, id: string) {
     return this.prisma.customer.findFirst({
       where: { tenantId, id },

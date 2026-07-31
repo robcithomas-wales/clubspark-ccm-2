@@ -72,9 +72,10 @@ export class BookingsRepository {
   ) {
     const offset = (page - 1) * limit
 
-    const statusFilter = filters.status && filters.status !== 'all'
-      ? Prisma.sql`AND b.status = ${filters.status}`
-      : Prisma.empty
+    const statusFilter =
+      filters.status && filters.status !== 'all'
+        ? Prisma.sql`AND b.status = ${filters.status}`
+        : Prisma.empty
 
     const fromFilter = filters.fromDate
       ? Prisma.sql`AND b.starts_at >= ${filters.fromDate}::timestamptz`
@@ -115,27 +116,11 @@ export class BookingsRepository {
           b.currency,
           b.created_at         AS "createdAt",
           b.updated_at         AS "updatedAt",
-          COALESCE(
-            c.first_name,
-            au.raw_user_meta_data->>'firstName',
-            au.raw_user_meta_data->>'first_name',
-            SPLIT_PART(NULLIF(COALESCE(au.raw_user_meta_data->>'full_name', au.raw_user_meta_data->>'name'), ''), ' ', 1)
-          ) AS "customerFirstName",
-          COALESCE(
-            c.last_name,
-            au.raw_user_meta_data->>'lastName',
-            au.raw_user_meta_data->>'last_name',
-            NULLIF(SUBSTRING(COALESCE(au.raw_user_meta_data->>'full_name', au.raw_user_meta_data->>'name', '') FROM POSITION(' ' IN COALESCE(au.raw_user_meta_data->>'full_name', au.raw_user_meta_data->>'name', '')) + 1), '')
-          ) AS "customerLastName",
-          COALESCE(c.email, au.email) AS "customerEmail",
-          c.phone              AS "customerPhone",
           v.name               AS "venueName",
           r.name               AS "resourceName",
           u.name               AS "unitName",
           COUNT(*) OVER()::int AS "totalCount"
         FROM booking.bookings b
-        LEFT JOIN people.persons c ON c.id = b.customer_id
-        LEFT JOIN auth.users au ON au.id = b.customer_id
         LEFT JOIN venue.venues v ON v.id = b.venue_id
         LEFT JOIN venue.resources r ON r.id = b.resource_id
         LEFT JOIN venue.bookable_units u ON u.id = b.bookable_unit_id
@@ -182,26 +167,10 @@ export class BookingsRepository {
           b.currency,
           b.created_at         AS "createdAt",
           b.updated_at         AS "updatedAt",
-          COALESCE(
-            c.first_name,
-            au.raw_user_meta_data->>'firstName',
-            au.raw_user_meta_data->>'first_name',
-            SPLIT_PART(NULLIF(COALESCE(au.raw_user_meta_data->>'full_name', au.raw_user_meta_data->>'name'), ''), ' ', 1)
-          ) AS "customerFirstName",
-          COALESCE(
-            c.last_name,
-            au.raw_user_meta_data->>'lastName',
-            au.raw_user_meta_data->>'last_name',
-            NULLIF(SUBSTRING(COALESCE(au.raw_user_meta_data->>'full_name', au.raw_user_meta_data->>'name', '') FROM POSITION(' ' IN COALESCE(au.raw_user_meta_data->>'full_name', au.raw_user_meta_data->>'name', '')) + 1), '')
-          ) AS "customerLastName",
-          COALESCE(c.email, au.email) AS "customerEmail",
-          c.phone              AS "customerPhone",
           v.name               AS "venueName",
           r.name               AS "resourceName",
           u.name               AS "unitName"
         FROM booking.bookings b
-        LEFT JOIN people.persons c ON c.id = b.customer_id
-        LEFT JOIN auth.users au ON au.id = b.customer_id
         LEFT JOIN venue.venues v ON v.id = b.venue_id
         LEFT JOIN venue.resources r ON r.id = b.resource_id
         LEFT JOIN venue.bookable_units u ON u.id = b.bookable_unit_id
@@ -232,7 +201,11 @@ export class BookingsRepository {
    * call after a successful one matches nothing and reports 0. That is what makes
    * it safe for the caller to retry.
    */
-  async reassignCustomer(tenantId: string, fromCustomerId: string, toCustomerId: string): Promise<number> {
+  async reassignCustomer(
+    tenantId: string,
+    fromCustomerId: string,
+    toCustomerId: string,
+  ): Promise<number> {
     return this.prisma.write.$executeRaw`
       UPDATE booking.bookings
       SET customer_id = ${toCustomerId}::uuid,
@@ -243,10 +216,17 @@ export class BookingsRepository {
   }
 
   async findBookableUnit(tenantId: string, bookableUnitId: string) {
-    const rows = await this.prisma.read.$queryRaw<{
-      id: string; tenantId: string; venueId: string; resourceId: string;
-      name: string; unitType: string; isActive: boolean
-    }[]>`
+    const rows = await this.prisma.read.$queryRaw<
+      {
+        id: string
+        tenantId: string
+        venueId: string
+        resourceId: string
+        name: string
+        unitType: string
+        isActive: boolean
+      }[]
+    >`
       SELECT
         id,
         tenant_id   AS "tenantId",
@@ -505,10 +485,9 @@ export class BookingsRepository {
             `
             if (current.length === 0) return null
 
-            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
             const startsAt = dto.startsAt ?? current[0]!.startsAt.toISOString()
-            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-            const endsAt   = dto.endsAt   ?? current[0]!.endsAt.toISOString()
+
+            const endsAt = dto.endsAt ?? current[0]!.endsAt.toISOString()
 
             const conflicts = await tx.$queryRaw<{ id: string }[]>`
               SELECT id FROM booking.bookings
@@ -631,9 +610,10 @@ export class BookingsRepository {
     const activeUnits = unitRows[0]?.activeUnits ?? 0
     // 16 operational hours per day (06:00–22:00), 30 days
     const totalPossibleHours30d = activeUnits * 16 * 30
-    const utilisationRate30d = totalPossibleHours30d > 0
-      ? Math.round((bookedHours30d / totalPossibleHours30d) * 1000) / 10
-      : 0
+    const utilisationRate30d =
+      totalPossibleHours30d > 0
+        ? Math.round((bookedHours30d / totalPossibleHours30d) * 1000) / 10
+        : 0
 
     return {
       totalBookedHours: bookingRows[0]?.totalBookedHours ?? 0,
@@ -649,11 +629,21 @@ export class BookingsRepository {
   async getDailyStats(
     tenantId: string,
     days = 30,
-  ): Promise<{ date: string; bookingCount: number; bookedHours: number; addOnRevenue: number; revenue: number }[]> {
+  ): Promise<
+    {
+      date: string
+      bookingCount: number
+      bookedHours: number
+      addOnRevenue: number
+      revenue: number
+    }[]
+  > {
     const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
 
     const [bookingRows, addOnRows] = await Promise.all([
-      this.prisma.read.$queryRaw<{ date: string; bookingCount: number; bookedHours: number; revenue: number }[]>`
+      this.prisma.read.$queryRaw<
+        { date: string; bookingCount: number; bookedHours: number; revenue: number }[]
+      >`
         SELECT
           starts_at::date::text                                                        AS date,
           COUNT(*)::int                                                                AS "bookingCount",
@@ -786,12 +776,16 @@ export class BookingsRepository {
   }
 
   /** Booked hours and booking count per bookable unit (active bookings only). */
-  async getStatsByUnit(tenantId: string): Promise<{
-    bookableUnitId: string
-    bookingCount: number
-    bookedHours: number
-  }[]> {
-    return this.prisma.read.$queryRaw<{ bookableUnitId: string; bookingCount: number; bookedHours: number }[]>`
+  async getStatsByUnit(tenantId: string): Promise<
+    {
+      bookableUnitId: string
+      bookingCount: number
+      bookedHours: number
+    }[]
+  > {
+    return this.prisma.read.$queryRaw<
+      { bookableUnitId: string; bookingCount: number; bookedHours: number }[]
+    >`
       SELECT
         bookable_unit_id                                                        AS "bookableUnitId",
         COUNT(*)::int                                                           AS "bookingCount",
@@ -818,16 +812,11 @@ export class BookingsRepository {
   }
 
   /** Top customers ranked by booking count, with total hours and add-on spend. */
-  async getTopCustomers(tenantId: string, limit = 20): Promise<{
-    customerId: string
-    firstName: string | null
-    lastName: string | null
-    email: string | null
-    bookingCount: number
-    totalHours: number
-    addOnSpend: number
-  }[]> {
-    return this.prisma.read.$queryRaw<{
+  async getTopCustomers(
+    tenantId: string,
+    limit = 20,
+  ): Promise<
+    {
       customerId: string
       firstName: string | null
       lastName: string | null
@@ -835,22 +824,30 @@ export class BookingsRepository {
       bookingCount: number
       totalHours: number
       addOnSpend: number
-    }[]>`
+    }[]
+  > {
+    return this.prisma.read.$queryRaw<
+      {
+        customerId: string
+        firstName: string | null
+        lastName: string | null
+        email: string | null
+        bookingCount: number
+        totalHours: number
+        addOnSpend: number
+      }[]
+    >`
       SELECT
         b.customer_id                                                                AS "customerId",
-        c.first_name                                                                 AS "firstName",
-        c.last_name                                                                  AS "lastName",
-        c.email,
         COUNT(DISTINCT b.id)::int                                                    AS "bookingCount",
         COALESCE(SUM(EXTRACT(EPOCH FROM (b.ends_at - b.starts_at)) / 3600), 0)::float AS "totalHours",
         COALESCE(SUM(ba.price * ba.quantity), 0)::float                             AS "addOnSpend"
       FROM booking.bookings b
-      JOIN people.persons c ON c.id = b.customer_id
       LEFT JOIN booking.booking_add_ons ba ON ba.booking_id = b.id AND ba.status = 'active'
       WHERE b.tenant_id    = ${tenantId}::uuid
         AND b.status       = 'active'
         AND b.customer_id IS NOT NULL
-      GROUP BY b.customer_id, c.first_name, c.last_name, c.email
+      GROUP BY b.customer_id
       ORDER BY "bookingCount" DESC
       LIMIT ${limit}
     `
@@ -907,19 +904,24 @@ export class BookingsRepository {
    * and have not yet had a reminder sent. The 2-hour window prevents
    * duplicate fires across hourly cron runs.
    */
-  async findDueReminders(): Promise<{
-    id: string
-    tenantId: string
-    customerId: string | null
-    customerEmail: string | null
-    customerFirstName: string | null
-    customerLastName: string | null
-    bookingReference: string
-    startsAt: Date
-    endsAt: Date
-    venueName: string | null
-    resourceName: string | null
-  }[]> {
+  /**
+   * Bookings due a reminder. Customer name/email are NOT selected here — they come
+   * from people-service via PeopleClient in BookingReminderTask. Keeping them out
+   * of the type is deliberate: leaving them declared but unselected would compile
+   * fine and be `undefined` at runtime.
+   */
+  async findDueReminders(): Promise<
+    {
+      id: string
+      tenantId: string
+      customerId: string | null
+      bookingReference: string
+      startsAt: Date
+      endsAt: Date
+      venueName: string | null
+      resourceName: string | null
+    }[]
+  > {
     const windowStart = new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString()
     const windowEnd = new Date(Date.now() + 25 * 60 * 60 * 1000).toISOString()
     return this.prisma.read.$queryRaw`
@@ -930,16 +932,11 @@ export class BookingsRepository {
         b.booking_reference      AS "bookingReference",
         b.starts_at              AS "startsAt",
         b.ends_at                AS "endsAt",
-        p.email                  AS "customerEmail",
-        p.first_name             AS "customerFirstName",
-        p.last_name              AS "customerLastName",
         v.name                   AS "venueName",
         r.name                   AS "resourceName"
       FROM booking.bookings b
-      -- Every join is tenant-qualified. Nothing validates that a booking's
-      -- customer_id belongs to the booking's tenant, so an unqualified join would
-      -- resolve another tenant's person and email them about this booking.
-      LEFT JOIN people.persons p  ON p.id = b.customer_id  AND p.tenant_id = b.tenant_id
+      -- Venue joins stay tenant-qualified: nothing validates that a booking's
+      -- foreign ids belong to its tenant. (These venue reads go in MR-3.)
       LEFT JOIN venue.venues v    ON v.id = b.venue_id::uuid  AND v.tenant_id = b.tenant_id
       LEFT JOIN venue.resources r ON r.id = b.resource_id::uuid AND r.tenant_id = b.tenant_id
       WHERE b.status IN ('active', 'pending')
@@ -1028,12 +1025,23 @@ export class BookingsRepository {
   // ─── Payment Splits ─────────────────────────────────────────────────────────
 
   async listPaymentSplits(tenantId: string, bookingId: string) {
-    return this.prisma.read.$queryRaw<{
-      id: string; bookingId: string; tenantId: string;
-      payerPersonId: string | null; payerName: string; payerEmail: string | null;
-      amountDue: number; amountPaid: number; currency: string;
-      paymentStatus: string; notes: string | null; createdAt: Date; updatedAt: Date;
-    }[]>`
+    return this.prisma.read.$queryRaw<
+      {
+        id: string
+        bookingId: string
+        tenantId: string
+        payerPersonId: string | null
+        payerName: string
+        payerEmail: string | null
+        amountDue: number
+        amountPaid: number
+        currency: string
+        paymentStatus: string
+        notes: string | null
+        createdAt: Date
+        updatedAt: Date
+      }[]
+    >`
       SELECT
         id,
         booking_id       AS "bookingId",
@@ -1057,9 +1065,18 @@ export class BookingsRepository {
   async addPaymentSplit(
     tenantId: string,
     bookingId: string,
-    dto: { payerName: string; payerEmail?: string; payerPersonId?: string; amountDue: number; currency?: string; notes?: string },
+    dto: {
+      payerName: string
+      payerEmail?: string
+      payerPersonId?: string
+      amountDue: number
+      currency?: string
+      notes?: string
+    },
   ) {
-    const rows = await this.prisma.write.$queryRaw<{ id: string; payerName: string; amountDue: number; paymentStatus: string }[]>`
+    const rows = await this.prisma.write.$queryRaw<
+      { id: string; payerName: string; amountDue: number; paymentStatus: string }[]
+    >`
       INSERT INTO booking.booking_payment_splits
         (tenant_id, booking_id, payer_person_id, payer_name, payer_email, amount_due, currency, notes)
       VALUES (
@@ -1105,5 +1122,4 @@ export class BookingsRepository {
     `
     return rows.length > 0
   }
-
 }

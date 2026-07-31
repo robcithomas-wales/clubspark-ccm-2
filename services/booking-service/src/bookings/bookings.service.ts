@@ -14,6 +14,7 @@ import { PricingService } from '../pricing/pricing.service.js'
 import { EventBusService } from '../event-bus/event-bus.service.js'
 import { RefundPoliciesRepository } from '../refund-policies/refund-policies.repository.js'
 import { OrderClient } from '../order-client/order.client.js'
+import { PeopleClient } from '../people/people.client.js'
 import type { CreateBookingDto } from './dto/create-booking.dto.js'
 import type { CreateBookingAddOnDto } from './dto/create-booking-add-on.dto.js'
 import type { UpdatePaymentStatusDto } from './dto/update-payment-status.dto.js'
@@ -34,6 +35,7 @@ export class BookingsService {
     private readonly eventBus: EventBusService,
     private readonly refundPolicies: RefundPoliciesRepository,
     private readonly orderClient: OrderClient,
+    private readonly people: PeopleClient,
   ) {}
 
   async list(
@@ -42,13 +44,16 @@ export class BookingsService {
     limit: number,
     filters: { status?: string; fromDate?: string; toDate?: string; customerId?: string } = {},
   ) {
-    return this.repo.list(ctx.tenantId, page, limit, filters)
+    const result = await this.repo.list(ctx.tenantId, page, limit, filters)
+    // Customer names come from people-service, not a SQL join — see PeopleClient.
+    return { ...result, rows: await this.people.hydrate(ctx.tenantId, result.rows) }
   }
 
   async getById(ctx: TenantContext, id: string) {
     const booking = await this.repo.findById(ctx.tenantId, id)
     if (!booking) throw new NotFoundException('Booking not found')
-    return booking
+    const [hydrated] = await this.people.hydrate(ctx.tenantId, [booking])
+    return hydrated ?? booking
   }
 
   async create(ctx: TenantContext, dto: CreateBookingDto) {
@@ -122,12 +127,20 @@ export class BookingsService {
       )
     } else if (dto.customerId && dto.price != null) {
       // No pricing rule — fall back to applying member discount against the provided price
-      const discountPct = await this.membershipClient.resolveMemberDiscount(ctx.tenantId, dto.customerId)
+      const discountPct = await this.membershipClient.resolveMemberDiscount(
+        ctx.tenantId,
+        dto.customerId,
+      )
       if (discountPct != null && discountPct > 0) {
         const discountedPrice = parseFloat((dto.price * (1 - discountPct / 100)).toFixed(2))
         resolvedDto = { ...dto, price: discountedPrice }
         this.logger.log(
-          { customerId: dto.customerId, discountPct, original: dto.price, discounted: discountedPrice },
+          {
+            customerId: dto.customerId,
+            discountPct,
+            original: dto.price,
+            discounted: discountedPrice,
+          },
           'Member discount applied (no pricing rule — fallback)',
         )
       }
@@ -215,7 +228,9 @@ export class BookingsService {
       if (err instanceof ConflictException) throw err
       const pg = err as { code?: string }
       if (pg.code === '23P01' || pg.code === '40001') {
-        throw new ConflictException('Booking conflicts with an existing booking for the selected time slot')
+        throw new ConflictException(
+          'Booking conflicts with an existing booking for the selected time slot',
+        )
       }
       throw err
     }
@@ -250,7 +265,22 @@ export class BookingsService {
   }
 
   async getTopCustomers(ctx: TenantContext, limit: number) {
-    return this.repo.getTopCustomers(ctx.tenantId, limit)
+    const rows = await this.repo.getTopCustomers(ctx.tenantId, limit)
+    // The aggregate is computed in SQL; names are attached afterwards so the
+    // report no longer needs to JOIN people.persons.
+    const people = await this.people.getDisplayFields(
+      ctx.tenantId,
+      rows.map((r) => r.customerId),
+    )
+    return rows.map((r) => {
+      const p = r.customerId ? people.get(r.customerId) : undefined
+      return {
+        ...r,
+        firstName: p?.customerFirstName ?? null,
+        lastName: p?.customerLastName ?? null,
+        email: p?.customerEmail ?? null,
+      }
+    })
   }
 
   async cancel(ctx: TenantContext, id: string) {
@@ -260,7 +290,8 @@ export class BookingsService {
       this.logger.log({ id, organisationId: ctx.organisationId }, 'Booking cancelled')
 
       // Apply refund policy if one exists for this venue/notice period
-      const hoursUntilStart = (new Date(cancelled.startsAt).getTime() - Date.now()) / (1000 * 60 * 60)
+      const hoursUntilStart =
+        (new Date(cancelled.startsAt).getTime() - Date.now()) / (1000 * 60 * 60)
       const policy = await this.refundPolicies.findApplicablePolicy(
         ctx.tenantId,
         cancelled.venueId,
@@ -268,9 +299,8 @@ export class BookingsService {
       )
       if (policy) {
         const pricePence = cancelled.price != null ? Number(cancelled.price) : null
-        const refundAmount = pricePence != null
-          ? Number((pricePence * policy.refundPct / 100).toFixed(2))
-          : null
+        const refundAmount =
+          pricePence != null ? Number(((pricePence * policy.refundPct) / 100).toFixed(2)) : null
         void this.refundPolicies.applyRefundToBooking(
           ctx.tenantId,
           cancelled.id,
@@ -291,9 +321,9 @@ export class BookingsService {
         bookingId: cancelled.id,
         bookingReference: cancelled.bookingReference,
         bookerPersonId: cancelled.customerId ?? '',
-        bookerEmail: '',  // TODO: fetch from people-service by customerId
+        bookerEmail: '', // TODO: fetch from people-service by customerId
         bookerFirstName: '',
-        venueName: '',    // TODO: fetch from venue-service by venueId
+        venueName: '', // TODO: fetch from venue-service by venueId
         resourceName: '',
         startsAt: cancelled.startsAt.toISOString(),
       })
@@ -345,10 +375,7 @@ export class BookingsService {
     const exists = await this.repo.exists(ctx.tenantId, bookingId)
     if (!exists) throw new NotFoundException('Booking not found')
 
-    this.logger.log(
-      { bookingId, organisationId: ctx.organisationId },
-      'Creating booking add-on',
-    )
+    this.logger.log({ bookingId, organisationId: ctx.organisationId }, 'Creating booking add-on')
     return this.repo.createAddOn(bookingId, dto)
   }
 
@@ -434,5 +461,4 @@ export class BookingsService {
     const updated = await this.repo.reassignCustomer(tenantId, fromCustomerId, toCustomerId)
     return { updated }
   }
-
 }

@@ -71,15 +71,23 @@ Until that is set, the workflow reports results but nothing stops a merge past a
 [`scripts/hooks/pre-push`](../../scripts/hooks/pre-push) is committed and installed automatically —
 the root `prepare` script points `core.hooksPath` at `scripts/hooks` on `npm install`.
 
-It runs the booking, membership, venue, people and admin suites before allowing a push, and encodes
-two rules learned the hard way:
+It runs **typecheck + lint on changed files** — fast and deterministic. It deliberately does **not**
+run the integration suites.
 
-1. **Kill running services first.** They hold Supabase connections; leaving them up exhausts the
-   pooled limit and the suites fail with `Can't reach database` or hook timeouts that look like real
-   failures. The old local-only hook did not do this.
-2. **Run sequentially.** Same reason — never parallelise service suites.
+**Why no tests in the hook.** The suites need a real database, and locally that is the shared
+Supabase instance. Running several back-to-back against it is unreliable for reasons unrelated to the
+code: they share one pgbouncer connection limit (later suites fail with `Can't reach database`), and
+they share fixture rows under fixed tenant ids (a killed run leaves orphans that fail the next one).
 
-Emergency override: `git push --no-verify`. CI is the real gate; the hook is a fast local warning.
+We hit both repeatedly during this work — including a push blocked by 7 "failures" in booking and
+membership that passed 59/59 when the suite was run on its own moments later. A hook that fails for
+environmental reasons is worse than no hook: it took 20+ minutes and made `--no-verify` tempting,
+which then skips the checks that *do* work.
+
+CI gets a clean, private Postgres every run, so it has neither problem. That is where the suites
+belong. The hook lints exactly what the CI lint job lints, so a green hook means a green lint job.
+
+Emergency override: `git push --no-verify`.
 
 ## Known gaps
 

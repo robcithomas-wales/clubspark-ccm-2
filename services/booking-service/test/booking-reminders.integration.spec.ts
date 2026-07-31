@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest'
 import { getApp, closeApp } from './helpers/app.js'
-import { prisma, seedFixtures, cleanBookings, teardownFixtures, checkDbAvailable } from './helpers/db.js'
+import {
+  prisma,
+  seedFixtures,
+  cleanBookings,
+  teardownFixtures,
+  checkDbAvailable,
+} from './helpers/db.js'
 import {
   TEST_TENANT_ID,
   TEST_ORG_ID,
@@ -11,6 +17,7 @@ import {
 import { BookingsRepository } from '../src/bookings/bookings.repository.js'
 import { BookingReminderTask } from '../src/bookings/tasks/booking-reminder.task.js'
 import { EventBusService } from '../src/event-bus/event-bus.service.js'
+import { PeopleClient } from '../src/people/people.client.js'
 
 /**
  * Regression suite for the booking-reminder cron.
@@ -82,6 +89,7 @@ describe.runIf(DB_AVAILABLE)('Booking reminders — cron regression', () => {
   let repo: BookingsRepository
   let task: BookingReminderTask
   let eventBus: EventBusService
+  let people: PeopleClient
 
   beforeAll(async () => {
     await seedFixtures()
@@ -90,6 +98,7 @@ describe.runIf(DB_AVAILABLE)('Booking reminders — cron regression', () => {
     repo = app.get(BookingsRepository)
     task = app.get(BookingReminderTask)
     eventBus = app.get(EventBusService)
+    people = app.get(PeopleClient)
   })
 
   afterEach(async () => {
@@ -109,7 +118,7 @@ describe.runIf(DB_AVAILABLE)('Booking reminders — cron regression', () => {
     await expect(repo.findDueReminders()).resolves.toBeInstanceOf(Array)
   })
 
-  it('returns a booking in the 23–25h window and hydrates the customer from people.persons', async () => {
+  it('returns a booking in the 23–25h window, without reaching into people.persons', async () => {
     const { startsAt, endsAt } = inReminderWindow()
     const id = await insertBooking({ startsAt, endsAt })
 
@@ -117,11 +126,11 @@ describe.runIf(DB_AVAILABLE)('Booking reminders — cron regression', () => {
     const row = due.find((b) => b.id === id)
 
     expect(row).toBeDefined()
-    // Proves the people.persons join resolves — a wrong table name would leave these null
-    // (LEFT JOIN) or throw, which is exactly what the regression is guarding.
-    expect(row!.customerEmail).toBe('reminder@example.test')
-    expect(row!.customerFirstName).toBe('Reminder')
-    expect(row!.customerLastName).toBe('Recipient')
+    // Customer identity is deliberately NOT selected here any more (MR-1): booking
+    // cannot read people.persons, so the task hydrates via people-service instead.
+    // The row carries the id to hydrate with, and booking's own columns.
+    expect(row!.customerId).toBe(TEST_PERSON_ID)
+    expect(row).not.toHaveProperty('customerEmail')
     expect(row!.venueName).toBe('Test Venue')
     expect(row!.resourceName).toBe('Test Court')
   })
@@ -168,6 +177,57 @@ describe.runIf(DB_AVAILABLE)('Booking reminders — cron regression', () => {
     expect(
       publish.mock.calls.filter(([e]) => (e as { bookingId?: string }).bookingId === id),
     ).toHaveLength(0)
+  })
+
+  /**
+   * MR-1: customer identity now comes from people-service, not a SQL join. The
+   * cron must attach it to the published event — otherwise reminders go out with
+   * no recipient, which is exactly the silent failure this suite exists to catch.
+   */
+  it('the cron hydrates customer details from people-service before publishing', async () => {
+    const { startsAt, endsAt } = inReminderWindow()
+    const id = await insertBooking({ startsAt, endsAt })
+
+    vi.spyOn(people, 'getDisplayFields').mockResolvedValue(
+      new Map([
+        [
+          TEST_PERSON_ID,
+          {
+            customerFirstName: 'Reminder',
+            customerLastName: 'Recipient',
+            customerEmail: 'reminder@example.test',
+            customerPhone: '07000000000',
+          },
+        ],
+      ]),
+    )
+    const publish = vi.spyOn(eventBus, 'publish').mockResolvedValue(undefined as never)
+
+    await task.sendReminders()
+
+    const event = publish.mock.calls
+      .map(([e]) => e as Record<string, unknown>)
+      .find((e) => e.bookingId === id)
+    expect(event).toBeDefined()
+    expect(event!.customerEmail).toBe('reminder@example.test')
+    expect(event!.customerFirstName).toBe('Reminder')
+  })
+
+  it('still publishes when people-service is unreachable, with blank customer details', async () => {
+    const { startsAt, endsAt } = inReminderWindow()
+    const id = await insertBooking({ startsAt, endsAt })
+
+    // A reminder with no name is better than no reminder and an unhandled error.
+    vi.spyOn(people, 'getDisplayFields').mockResolvedValue(new Map())
+    const publish = vi.spyOn(eventBus, 'publish').mockResolvedValue(undefined as never)
+
+    await task.sendReminders()
+
+    const event = publish.mock.calls
+      .map(([e]) => e as Record<string, unknown>)
+      .find((e) => e.bookingId === id)
+    expect(event).toBeDefined()
+    expect(event!.customerEmail).toBeNull()
   })
 
   it('the cron swallows a lookup failure instead of rejecting unhandled', async () => {

@@ -78,6 +78,19 @@ export class CustomersService {
     return { data: customer }
   }
 
+  /**
+   * Batch display-field lookup for other services (see CustomersRepository.findManyByIds).
+   *
+   * Silently skips ids that do not exist or belong to another tenant — callers are
+   * hydrating a list and a missing person should leave blank fields, not fail the
+   * whole request. Duplicate ids are collapsed.
+   */
+  async findManyByIds(tenantId: string, ids: string[]) {
+    const unique = [...new Set(ids.filter(Boolean))]
+    const data = await this.repo.findManyByIds(tenantId, unique)
+    return { data }
+  }
+
   async create(tenantId: string, dto: CreateCustomerDto) {
     // If a Supabase user ID is provided, check whether this email already exists.
     // If it does, rehome the existing record to the new ID so everything stays linked.
@@ -225,7 +238,10 @@ export class CustomersService {
       try {
         if (row.email) {
           const existing = await this.repo.findByEmail(tenantId, row.email)
-          if (existing) { results.skipped++; continue }
+          if (existing) {
+            results.skipped++
+            continue
+          }
         }
         await this.repo.create(tenantId, row)
         results.created++
@@ -264,7 +280,9 @@ export class CustomersService {
         { headers },
       )
       if (bRes.ok) {
-        const bJson = await bRes.json() as { data?: { price?: number | null; paymentStatus?: string; status?: string }[] }
+        const bJson = (await bRes.json()) as {
+          data?: { price?: number | null; paymentStatus?: string; status?: string }[]
+        }
         const bookings = bJson.data ?? []
         bookingCount = bookings.filter((b) => b.status !== 'cancelled').length
         for (const b of bookings) {
@@ -273,7 +291,9 @@ export class CustomersService {
           if (b.paymentStatus === 'unpaid') unpaidCount++
         }
       }
-    } catch { /* non-fatal */ }
+    } catch {
+      /* non-fatal */
+    }
 
     // Fetch active membership (if any)
     let activeMembership: { planName: string; status: string; expiresAt?: string } | null = null
@@ -284,7 +304,9 @@ export class CustomersService {
         { headers },
       )
       if (mRes.ok) {
-        const mJson = await mRes.json() as { data?: { planName?: string; status?: string; expiresAt?: string }[] }
+        const mJson = (await mRes.json()) as {
+          data?: { planName?: string; status?: string; expiresAt?: string }[]
+        }
         const first = mJson.data?.[0]
         if (first) {
           activeMembership = {
@@ -294,7 +316,9 @@ export class CustomersService {
           }
         }
       }
-    } catch { /* non-fatal */ }
+    } catch {
+      /* non-fatal */
+    }
 
     return {
       data: {

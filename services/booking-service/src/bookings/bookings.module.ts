@@ -10,10 +10,24 @@ import { MembershipModule } from '../membership/membership.module.js'
 import { PricingModule } from '../pricing/pricing.module.js'
 import { EventBusModule } from '../event-bus/event-bus.module.js'
 import { RefundPoliciesRepository } from '../refund-policies/refund-policies.repository.js'
+import { PeopleModule } from '../people/people.module.js'
 
 @Module({
-  imports: [AvailabilityModule, BookingRulesModule, MembershipModule, PricingModule, EventBusModule],
+  imports: [
+    PeopleModule,
+    AvailabilityModule,
+    BookingRulesModule,
+    MembershipModule,
+    PricingModule,
+    EventBusModule,
+  ],
   controllers: [BookingsController],
-  providers: [BookingsService, BookingsRepository, BookingExpiryTask, BookingReminderTask, RefundPoliciesRepository],
+  providers: [
+    BookingsService,
+    BookingsRepository,
+    BookingExpiryTask,
+    BookingReminderTask,
+    RefundPoliciesRepository,
+  ],
 })
 export class BookingsModule {}
