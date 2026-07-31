@@ -262,11 +262,19 @@ export class BookingsRepository {
    * The btree_gist exclusion constraint on booking.bookings is the final safety
    * net — it rejects any overlapping insert at the database level.
    */
+  /**
+   * @param withinTx runs inside the SAME transaction as the insert, with the row
+   *   just created. Used to write the outbox event atomically: either the booking
+   *   and its event both commit, or neither does. Publishing after the commit —
+   *   which is what this used to do — loses the event if the process dies in
+   *   between, and emits one for a change that rolled back.
+   */
   async createAtomic(
     tenantId: string,
     organisationId: string,
     unitIds: string[],
     dto: CreateBookingDto,
+    withinTx?: (tx: Prisma.TransactionClient, booking: BookingRow) => Promise<void>,
   ) {
     const bookingReference = generateBookingReference()
 
@@ -350,7 +358,9 @@ export class BookingsRepository {
               updated_at             AS "updatedAt"
           `
 
-          return rows[0]
+          const created = rows[0]
+          if (created && withinTx) await withinTx(tx, created)
+          return created
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       )
@@ -369,8 +379,18 @@ export class BookingsRepository {
     }
   }
 
-  async cancel(tenantId: string, id: string) {
-    const rows = await this.prisma.write.$queryRaw<BookingRow[]>`
+  /**
+   * @param withinTx runs inside the same transaction as the cancellation, with
+   *   the updated row — used to record booking.cancelled in the outbox so the
+   *   state change and its event commit together (MR-2).
+   */
+  async cancel(
+    tenantId: string,
+    id: string,
+    withinTx?: (tx: Prisma.TransactionClient, booking: BookingRow) => Promise<void>,
+  ) {
+    return this.prisma.write.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<BookingRow[]>`
       UPDATE booking.bookings
       SET status       = 'cancelled',
           cancelled_at = now(),
@@ -391,7 +411,10 @@ export class BookingsRepository {
         cancelled_at     AS "cancelledAt",
         updated_at       AS "updatedAt"
     `
-    return rows[0] ?? null
+      const cancelled = rows[0] ?? null
+      if (cancelled && withinTx) await withinTx(tx, cancelled)
+      return cancelled
+    })
   }
 
   async bulkCancel(tenantId: string, ids: string[]): Promise<number> {

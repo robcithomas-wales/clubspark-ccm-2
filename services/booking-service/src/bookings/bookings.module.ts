@@ -11,9 +11,10 @@ import { PricingModule } from '../pricing/pricing.module.js'
 import { EventBusModule } from '../event-bus/event-bus.module.js'
 import { RefundPoliciesRepository } from '../refund-policies/refund-policies.repository.js'
 import { PeopleModule } from '../people/people.module.js'
+import { OutboxModule } from '../outbox/outbox.module.js'
 
 @Module({
-  imports: [
+  imports: [OutboxModule, 
     PeopleModule,
     AvailabilityModule,
     BookingRulesModule,

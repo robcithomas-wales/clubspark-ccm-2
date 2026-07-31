@@ -82,7 +82,7 @@ export class EventBusService {
       try {
         const res = await fetch(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: this.headers(),
           body: JSON.stringify(event),
         })
         if (!res.ok) {
@@ -95,5 +95,18 @@ export class EventBusService {
         this.logger.error(`[EventBus] Could not publish ${event.type} → ${url}: ${String(err)}`)
       }
     }
+  }
+
+  /**
+   * Every inbound-event endpoint is behind an InternalSecretGuard, so the secret
+   * is required — without it comms/people/integration reject the event and the
+   * failure is swallowed below. This was silently dropping every domain event
+   * anywhere the guard is enforced (i.e. production).
+   */
+  private headers(): Record<string, string> {
+    const h: Record<string, string> = { 'Content-Type': 'application/json' }
+    const secret = process.env['INTERNAL_SECRET']
+    if (secret) h['x-internal-secret'] = secret
+    return h
   }
 }
