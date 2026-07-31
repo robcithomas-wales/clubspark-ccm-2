@@ -5,12 +5,14 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Migrations and introspection need a session-mode connection. Supabase's
+  // transaction pooler (port 6543) silently HANGS on DDL; port 5432 works.
   // Migrations and introspection need a session-mode connection. Supabase's
   // transaction pooler (port 6543) silently HANGS on DDL; port 5432 works.
   directUrl = env("DIRECT_DATABASE_URL")
-  schemas  = ["venue"]
+  schemas   = ["venue"]
 }
 
 model Venue {
@@ -142,6 +144,8 @@ model AddOn {
   @@index([tenantId])
   @@index([tenantId, venueId])
   @@index([tenantId, status])
+  @@index([tenantId, status], map: "add_ons_tenant_status_idx")
+  @@index([tenantId, venueId], map: "add_ons_tenant_venue_idx")
   @@map("add_ons")
   @@schema("venue")
 }
@@ -184,11 +188,6 @@ model BlackoutDate {
   @@map("blackout_dates")
   @@schema("venue")
 }
-
-// ─── Organisation domain ──────────────────────────────────────────────────────
-// Logically belongs to the organisation domain, not the venue/place domain.
-// Target state: dedicated organisation-service. Kept here during consolidation.
-// Cross-schema relations to Venue are supported via Prisma multiSchema.
 
 model Organisation {
   id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -291,17 +290,17 @@ model SeasonalSchedule {
   tenantId            String               @map("tenant_id") @db.Uuid
   venueId             String               @map("venue_id") @db.Uuid
   name                String
-  status              String               @default("draft")  // draft | active | ended
+  status              String               @default("draft")
   startDate           DateTime             @map("start_date") @db.Date
   endDate             DateTime             @map("end_date") @db.Date
   notes               String?
-  createdAt           DateTime             @default(now()) @map("created_at")
-  updatedAt           DateTime             @updatedAt @map("updated_at")
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   availabilityConfigs AvailabilityConfig[]
 
-  @@index([tenantId])
-  @@index([tenantId, venueId])
-  @@index([tenantId, status])
+  @@index([tenantId, status], map: "idx_seasonal_schedules_status")
+  @@index([tenantId], map: "idx_seasonal_schedules_tenant")
+  @@index([tenantId, venueId], map: "idx_seasonal_schedules_venue")
   @@map("seasonal_schedules")
   @@schema("venue")
 }
@@ -309,7 +308,6 @@ model SeasonalSchedule {
 model AvailabilityConfig {
   id                     String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId               String            @map("tenant_id") @db.Uuid
-  seasonalScheduleId     String?           @map("seasonal_schedule_id") @db.Uuid
   scopeType              String            @map("scope_type")
   scopeId                String            @map("scope_id") @db.Uuid
   dayOfWeek              Int?              @map("day_of_week")
@@ -321,16 +319,14 @@ model AvailabilityConfig {
   isActive               Boolean           @default(true) @map("is_active")
   createdAt              DateTime          @default(now()) @map("created_at")
   updatedAt              DateTime          @updatedAt @map("updated_at")
-  seasonalSchedule       SeasonalSchedule? @relation(fields: [seasonalScheduleId], references: [id], onDelete: SetNull)
+  seasonalScheduleId     String?           @map("seasonal_schedule_id") @db.Uuid
+  seasonalSchedule       SeasonalSchedule? @relation(fields: [seasonalScheduleId], references: [id], onUpdate: NoAction)
 
   @@index([tenantId])
   @@index([tenantId, scopeType, scopeId])
-  @@index([tenantId, seasonalScheduleId])
   @@map("availability_configs")
   @@schema("venue")
 }
-
-
 
 enum TenantType {
   enterprise

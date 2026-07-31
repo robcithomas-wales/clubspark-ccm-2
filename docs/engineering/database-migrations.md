@@ -98,25 +98,46 @@ Both live in [`../../scripts/sql/000_shared_bootstrap.sql`](../../scripts/sql/00
   schema. Not recreated: a database-level FK between two services physically prevents them living in
   separate regional databases.
 
+## The live database
+
+Re-baselined on 2026-07-31. Each service now has its own `<schema>._prisma_migrations` with its
+baseline recorded as applied, and all 14 report **"Database schema is up to date!"**.
+
+The old shared table was renamed to `public._prisma_migrations_pre_20260731` rather than dropped, so
+the previous history is still inspectable. Delete it once you are satisfied.
+
 ## Still outstanding
 
 - **The three orphaned schemas** (`identity`, `crm`, `customer` — 13 tables between them) still exist
   in the live database. Empty and unreferenced; dropping them is a separate deliberate step.
-- **The live database has not been re-baselined** against this new history. The migrations reproduce
-  it exactly, but `_prisma_migrations` there still reflects the old, shared-table world.
 
-## Backlog: reconcile `schema.prisma` with the database
+## Drift: reconciled for 11 of 14, and now a blocking gate
 
-`npm run check:drift` currently reports differences for most services, and CI runs it
-**report-only** for that reason.
+`npm run check:drift` is **blocking in CI** as of 2026-07-31. Any *new* drift fails the build.
 
-The baselines are faithful — a from-empty build reproduces the live schema exactly and every test
-suite passes against it. What drifted is the **`schema.prisma` files**, during the `db push` era, in
-both directions: enums and constraints exist in the database that the schema files do not declare,
-and vice versa.
+**The database was authoritative, not the schema files.** The drift was mostly `timestamptz` columns
+that `schema.prisma` declared as bare `DateTime` — which Prisma maps to `TIMESTAMP(3)`, i.e. **no
+timezone**. Had we "fixed" the drift the other way and let Prisma rewrite the database, we would have
+stripped timezone awareness from a platform whose entire premise is EU/US/AU. The rest was index and
+foreign-key naming.
 
-Reconciling means deciding, per difference, which side is right — the schema file or the database.
-That is real work with product judgement in it, so it is tracked rather than guessed at.
+Eleven services were reconciled with `prisma db pull`, giving exactly zero drift.
 
-**When it is done, delete `continue-on-error` from the drift step in `.github/workflows/ci.yml`.**
-That check going green and staying green is what prevents this whole class of problem returning.
+**Three services could not be** — booking, membership and people, listed in `KNOWN_DRIFT` in
+[`../../scripts/check-migration-drift.sh`](../../scripts/check-migration-drift.sh). They declare
+relations in `schema.prisma` that have **no foreign key in the database** (people's `personTags`,
+`householdMemberships`, `relationshipsFrom`/`To`, and similar). Introspection cannot see a relation
+with no FK, so it drops the field — and the code that uses it stops compiling.
+
+Reconciling them means answering a real question per relation: **add the missing foreign key to the
+database, or keep it as an application-level relation?** That is design work, not a mechanical fix.
+Shrinking `KNOWN_DRIFT` to empty is the remaining task; each name removed is one more service that
+can never silently drift again.
+
+### A caveat about `check:drift`
+
+The obvious formulation — `prisma migrate diff --from-migrations ... --shadow-database-url` — does
+**not** work here. Prisma's shadow replay mishandles the pg_dump baselines: it fails to register the
+`CREATE SCHEMA` and then reports every table as unqualified, producing a full drop-and-recreate diff
+for all 14 services. The script instead compares the database that `migrate-all.sh` just built
+against each `schema.prisma`, which proves the same property and is cheaper.

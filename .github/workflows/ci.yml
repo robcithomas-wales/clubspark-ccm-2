@@ -145,22 +145,14 @@ jobs:
       - name: Apply every service's migrations to an empty database
         run: ./scripts/migrate-all.sh
 
-      # Report-only for now, deliberately.
+      # BLOCKING. The step above built this database purely from migrations, so
+      # comparing it to every schema.prisma proves migrations == schema.prisma.
+      # Any NEW drift fails the build — which is what stops `db push` returning.
       #
-      # The baselines faithfully reproduce the database (proven by the step above
-      # and by the test job). But the `schema.prisma` FILES drifted from the
-      # database during the `db push` era — in both directions — so this check
-      # currently reports differences for most services.
-      #
-      # Making it blocking today would mean a permanently red build for a
-      # pre-existing condition, which teaches everyone to ignore CI. Reconciling
-      # each schema.prisma against reality is real work with product judgement in
-      # it (which side is correct?), tracked separately.
-      #
-      # ⚠️ Flip this to blocking (delete continue-on-error) as soon as the
-      # reconciliation lands — that is what stops `db push` drift returning.
-      - name: Verify migrations still reproduce every schema.prisma (report-only)
-        continue-on-error: true
+      # Three services (booking, membership, people) have known, tracked drift and
+      # are listed in KNOWN_DRIFT inside the script. Shrinking that list to empty
+      # is the remaining work.
+      - name: Verify migrations reproduce every schema.prisma
         run: ./scripts/check-migration-drift.sh
 
   # ─────────────────────────────────────────────────────────────────────────

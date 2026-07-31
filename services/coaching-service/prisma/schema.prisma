@@ -3,163 +3,148 @@
 
 generator client {
   provider        = "prisma-client-js"
-  previewFeatures = ["multiSchema"]
   output          = "../src/generated/prisma"
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Migrations and introspection need a session-mode connection. Supabase's
+  // transaction pooler (port 6543) silently HANGS on DDL; port 5432 works.
   // Migrations and introspection need a session-mode connection. Supabase's
   // transaction pooler (port 6543) silently HANGS on DDL; port 5432 works.
   directUrl = env("DIRECT_DATABASE_URL")
-  schemas  = ["coaching"]
+  schemas   = ["coaching"]
 }
 
-// A coach profile. Linked to a person in people-service via customerId (UUID cross-reference).
 model Coach {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId     String   @map("tenant_id") @db.Uuid
-  customerId   String?  @map("customer_id") @db.Uuid  // optional link to people.persons (cross-service ref, no hard constraint)
-  displayName  String   @map("display_name")
-  bio          String?
-  avatarUrl    String?  @map("avatar_url")
-  specialties  String[] // e.g. ["tennis", "padel", "junior coaching"]
-  isActive     Boolean  @default(true) @map("is_active")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
-
-  lessonTypes       CoachLessonType[]
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String              @map("tenant_id") @db.Uuid
+  customerId        String?             @map("customer_id") @db.Uuid
+  displayName       String              @map("display_name")
+  bio               String?
+  avatarUrl         String?             @map("avatar_url")
+  specialties       String[]
+  isActive          Boolean             @default(true) @map("is_active")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @default(now()) @updatedAt @map("updated_at")
   availability      CoachAvailability[]
   blocks            CoachBlock[]
+  lessonTypes       CoachLessonType[]
   sessions          LessonSession[]
+  programmeSessions ProgrammeSession[]  @relation("ProgrammeSessionCoach")
   programmes        Programme[]
-  programmeSessions ProgrammeSession[] @relation("ProgrammeSessionCoach")
 
-  @@map("coaches")
-  @@schema("coaching")
   @@index([tenantId])
   @@index([tenantId, isActive])
   @@index([customerId])
+  @@map("coaches")
+  @@schema("coaching")
 }
 
-// A type of lesson/session that a venue offers (e.g. "Junior Tennis", "Adult Padel Clinic")
 model LessonType {
-  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId         String   @map("tenant_id") @db.Uuid
-  name             String
-  description      String?
-  sport            String?  // e.g. "tennis", "padel", "squash"
-  durationMinutes  Int      @map("duration_minutes")
-  maxParticipants  Int      @default(1) @map("max_participants")
-  pricePerSession  Decimal  @default(0) @map("price_per_session") @db.Decimal(10, 2)
-  currency         String   @default("GBP")
-  isActive         Boolean  @default(true) @map("is_active")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at")
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String            @map("tenant_id") @db.Uuid
+  name            String
+  description     String?
+  sport           String?
+  durationMinutes Int               @map("duration_minutes")
+  maxParticipants Int               @default(1) @map("max_participants")
+  pricePerSession Decimal           @default(0) @map("price_per_session") @db.Decimal(10, 2)
+  currency        String            @default("GBP")
+  isActive        Boolean           @default(true) @map("is_active")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @default(now()) @updatedAt @map("updated_at")
+  coaches         CoachLessonType[]
+  sessions        LessonSession[]
 
-  coaches  CoachLessonType[]
-  sessions LessonSession[]
-
-  @@map("lesson_types")
-  @@schema("coaching")
   @@index([tenantId])
   @@index([tenantId, isActive])
   @@index([tenantId, sport])
+  @@map("lesson_types")
+  @@schema("coaching")
 }
 
-// Join table: which lesson types a coach delivers
 model CoachLessonType {
-  coachId       String @map("coach_id") @db.Uuid
-  lessonTypeId  String @map("lesson_type_id") @db.Uuid
-
-  coach      Coach      @relation(fields: [coachId], references: [id], onDelete: Cascade)
-  lessonType LessonType @relation(fields: [lessonTypeId], references: [id], onDelete: Cascade)
+  coachId      String     @map("coach_id") @db.Uuid
+  lessonTypeId String     @map("lesson_type_id") @db.Uuid
+  coach        Coach      @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  lessonType   LessonType @relation(fields: [lessonTypeId], references: [id], onDelete: Cascade)
 
   @@id([coachId, lessonTypeId])
-  @@map("coach_lesson_types")
-  @@schema("coaching")
   @@index([coachId])
   @@index([lessonTypeId])
+  @@map("coach_lesson_types")
+  @@schema("coaching")
 }
 
-// Recurring weekly availability windows for a coach.
-// dayOfWeek: 0 = Sunday … 6 = Saturday (matches JS Date.getDay())
 model CoachAvailability {
   id           String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId     String  @map("tenant_id") @db.Uuid
   coachId      String  @map("coach_id") @db.Uuid
-  dayOfWeek    Int     @map("day_of_week")   // 0–6
-  startTime    String  @map("start_time")    // "HH:MM" 24-hour
-  endTime      String  @map("end_time")      // "HH:MM" 24-hour
-  lessonTypeId String? @map("lesson_type_id") @db.Uuid // null = available for any type
+  dayOfWeek    Int     @map("day_of_week")
+  startTime    String  @map("start_time")
+  endTime      String  @map("end_time")
+  lessonTypeId String? @map("lesson_type_id") @db.Uuid
+  coach        Coach   @relation(fields: [coachId], references: [id], onDelete: Cascade)
 
-  coach Coach @relation(fields: [coachId], references: [id], onDelete: Cascade)
-
-  @@map("coach_availability")
-  @@schema("coaching")
   @@index([coachId])
   @@index([tenantId])
   @@index([coachId, dayOfWeek])
+  @@map("coach_availability")
+  @@schema("coaching")
 }
 
-// A scheduled lesson / session instance — a concrete booking of a coach + lesson type
-// for a specific time. customerId is a cross-ref to people-service (no hard FK).
 model LessonSession {
-  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId           String   @map("tenant_id") @db.Uuid
-  coachId            String   @map("coach_id") @db.Uuid
-  lessonTypeId       String   @map("lesson_type_id") @db.Uuid
-  customerId         String?  @map("customer_id") @db.Uuid  // optional link to people.persons
-  bookableUnitId     String?  @map("bookable_unit_id") @db.Uuid  // optional link to venue.bookable_units (no hard FK; enables conflict detection)
-  startsAt           DateTime @map("starts_at")
-  endsAt             DateTime @map("ends_at")
-  status             String   @default("scheduled") // scheduled | confirmed | completed | cancelled | no_show
+  id                 String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String     @map("tenant_id") @db.Uuid
+  coachId            String     @map("coach_id") @db.Uuid
+  lessonTypeId       String     @map("lesson_type_id") @db.Uuid
+  customerId         String?    @map("customer_id") @db.Uuid
+  startsAt           DateTime   @map("starts_at")
+  endsAt             DateTime   @map("ends_at")
+  status             String     @default("scheduled")
   notes              String?
-  paymentStatus      String   @default("unpaid") @map("payment_status") // unpaid | paid | waived
-  priceCharged       Decimal? @map("price_charged") @db.Decimal(10, 2)
-  cancellationReason String?  @map("cancellation_reason")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
+  paymentStatus      String     @default("unpaid") @map("payment_status")
+  priceCharged       Decimal?   @map("price_charged") @db.Decimal(10, 2)
+  cancellationReason String?    @map("cancellation_reason")
+  createdAt          DateTime   @default(now()) @map("created_at")
+  updatedAt          DateTime   @default(now()) @updatedAt @map("updated_at")
+  bookableUnitId     String?    @map("bookable_unit_id") @db.Uuid
+  coach              Coach      @relation(fields: [coachId], references: [id])
+  lessonType         LessonType @relation(fields: [lessonTypeId], references: [id])
 
-  coach      Coach      @relation(fields: [coachId], references: [id], onDelete: Restrict)
-  lessonType LessonType @relation(fields: [lessonTypeId], references: [id], onDelete: Restrict)
-
-  @@map("lesson_sessions")
-  @@schema("coaching")
   @@index([tenantId])
   @@index([coachId])
   @@index([lessonTypeId])
   @@index([customerId])
   @@index([tenantId, startsAt])
   @@index([tenantId, status])
+  @@map("lesson_sessions")
+  @@schema("coaching")
 }
 
-// ─── Programme domain ─────────────────────────────────────────────────────────
-// Programme = structured group coaching offer (course, camp, academy).
-// LessonSession (above) remains the 1:1 appointment model — these are separate.
-
 model Programme {
-  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId        String   @map("tenant_id") @db.Uuid
+  id              String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String             @map("tenant_id") @db.Uuid
   name            String
   description     String?
   sport           String?
-  coachId         String?  @map("coach_id") @db.Uuid
-  venueId         String?  @map("venue_id") @db.Uuid           // cross-service ref, no hard FK
-  maxParticipants Int      @default(10) @map("max_participants")
-  minParticipants Int      @default(1)  @map("min_participants")
-  price           Decimal  @default(0)  @db.Decimal(10, 2)
-  currency        String   @default("GBP")
-  enrollsFrom     DateTime? @map("enrolls_from")
-  enrollsUntil    DateTime? @map("enrolls_until")
-  status          String   @default("draft")  // draft | published | closed | ended | cancelled
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-
-  coach      Coach?             @relation(fields: [coachId], references: [id], onDelete: SetNull)
-  sessions   ProgrammeSession[]
-  enrolments Enrolment[]
+  coachId         String?            @map("coach_id") @db.Uuid
+  venueId         String?            @map("venue_id") @db.Uuid
+  maxParticipants Int                @default(10) @map("max_participants")
+  minParticipants Int                @default(1) @map("min_participants")
+  price           Decimal            @default(0) @db.Decimal(10, 2)
+  currency        String             @default("GBP")
+  enrollsFrom     DateTime?          @map("enrolls_from")
+  enrollsUntil    DateTime?          @map("enrolls_until")
+  status          String             @default("draft")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+  enrolments      Enrolment[]
+  sessions        ProgrammeSession[]
+  coach           Coach?             @relation(fields: [coachId], references: [id])
 
   @@index([tenantId])
   @@index([tenantId, status])
@@ -170,21 +155,20 @@ model Programme {
 }
 
 model ProgrammeSession {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId       String   @map("tenant_id") @db.Uuid
-  programmeId    String   @map("programme_id") @db.Uuid
-  coachId        String?  @map("coach_id") @db.Uuid
-  bookableUnitId String?  @map("bookable_unit_id") @db.Uuid    // cross-service ref, no hard FK
-  startsAt       DateTime @map("starts_at")
-  endsAt         DateTime @map("ends_at")
-  status         String   @default("scheduled")  // scheduled | completed | cancelled
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String       @map("tenant_id") @db.Uuid
+  programmeId    String       @map("programme_id") @db.Uuid
+  coachId        String?      @map("coach_id") @db.Uuid
+  bookableUnitId String?      @map("bookable_unit_id") @db.Uuid
+  startsAt       DateTime     @map("starts_at")
+  endsAt         DateTime     @map("ends_at")
+  status         String       @default("scheduled")
   notes          String?
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
-
-  programme   Programme  @relation(fields: [programmeId], references: [id], onDelete: Cascade)
-  coach       Coach?     @relation("ProgrammeSessionCoach", fields: [coachId], references: [id], onDelete: SetNull)
-  attendances Attendance[]
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  attendances    Attendance[]
+  coach          Coach?       @relation("ProgrammeSessionCoach", fields: [coachId], references: [id])
+  programme      Programme    @relation(fields: [programmeId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([programmeId])
@@ -195,18 +179,17 @@ model ProgrammeSession {
 }
 
 model Enrolment {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId    String   @map("tenant_id") @db.Uuid
-  programmeId String   @map("programme_id") @db.Uuid
-  customerId  String   @map("customer_id") @db.Uuid            // cross-service ref, no hard FK
-  status      String   @default("confirmed")  // pending | confirmed | cancelled | waitlisted
-  orderId     String?  @map("order_id") @db.Uuid               // cross-service ref, no hard FK
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String       @map("tenant_id") @db.Uuid
+  programmeId String       @map("programme_id") @db.Uuid
+  customerId  String       @map("customer_id") @db.Uuid
+  status      String       @default("confirmed")
+  orderId     String?      @map("order_id") @db.Uuid
   notes       String?
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  programme   Programme  @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
   attendances Attendance[]
+  programme   Programme    @relation(fields: [programmeId], references: [id], onDelete: Cascade)
 
   @@unique([programmeId, customerId])
   @@index([tenantId])
@@ -217,18 +200,17 @@ model Enrolment {
 }
 
 model Attendance {
-  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId           String   @map("tenant_id") @db.Uuid
-  programmeSessionId String   @map("programme_session_id") @db.Uuid
-  enrolmentId        String   @map("enrolment_id") @db.Uuid
-  customerId         String   @map("customer_id") @db.Uuid     // denormalised for query speed
-  attended           Boolean?                                   // null = not yet recorded
+  id                 String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String           @map("tenant_id") @db.Uuid
+  programmeSessionId String           @map("programme_session_id") @db.Uuid
+  enrolmentId        String           @map("enrolment_id") @db.Uuid
+  customerId         String           @map("customer_id") @db.Uuid
+  attended           Boolean?
   notes              String?
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
-
-  programmeSession ProgrammeSession @relation(fields: [programmeSessionId], references: [id], onDelete: Cascade)
-  enrolment        Enrolment        @relation(fields: [enrolmentId], references: [id], onDelete: Cascade)
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+  enrolment          Enrolment        @relation(fields: [enrolmentId], references: [id], onDelete: Cascade)
+  programmeSession   ProgrammeSession @relation(fields: [programmeSessionId], references: [id], onDelete: Cascade)
 
   @@unique([programmeSessionId, enrolmentId])
   @@index([tenantId])
@@ -239,7 +221,6 @@ model Attendance {
   @@schema("coaching")
 }
 
-// One-off time blocks where a coach is NOT available (holiday, illness, etc.)
 model CoachBlock {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId  String   @map("tenant_id") @db.Uuid
@@ -248,12 +229,11 @@ model CoachBlock {
   endsAt    DateTime @map("ends_at")
   reason    String?
   createdAt DateTime @default(now()) @map("created_at")
+  coach     Coach    @relation(fields: [coachId], references: [id], onDelete: Cascade)
 
-  coach Coach @relation(fields: [coachId], references: [id], onDelete: Cascade)
-
-  @@map("coach_blocks")
-  @@schema("coaching")
   @@index([coachId])
   @@index([tenantId])
   @@index([coachId, startsAt, endsAt])
+  @@map("coach_blocks")
+  @@schema("coaching")
 }
