@@ -16,13 +16,22 @@ import { VenueReferenceService } from './venue-reference.service.js'
 
 /** Body for the internal reference lookup. Each list is optional. */
 export class VenueReferenceDto {
-  @IsOptional() @IsArray() @ArrayMaxSize(500) @IsString({ each: true })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(500)
+  @IsString({ each: true })
   venueIds?: string[]
 
-  @IsOptional() @IsArray() @ArrayMaxSize(500) @IsString({ each: true })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(500)
+  @IsString({ each: true })
   resourceIds?: string[]
 
-  @IsOptional() @IsArray() @ArrayMaxSize(500) @IsString({ each: true })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(500)
+  @IsString({ each: true })
   bookableUnitIds?: string[]
 }
 

@@ -23,8 +23,13 @@ import { SeasonalSchedulesModule } from './seasonal-schedules/seasonal-schedules
 import { VenueReferenceModule } from './internal/venue-reference.module.js'
 
 @Module({
-  imports: [VenueReferenceModule, 
-    ConfigModule.forRoot({ isGlobal: true, load: [configuration], envFilePath: join(__dirname, '..', '.env') }),
+  imports: [
+    VenueReferenceModule,
+    ConfigModule.forRoot({
+      isGlobal: true,
+      load: [configuration],
+      envFilePath: join(__dirname, '..', '.env'),
+    }),
     PrismaModule,
     HealthModule,
     VenuesModule,

@@ -12,7 +12,10 @@ const EMPTY: VenueFields = { venueName: null, resourceName: null, unitName: null
 
 const TIMEOUT_MS = 5_000
 
-interface NamedRow { id: string; name: string | null }
+interface NamedRow {
+  id: string
+  name: string | null
+}
 
 /**
  * Reads venue reference data from venue-service.
@@ -47,7 +50,11 @@ export class VenueClient {
    * Rows keep their booking data regardless; only the labels depend on this call.
    */
   async hydrate<
-    T extends { venueId?: string | null; resourceId?: string | null; bookableUnitId?: string | null },
+    T extends {
+      venueId?: string | null
+      resourceId?: string | null
+      bookableUnitId?: string | null
+    },
   >(tenantId: string, rows: T[]): Promise<(T & VenueFields)[]> {
     if (rows.length === 0) return []
 
@@ -71,9 +78,14 @@ export class VenueClient {
   private async fetchNames(
     tenantId: string,
     body: { venueIds: string[]; resourceIds: string[]; bookableUnitIds: string[] },
-  ): Promise<{ venues: Map<string, string>; resources: Map<string, string>; units: Map<string, string> }> {
+  ): Promise<{
+    venues: Map<string, string>
+    resources: Map<string, string>
+    units: Map<string, string>
+  }> {
     const empty = { venues: new Map(), resources: new Map(), units: new Map() }
-    if (!body.venueIds.length && !body.resourceIds.length && !body.bookableUnitIds.length) return empty
+    if (!body.venueIds.length && !body.resourceIds.length && !body.bookableUnitIds.length)
+      return empty
 
     try {
       const headers: Record<string, string> = {
