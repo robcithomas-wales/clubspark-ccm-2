@@ -47,9 +47,7 @@ function expandOccurrences(
 ): Array<{ startsAt: Date; endsAt: Date }> {
   const durationMs = firstEndsAt.getTime() - firstStartsAt.getTime()
 
-  const rule = RRule.fromString(
-    rruleStr.startsWith('RRULE:') ? rruleStr : `RRULE:${rruleStr}`,
-  )
+  const rule = RRule.fromString(rruleStr.startsWith('RRULE:') ? rruleStr : `RRULE:${rruleStr}`)
 
   // Override dtstart to match the first occurrence
   const withDtstart = new RRule({
@@ -181,9 +179,10 @@ export class BookingSeriesRepository {
     }
 
     // Enforce maxSessions: cap occurrences to this many (truncate the rest)
-    const occurrences = dto.maxSessions && allOccurrences.length > dto.maxSessions
-      ? allOccurrences.slice(0, dto.maxSessions)
-      : allOccurrences
+    const occurrences =
+      dto.maxSessions && allOccurrences.length > dto.maxSessions
+        ? allOccurrences.slice(0, dto.maxSessions)
+        : allOccurrences
 
     const slotStartsAt = firstStartsAt.toTimeString().slice(0, 8) // "HH:MM:SS"
     const slotEndsAt = firstEndsAt.toTimeString().slice(0, 8)
@@ -248,7 +247,6 @@ export class BookingSeriesRepository {
             updated_at       AS "updatedAt"
         `
         const series = seriesRows[0]!
-
 
         // Conflict check across all occurrences in one query
         const starts = occurrences.map((o) => o.startsAt.toISOString())

@@ -61,7 +61,10 @@ export class PeopleClient {
    * Batch by design — booking lists are paginated, and a per-row lookup would be
    * an N+1 across the page. Returns a Map so callers can hydrate rows directly.
    */
-  async getDisplayFields(tenantId: string, customerIds: (string | null)[]): Promise<Map<string, CustomerFields>> {
+  async getDisplayFields(
+    tenantId: string,
+    customerIds: (string | null)[],
+  ): Promise<Map<string, CustomerFields>> {
     const ids = [...new Set(customerIds.filter((id): id is string => Boolean(id)))]
     const map = new Map<string, CustomerFields>()
     if (ids.length === 0) return map
@@ -119,7 +122,10 @@ export class PeopleClient {
     rows: T[],
   ): Promise<(T & CustomerFields)[]> {
     if (rows.length === 0) return []
-    const map = await this.getDisplayFields(tenantId, rows.map((r) => r.customerId))
+    const map = await this.getDisplayFields(
+      tenantId,
+      rows.map((r) => r.customerId),
+    )
     return rows.map((r) => ({
       ...r,
       ...(r.customerId ? (map.get(r.customerId) ?? EMPTY) : EMPTY),

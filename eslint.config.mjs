@@ -53,9 +53,41 @@ export default [
       'no-console': ['warn', { allow: ['warn', 'error'] }],
       'prefer-const': 'error',
       'no-var': 'error',
-      eqeqeq: ['error', 'always'],
+      // `null: 'ignore'` permits the deliberate `x != null` idiom, which means
+      // "neither null nor undefined". Rewriting those as `!== null` would let
+      // undefined through — a real behaviour change. Strict equality is still
+      // required everywhere else.
+      eqeqeq: ['error', 'always', { null: 'ignore' }],
 
       ...eslintConfigPrettier.rules,
+    },
+  },
+  // Test files: linted WITHOUT type-aware rules.
+  //
+  // Each service's tsconfig includes only src/**, so test/** belongs to no
+  // TypeScript project and `project: true` fails with a parsing error. That made
+  // every spec file unlintable — which mattered once CI started gating on the
+  // files a PR touches: any PR containing a test would fail lint for a config
+  // reason, not a code one.
+  //
+  // Adding test/** to the build tsconfig would make `nest build` compile tests
+  // into dist. Turning off type-aware parsing here keeps formatting and syntax
+  // rules working, and only loses rules that need type information.
+  {
+    files: ['**/test/**/*.ts', '**/*.spec.ts', '**/*.test.ts', '**/vitest.config.ts'],
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: { ecmaVersion: 2022, sourceType: 'module', project: false },
+    },
+    plugins: { '@typescript-eslint': tseslint, prettier },
+    rules: {
+      'prettier/prettier': 'error',
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-explicit-any': 'warn',
+      // Rules that need type information cannot run without a project.
+      '@typescript-eslint/no-floating-promises': 'off',
+      '@typescript-eslint/await-thenable': 'off',
+      '@typescript-eslint/no-misused-promises': 'off',
     },
   },
 ]

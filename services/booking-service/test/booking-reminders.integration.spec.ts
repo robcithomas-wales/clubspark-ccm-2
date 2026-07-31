@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest'
 import { getApp, closeApp } from './helpers/app.js'
-import { prisma, seedFixtures, cleanBookings, teardownFixtures, checkDbAvailable } from './helpers/db.js'
+import {
+  prisma,
+  seedFixtures,
+  cleanBookings,
+  teardownFixtures,
+  checkDbAvailable,
+} from './helpers/db.js'
 import {
   TEST_TENANT_ID,
   TEST_ORG_ID,
@@ -183,12 +189,17 @@ describe.runIf(DB_AVAILABLE)('Booking reminders — cron regression', () => {
     const id = await insertBooking({ startsAt, endsAt })
 
     vi.spyOn(people, 'getDisplayFields').mockResolvedValue(
-      new Map([[TEST_PERSON_ID, {
-        customerFirstName: 'Reminder',
-        customerLastName: 'Recipient',
-        customerEmail: 'reminder@example.test',
-        customerPhone: '07000000000',
-      }]]),
+      new Map([
+        [
+          TEST_PERSON_ID,
+          {
+            customerFirstName: 'Reminder',
+            customerLastName: 'Recipient',
+            customerEmail: 'reminder@example.test',
+            customerPhone: '07000000000',
+          },
+        ],
+      ]),
     )
     const publish = vi.spyOn(eventBus, 'publish').mockResolvedValue(undefined as never)
 

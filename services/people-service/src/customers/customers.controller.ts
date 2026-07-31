@@ -63,10 +63,7 @@ export class CustomersController {
   @UseGuards(InternalSecretGuard)
   @HttpCode(HttpStatus.OK)
   @ApiExcludeEndpoint()
-  batchByIds(
-    @Headers('x-tenant-id') tenantId: string | undefined,
-    @Body() dto: BatchPeopleDto,
-  ) {
+  batchByIds(@Headers('x-tenant-id') tenantId: string | undefined, @Body() dto: BatchPeopleDto) {
     if (!tenantId) throw new BadRequestException('x-tenant-id header is required')
     return this.service.findManyByIds(tenantId, dto.ids)
   }

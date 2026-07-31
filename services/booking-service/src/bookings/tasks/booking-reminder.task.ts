@@ -50,7 +50,13 @@ export class BookingReminderTask {
     }
     const customers = new Map<string, Awaited<ReturnType<PeopleClient['getDisplayFields']>>>()
     for (const [tenantId, rows] of byTenant) {
-      customers.set(tenantId, await this.people.getDisplayFields(tenantId, rows.map((r) => r.customerId)))
+      customers.set(
+        tenantId,
+        await this.people.getDisplayFields(
+          tenantId,
+          rows.map((r) => r.customerId),
+        ),
+      )
     }
 
     for (const b of bookings) {

@@ -13,8 +13,21 @@ import { RefundPoliciesRepository } from '../refund-policies/refund-policies.rep
 import { PeopleModule } from '../people/people.module.js'
 
 @Module({
-  imports: [PeopleModule, AvailabilityModule, BookingRulesModule, MembershipModule, PricingModule, EventBusModule],
+  imports: [
+    PeopleModule,
+    AvailabilityModule,
+    BookingRulesModule,
+    MembershipModule,
+    PricingModule,
+    EventBusModule,
+  ],
   controllers: [BookingsController],
-  providers: [BookingsService, BookingsRepository, BookingExpiryTask, BookingReminderTask, RefundPoliciesRepository],
+  providers: [
+    BookingsService,
+    BookingsRepository,
+    BookingExpiryTask,
+    BookingReminderTask,
+    RefundPoliciesRepository,
+  ],
 })
 export class BookingsModule {}

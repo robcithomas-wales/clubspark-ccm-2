@@ -72,9 +72,10 @@ export class BookingsRepository {
   ) {
     const offset = (page - 1) * limit
 
-    const statusFilter = filters.status && filters.status !== 'all'
-      ? Prisma.sql`AND b.status = ${filters.status}`
-      : Prisma.empty
+    const statusFilter =
+      filters.status && filters.status !== 'all'
+        ? Prisma.sql`AND b.status = ${filters.status}`
+        : Prisma.empty
 
     const fromFilter = filters.fromDate
       ? Prisma.sql`AND b.starts_at >= ${filters.fromDate}::timestamptz`
@@ -200,7 +201,11 @@ export class BookingsRepository {
    * call after a successful one matches nothing and reports 0. That is what makes
    * it safe for the caller to retry.
    */
-  async reassignCustomer(tenantId: string, fromCustomerId: string, toCustomerId: string): Promise<number> {
+  async reassignCustomer(
+    tenantId: string,
+    fromCustomerId: string,
+    toCustomerId: string,
+  ): Promise<number> {
     return this.prisma.write.$executeRaw`
       UPDATE booking.bookings
       SET customer_id = ${toCustomerId}::uuid,
@@ -211,10 +216,17 @@ export class BookingsRepository {
   }
 
   async findBookableUnit(tenantId: string, bookableUnitId: string) {
-    const rows = await this.prisma.read.$queryRaw<{
-      id: string; tenantId: string; venueId: string; resourceId: string;
-      name: string; unitType: string; isActive: boolean
-    }[]>`
+    const rows = await this.prisma.read.$queryRaw<
+      {
+        id: string
+        tenantId: string
+        venueId: string
+        resourceId: string
+        name: string
+        unitType: string
+        isActive: boolean
+      }[]
+    >`
       SELECT
         id,
         tenant_id   AS "tenantId",
@@ -473,10 +485,9 @@ export class BookingsRepository {
             `
             if (current.length === 0) return null
 
-            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
             const startsAt = dto.startsAt ?? current[0]!.startsAt.toISOString()
-            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-            const endsAt   = dto.endsAt   ?? current[0]!.endsAt.toISOString()
+
+            const endsAt = dto.endsAt ?? current[0]!.endsAt.toISOString()
 
             const conflicts = await tx.$queryRaw<{ id: string }[]>`
               SELECT id FROM booking.bookings
@@ -599,9 +610,10 @@ export class BookingsRepository {
     const activeUnits = unitRows[0]?.activeUnits ?? 0
     // 16 operational hours per day (06:00–22:00), 30 days
     const totalPossibleHours30d = activeUnits * 16 * 30
-    const utilisationRate30d = totalPossibleHours30d > 0
-      ? Math.round((bookedHours30d / totalPossibleHours30d) * 1000) / 10
-      : 0
+    const utilisationRate30d =
+      totalPossibleHours30d > 0
+        ? Math.round((bookedHours30d / totalPossibleHours30d) * 1000) / 10
+        : 0
 
     return {
       totalBookedHours: bookingRows[0]?.totalBookedHours ?? 0,
@@ -617,11 +629,21 @@ export class BookingsRepository {
   async getDailyStats(
     tenantId: string,
     days = 30,
-  ): Promise<{ date: string; bookingCount: number; bookedHours: number; addOnRevenue: number; revenue: number }[]> {
+  ): Promise<
+    {
+      date: string
+      bookingCount: number
+      bookedHours: number
+      addOnRevenue: number
+      revenue: number
+    }[]
+  > {
     const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
 
     const [bookingRows, addOnRows] = await Promise.all([
-      this.prisma.read.$queryRaw<{ date: string; bookingCount: number; bookedHours: number; revenue: number }[]>`
+      this.prisma.read.$queryRaw<
+        { date: string; bookingCount: number; bookedHours: number; revenue: number }[]
+      >`
         SELECT
           starts_at::date::text                                                        AS date,
           COUNT(*)::int                                                                AS "bookingCount",
@@ -754,12 +776,16 @@ export class BookingsRepository {
   }
 
   /** Booked hours and booking count per bookable unit (active bookings only). */
-  async getStatsByUnit(tenantId: string): Promise<{
-    bookableUnitId: string
-    bookingCount: number
-    bookedHours: number
-  }[]> {
-    return this.prisma.read.$queryRaw<{ bookableUnitId: string; bookingCount: number; bookedHours: number }[]>`
+  async getStatsByUnit(tenantId: string): Promise<
+    {
+      bookableUnitId: string
+      bookingCount: number
+      bookedHours: number
+    }[]
+  > {
+    return this.prisma.read.$queryRaw<
+      { bookableUnitId: string; bookingCount: number; bookedHours: number }[]
+    >`
       SELECT
         bookable_unit_id                                                        AS "bookableUnitId",
         COUNT(*)::int                                                           AS "bookingCount",
@@ -786,16 +812,11 @@ export class BookingsRepository {
   }
 
   /** Top customers ranked by booking count, with total hours and add-on spend. */
-  async getTopCustomers(tenantId: string, limit = 20): Promise<{
-    customerId: string
-    firstName: string | null
-    lastName: string | null
-    email: string | null
-    bookingCount: number
-    totalHours: number
-    addOnSpend: number
-  }[]> {
-    return this.prisma.read.$queryRaw<{
+  async getTopCustomers(
+    tenantId: string,
+    limit = 20,
+  ): Promise<
+    {
       customerId: string
       firstName: string | null
       lastName: string | null
@@ -803,7 +824,19 @@ export class BookingsRepository {
       bookingCount: number
       totalHours: number
       addOnSpend: number
-    }[]>`
+    }[]
+  > {
+    return this.prisma.read.$queryRaw<
+      {
+        customerId: string
+        firstName: string | null
+        lastName: string | null
+        email: string | null
+        bookingCount: number
+        totalHours: number
+        addOnSpend: number
+      }[]
+    >`
       SELECT
         b.customer_id                                                                AS "customerId",
         COUNT(DISTINCT b.id)::int                                                    AS "bookingCount",
@@ -877,16 +910,18 @@ export class BookingsRepository {
    * of the type is deliberate: leaving them declared but unselected would compile
    * fine and be `undefined` at runtime.
    */
-  async findDueReminders(): Promise<{
-    id: string
-    tenantId: string
-    customerId: string | null
-    bookingReference: string
-    startsAt: Date
-    endsAt: Date
-    venueName: string | null
-    resourceName: string | null
-  }[]> {
+  async findDueReminders(): Promise<
+    {
+      id: string
+      tenantId: string
+      customerId: string | null
+      bookingReference: string
+      startsAt: Date
+      endsAt: Date
+      venueName: string | null
+      resourceName: string | null
+    }[]
+  > {
     const windowStart = new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString()
     const windowEnd = new Date(Date.now() + 25 * 60 * 60 * 1000).toISOString()
     return this.prisma.read.$queryRaw`
@@ -990,12 +1025,23 @@ export class BookingsRepository {
   // ─── Payment Splits ─────────────────────────────────────────────────────────
 
   async listPaymentSplits(tenantId: string, bookingId: string) {
-    return this.prisma.read.$queryRaw<{
-      id: string; bookingId: string; tenantId: string;
-      payerPersonId: string | null; payerName: string; payerEmail: string | null;
-      amountDue: number; amountPaid: number; currency: string;
-      paymentStatus: string; notes: string | null; createdAt: Date; updatedAt: Date;
-    }[]>`
+    return this.prisma.read.$queryRaw<
+      {
+        id: string
+        bookingId: string
+        tenantId: string
+        payerPersonId: string | null
+        payerName: string
+        payerEmail: string | null
+        amountDue: number
+        amountPaid: number
+        currency: string
+        paymentStatus: string
+        notes: string | null
+        createdAt: Date
+        updatedAt: Date
+      }[]
+    >`
       SELECT
         id,
         booking_id       AS "bookingId",
@@ -1019,9 +1065,18 @@ export class BookingsRepository {
   async addPaymentSplit(
     tenantId: string,
     bookingId: string,
-    dto: { payerName: string; payerEmail?: string; payerPersonId?: string; amountDue: number; currency?: string; notes?: string },
+    dto: {
+      payerName: string
+      payerEmail?: string
+      payerPersonId?: string
+      amountDue: number
+      currency?: string
+      notes?: string
+    },
   ) {
-    const rows = await this.prisma.write.$queryRaw<{ id: string; payerName: string; amountDue: number; paymentStatus: string }[]>`
+    const rows = await this.prisma.write.$queryRaw<
+      { id: string; payerName: string; amountDue: number; paymentStatus: string }[]
+    >`
       INSERT INTO booking.booking_payment_splits
         (tenant_id, booking_id, payer_person_id, payer_name, payer_email, amount_due, currency, notes)
       VALUES (
@@ -1067,5 +1122,4 @@ export class BookingsRepository {
     `
     return rows.length > 0
   }
-
 }
