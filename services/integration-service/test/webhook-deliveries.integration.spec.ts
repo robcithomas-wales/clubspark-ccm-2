@@ -77,7 +77,13 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
     })
     expect(deliveries).toHaveLength(1)
     expect(deliveries[0].eventType).toBe('booking.confirmed')
-    expect(deliveries[0].status).toBe('pending')
+    // Status is deliberately NOT asserted. A @Cron worker runs every 30s and
+    // moves pending -> failed/delivered/dead; the subscription URL here is
+    // unreachable, so a run landing mid-test flips it to 'failed'. That made this
+    // suite intermittently red in CI while passing locally. What this test is
+    // actually about is that a delivery row is CREATED for a matching
+    // subscription — the worker's behaviour is covered by its own tests.
+    expect(deliveries[0].subscriptionId).toBe(sub.id)
   })
 
   it('inbound event does not create deliveries for non-matching event type', async () => {
@@ -147,7 +153,10 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
     expect(res.body.data).toHaveLength(1)
     expect(res.body.pagination.total).toBe(1)
     expect(res.body.data[0].eventType).toBe('booking.confirmed')
-    expect(res.body.data[0].status).toBe('pending')
+    // Not asserting status — see the note above; the delivery worker owns it.
+    // The subscription filter is proven by the pagination total of exactly 1
+    // (this subscription's delivery, and no other's).
+    expect(res.body.data[0].id).toBeTruthy()
   })
 
   it('manual retry resets status to pending and attempts to 0', async () => {

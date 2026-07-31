@@ -22,7 +22,14 @@ import { OrderModule } from './order-client/order.module.js'
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, load: [configuration], envFilePath: join(__dirname, '..', '.env') }),
-    ScheduleModule.forRoot(),
+    // Scheduled jobs are not registered under test.
+    //
+    // Several suites assert on state that a @Cron owns — the webhook-delivery
+    // worker flipping pending->failed, the outbox relay publishing a row a test
+    // expects to still be unsent. A job firing mid-test made suites fail in CI
+    // while passing locally. Tests that exercise a job call its method directly,
+    // which still works with the scheduler off.
+    ...(process.env['NODE_ENV'] === 'test' ? [] : [ScheduleModule.forRoot()]),
     PrismaModule,
     EventBusModule,
     HealthModule,
