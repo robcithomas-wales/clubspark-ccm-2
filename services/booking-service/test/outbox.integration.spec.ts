@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest'
 import supertest from 'supertest'
 import { getApp, closeApp } from './helpers/app.js'
-import { prisma, seedFixtures, cleanBookings, teardownFixtures, checkDbAvailable } from './helpers/db.js'
+import {
+  prisma,
+  seedFixtures,
+  cleanBookings,
+  teardownFixtures,
+  checkDbAvailable,
+} from './helpers/db.js'
 import {
   TEST_TENANT_ID,
   TEST_ORG_ID,
@@ -38,10 +44,14 @@ function futureSlot() {
 
 async function outboxRows(type?: string) {
   return type
-    ? prisma.$queryRaw<{ id: string; eventType: string; publishedAt: Date | null; attempts: number }[]>`
+    ? prisma.$queryRaw<
+        { id: string; eventType: string; publishedAt: Date | null; attempts: number }[]
+      >`
         SELECT id::text, event_type AS "eventType", published_at AS "publishedAt", attempts
         FROM booking.event_outbox WHERE tenant_id = ${TEST_TENANT_ID}::uuid AND event_type = ${type}`
-    : prisma.$queryRaw<{ id: string; eventType: string; publishedAt: Date | null; attempts: number }[]>`
+    : prisma.$queryRaw<
+        { id: string; eventType: string; publishedAt: Date | null; attempts: number }[]
+      >`
         SELECT id::text, event_type AS "eventType", published_at AS "publishedAt", attempts
         FROM booking.event_outbox WHERE tenant_id = ${TEST_TENANT_ID}::uuid`
 }
@@ -77,12 +87,15 @@ describe.runIf(DB_AVAILABLE)('Transactional outbox', () => {
   })
 
   it('records booking.confirmed in the same transaction as the booking', async () => {
-    const res = await request.post('/bookings').set(JSON_HEADERS).send({
-      venueId: TEST_VENUE_ID,
-      resourceId: TEST_RESOURCE_ID,
-      bookableUnitId: TEST_UNIT_ID,
-      ...futureSlot(),
-    })
+    const res = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send({
+        venueId: TEST_VENUE_ID,
+        resourceId: TEST_RESOURCE_ID,
+        bookableUnitId: TEST_UNIT_ID,
+        ...futureSlot(),
+      })
     expect(res.status).toBe(201)
 
     const rows = await outboxRows('booking.confirmed')
@@ -97,25 +110,43 @@ describe.runIf(DB_AVAILABLE)('Transactional outbox', () => {
    */
   it('records nothing when the state change is rejected', async () => {
     const slotUsed = futureSlot()
-    const first = await request.post('/bookings').set(JSON_HEADERS).send({
-      venueId: TEST_VENUE_ID, resourceId: TEST_RESOURCE_ID, bookableUnitId: TEST_UNIT_ID, ...slotUsed,
-    })
+    const first = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send({
+        venueId: TEST_VENUE_ID,
+        resourceId: TEST_RESOURCE_ID,
+        bookableUnitId: TEST_UNIT_ID,
+        ...slotUsed,
+      })
     expect(first.status).toBe(201)
     await prisma.$executeRaw`DELETE FROM booking.event_outbox WHERE tenant_id = ${TEST_TENANT_ID}::uuid`
 
     // Same slot — rejected by the exclusion constraint.
-    const clash = await request.post('/bookings').set(JSON_HEADERS).send({
-      venueId: TEST_VENUE_ID, resourceId: TEST_RESOURCE_ID, bookableUnitId: TEST_UNIT_ID, ...slotUsed,
-    })
+    const clash = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send({
+        venueId: TEST_VENUE_ID,
+        resourceId: TEST_RESOURCE_ID,
+        bookableUnitId: TEST_UNIT_ID,
+        ...slotUsed,
+      })
     expect(clash.status).toBe(409)
 
     expect(await outboxRows()).toHaveLength(0)
   })
 
   it('the relay delivers a pending event and marks it published', async () => {
-    await request.post('/bookings').set(JSON_HEADERS).send({
-      venueId: TEST_VENUE_ID, resourceId: TEST_RESOURCE_ID, bookableUnitId: TEST_UNIT_ID, ...futureSlot(),
-    })
+    await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send({
+        venueId: TEST_VENUE_ID,
+        resourceId: TEST_RESOURCE_ID,
+        bookableUnitId: TEST_UNIT_ID,
+        ...futureSlot(),
+      })
     const publish = vi.spyOn(eventBus, 'publish').mockResolvedValue(undefined)
 
     await relay.flush()
@@ -130,16 +161,22 @@ describe.runIf(DB_AVAILABLE)('Transactional outbox', () => {
    * Previously `void publish()` swallowed the error and the event was gone.
    */
   it('keeps the event and retries when delivery fails', async () => {
-    await request.post('/bookings').set(JSON_HEADERS).send({
-      venueId: TEST_VENUE_ID, resourceId: TEST_RESOURCE_ID, bookableUnitId: TEST_UNIT_ID, ...futureSlot(),
-    })
+    await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send({
+        venueId: TEST_VENUE_ID,
+        resourceId: TEST_RESOURCE_ID,
+        bookableUnitId: TEST_UNIT_ID,
+        ...futureSlot(),
+      })
 
     const publish = vi.spyOn(eventBus, 'publish').mockRejectedValue(new Error('subscriber down'))
     await relay.flush()
 
     const afterFailure = await outboxRows('booking.confirmed')
-    expect(afterFailure[0]!.publishedAt).toBeNull()   // still owed
-    expect(afterFailure[0]!.attempts).toBe(1)          // and counted
+    expect(afterFailure[0]!.publishedAt).toBeNull() // still owed
+    expect(afterFailure[0]!.attempts).toBe(1) // and counted
 
     // Backoff defers the retry, so clear it to simulate the wait elapsing.
     await prisma.$executeRaw`
@@ -154,21 +191,33 @@ describe.runIf(DB_AVAILABLE)('Transactional outbox', () => {
   })
 
   it('backs off rather than retrying immediately', async () => {
-    await request.post('/bookings').set(JSON_HEADERS).send({
-      venueId: TEST_VENUE_ID, resourceId: TEST_RESOURCE_ID, bookableUnitId: TEST_UNIT_ID, ...futureSlot(),
-    })
+    await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send({
+        venueId: TEST_VENUE_ID,
+        resourceId: TEST_RESOURCE_ID,
+        bookableUnitId: TEST_UNIT_ID,
+        ...futureSlot(),
+      })
     const publish = vi.spyOn(eventBus, 'publish').mockRejectedValue(new Error('down'))
 
     await relay.flush()
-    await relay.flush()   // immediately again — should be skipped by next_attempt_at
+    await relay.flush() // immediately again — should be skipped by next_attempt_at
 
     expect(publish).toHaveBeenCalledTimes(1)
   })
 
   it('records booking.cancelled in the cancellation transaction', async () => {
-    const created = await request.post('/bookings').set(JSON_HEADERS).send({
-      venueId: TEST_VENUE_ID, resourceId: TEST_RESOURCE_ID, bookableUnitId: TEST_UNIT_ID, ...futureSlot(),
-    })
+    const created = await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send({
+        venueId: TEST_VENUE_ID,
+        resourceId: TEST_RESOURCE_ID,
+        bookableUnitId: TEST_UNIT_ID,
+        ...futureSlot(),
+      })
     await prisma.$executeRaw`DELETE FROM booking.event_outbox WHERE tenant_id = ${TEST_TENANT_ID}::uuid`
 
     await request.post(`/bookings/${created.body.data.id}/cancel`).set(HEADERS).expect(200)

@@ -29,10 +29,7 @@ export class EventBusService {
   constructor() {
     const commsUrl = process.env['COMMS_SERVICE_URL'] ?? 'http://localhost:4012'
     const integrationUrl = process.env['INTEGRATION_SERVICE_URL'] ?? 'http://localhost:4016'
-    this.subscribers = [
-      `${commsUrl}/v1/events/inbound`,
-      `${integrationUrl}/v1/events/inbound`,
-    ]
+    this.subscribers = [`${commsUrl}/v1/events/inbound`, `${integrationUrl}/v1/events/inbound`]
   }
 
   async publish(event: DomainEvent): Promise<void> {

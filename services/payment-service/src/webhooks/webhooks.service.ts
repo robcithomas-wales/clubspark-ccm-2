@@ -104,40 +104,50 @@ export class WebhooksService {
 
     switch (type) {
       case 'payment.succeeded':
-        await this.paymentsRepo.updateStatus(payment.id, 'succeeded', undefined, async (tx, updated) => {
-          await this.outbox.enqueue(tx, {
-            type: 'payment.succeeded',
-            tenantId: updated.tenantId,
-            occurredAt: new Date().toISOString(),
-            paymentId: updated.id,
-            personId: updated.customerId ?? '',
-            personEmail: '',      // TODO: hydrate from people-service (MR-1's PeopleClient)
-            personFirstName: '',
-            amount: Number(updated.amount ?? 0),
-            currency: updated.currency ?? 'GBP',
-            description: 'Payment',
-          } as never)
-        })
+        await this.paymentsRepo.updateStatus(
+          payment.id,
+          'succeeded',
+          undefined,
+          async (tx, updated) => {
+            await this.outbox.enqueue(tx, {
+              type: 'payment.succeeded',
+              tenantId: updated.tenantId,
+              occurredAt: new Date().toISOString(),
+              paymentId: updated.id,
+              personId: updated.customerId ?? '',
+              personEmail: '', // TODO: hydrate from people-service (MR-1's PeopleClient)
+              personFirstName: '',
+              amount: Number(updated.amount ?? 0),
+              currency: updated.currency ?? 'GBP',
+              description: 'Payment',
+            } as never)
+          },
+        )
         this.logger.log(`Payment ${payment.id} succeeded`)
         // TODO: populate personEmail + personFirstName from people-service lookup
         // payment.succeeded is recorded in the outbox inside updateStatus's transaction.
         break
 
       case 'payment.failed':
-        await this.paymentsRepo.updateStatus(payment.id, 'failed', undefined, async (tx, updated) => {
-          await this.outbox.enqueue(tx, {
-            type: 'payment.failed',
-            tenantId: updated.tenantId,
-            occurredAt: new Date().toISOString(),
-            paymentId: updated.id,
-            personId: updated.customerId ?? '',
-            personEmail: '',      // TODO: hydrate from people-service (MR-1's PeopleClient)
-            personFirstName: '',
-            amount: Number(updated.amount ?? 0),
-            currency: updated.currency ?? 'GBP',
-            description: 'Payment',
-          } as never)
-        })
+        await this.paymentsRepo.updateStatus(
+          payment.id,
+          'failed',
+          undefined,
+          async (tx, updated) => {
+            await this.outbox.enqueue(tx, {
+              type: 'payment.failed',
+              tenantId: updated.tenantId,
+              occurredAt: new Date().toISOString(),
+              paymentId: updated.id,
+              personId: updated.customerId ?? '',
+              personEmail: '', // TODO: hydrate from people-service (MR-1's PeopleClient)
+              personFirstName: '',
+              amount: Number(updated.amount ?? 0),
+              currency: updated.currency ?? 'GBP',
+              description: 'Payment',
+            } as never)
+          },
+        )
         this.logger.log(`Payment ${payment.id} failed`)
         // payment.failed is recorded in the outbox inside updateStatus's transaction.
         break
@@ -157,7 +167,7 @@ export class WebhooksService {
             occurredAt: new Date().toISOString(),
             paymentId: payment.id,
             personId: payment.customerId ?? '',
-            personEmail: '',      // TODO: hydrate from people-service (MR-1's PeopleClient)
+            personEmail: '', // TODO: hydrate from people-service (MR-1's PeopleClient)
             personFirstName: '',
             amount: Number(payment.amount ?? 0),
             currency: payment.currency ?? 'GBP',

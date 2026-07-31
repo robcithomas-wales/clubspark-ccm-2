@@ -2,10 +2,7 @@ import { Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import type { AppConfig } from '../config/configuration.js'
 
-export type DomainEventType =
-  | 'booking.confirmed'
-  | 'booking.cancelled'
-  | 'booking.reminder_due'
+export type DomainEventType = 'booking.confirmed' | 'booking.cancelled' | 'booking.reminder_due'
 
 export interface DomainEvent {
   type: DomainEventType

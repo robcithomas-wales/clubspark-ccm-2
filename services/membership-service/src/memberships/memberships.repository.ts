@@ -99,7 +99,18 @@ export class MembershipsRepository {
     const [rows, total] = await Promise.all([
       this.prisma.membership.findMany({
         where,
-        include: { plan: { select: { name: true, ownershipType: true, membershipType: true, price: true, currency: true, pricingModel: true } } },
+        include: {
+          plan: {
+            select: {
+              name: true,
+              ownershipType: true,
+              membershipType: true,
+              price: true,
+              currency: true,
+              pricingModel: true,
+            },
+          },
+        },
         orderBy: { createdAt: 'desc' },
         skip: input.offset,
         take: input.limit,
@@ -113,7 +124,18 @@ export class MembershipsRepository {
   async findById(tenantId: string, organisationId: string, id: string) {
     const m = await this.prisma.membership.findFirst({
       where: { id, tenantId, organisationId },
-      include: { plan: { select: { name: true, ownershipType: true, membershipType: true, price: true, currency: true, pricingModel: true } } },
+      include: {
+        plan: {
+          select: {
+            name: true,
+            ownershipType: true,
+            membershipType: true,
+            price: true,
+            currency: true,
+            pricingModel: true,
+          },
+        },
+      },
     })
     return m ? this.format(m) : null
   }
@@ -138,7 +160,18 @@ export class MembershipsRepository {
         source: input.source ?? null,
         notes: input.notes ?? null,
       },
-      include: { plan: { select: { name: true, ownershipType: true, membershipType: true, price: true, currency: true, pricingModel: true } } },
+      include: {
+        plan: {
+          select: {
+            name: true,
+            ownershipType: true,
+            membershipType: true,
+            price: true,
+            currency: true,
+            pricingModel: true,
+          },
+        },
+      },
     })
     return this.format(m)
   }
@@ -162,7 +195,18 @@ export class MembershipsRepository {
         source: input.source ?? null,
         notes: input.notes ?? null,
       },
-      include: { plan: { select: { name: true, ownershipType: true, membershipType: true, price: true, currency: true, pricingModel: true } } },
+      include: {
+        plan: {
+          select: {
+            name: true,
+            ownershipType: true,
+            membershipType: true,
+            price: true,
+            currency: true,
+            pricingModel: true,
+          },
+        },
+      },
     })
     return this.format(m)
   }
@@ -176,17 +220,45 @@ export class MembershipsRepository {
   async transition(
     id: string,
     toStatus: string,
-    timestamps: { activatedAt?: Date; suspendedAt?: Date; cancelledAt?: Date; lapsedAt?: Date; expiredAt?: Date },
+    timestamps: {
+      activatedAt?: Date
+      suspendedAt?: Date
+      cancelledAt?: Date
+      lapsedAt?: Date
+      expiredAt?: Date
+    },
     fromStatus: string,
     reason: string | null,
     createdBy: string | null,
-    withinTx?: (tx: Prisma.TransactionClient, membership: { id: string; tenantId: string; customerId: string | null; startDate: Date | null; endDate: Date | null; expiredAt?: Date | null; plan?: { name?: string } | null }) => Promise<void>,
+    withinTx?: (
+      tx: Prisma.TransactionClient,
+      membership: {
+        id: string
+        tenantId: string
+        customerId: string | null
+        startDate: Date | null
+        endDate: Date | null
+        expiredAt?: Date | null
+        plan?: { name?: string } | null
+      },
+    ) => Promise<void>,
   ) {
     const m = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.membership.update({
         where: { id },
         data: { status: toStatus, ...timestamps },
-        include: { plan: { select: { name: true, ownershipType: true, membershipType: true, price: true, currency: true, pricingModel: true } } },
+        include: {
+          plan: {
+            select: {
+              name: true,
+              ownershipType: true,
+              membershipType: true,
+              price: true,
+              currency: true,
+              pricingModel: true,
+            },
+          },
+        },
       })
       await tx.membershipLifecycleEvent.create({
         data: { membershipId: id, fromStatus, toStatus, reason, createdBy },
@@ -220,20 +292,34 @@ export class MembershipsRepository {
         status: { in: ['active', 'pending'] },
         renewalDate: { lte: cutoff },
       },
-      include: { plan: { select: { name: true, ownershipType: true, membershipType: true, price: true, currency: true, pricingModel: true } } },
+      include: {
+        plan: {
+          select: {
+            name: true,
+            ownershipType: true,
+            membershipType: true,
+            price: true,
+            currency: true,
+            pricingModel: true,
+          },
+        },
+      },
       orderBy: { renewalDate: 'asc' },
       take: 100,
     })
     return rows.map((m) => this.format(m))
   }
 
-  async recordPayment(id: string, input: {
-    paymentStatus: string
-    paymentMethod: string | null
-    paymentReference: string | null
-    paymentAmount: number | null
-    paymentRecordedAt: Date
-  }) {
+  async recordPayment(
+    id: string,
+    input: {
+      paymentStatus: string
+      paymentMethod: string | null
+      paymentReference: string | null
+      paymentAmount: number | null
+      paymentRecordedAt: Date
+    },
+  ) {
     const m = await this.prisma.membership.update({
       where: { id },
       data: {
@@ -243,14 +329,28 @@ export class MembershipsRepository {
         paymentAmount: input.paymentAmount,
         paymentRecordedAt: input.paymentRecordedAt,
       },
-      include: { plan: { select: { name: true, ownershipType: true, membershipType: true, price: true, currency: true, pricingModel: true } } },
+      include: {
+        plan: {
+          select: {
+            name: true,
+            ownershipType: true,
+            membershipType: true,
+            price: true,
+            currency: true,
+            pricingModel: true,
+          },
+        },
+      },
     })
     return this.format(m)
   }
 
   // ─── Reporting aggregations ─────────────────────────────────────────────────
 
-  async getStats(tenantId: string, organisationId: string): Promise<{
+  async getStats(
+    tenantId: string,
+    organisationId: string,
+  ): Promise<{
     byStatus: { status: string; count: number }[]
     byPlan: { planName: string; membershipType: string; count: number; revenue: number }[]
     byType: { membershipType: string; count: number }[]
@@ -265,7 +365,9 @@ export class MembershipsRepository {
         GROUP BY status
         ORDER BY count DESC
       `,
-      this.prisma.$queryRaw<{ planName: string; membershipType: string; count: number; revenue: number }[]>`
+      this.prisma.$queryRaw<
+        { planName: string; membershipType: string; count: number; revenue: number }[]
+      >`
         SELECT
           p.name                                                             AS "planName",
           p.membership_type                                                  AS "membershipType",
@@ -290,15 +392,24 @@ export class MembershipsRepository {
       if (row.status === 'active') totalActive = row.count
     }
 
-    const byType = Array.from(byTypeMap.entries()).map(([membershipType, count]) => ({ membershipType, count }))
+    const byType = Array.from(byTypeMap.entries()).map(([membershipType, count]) => ({
+      membershipType,
+      count,
+    }))
     return { byStatus, byPlan, byType, totalActive, totalRevenue }
   }
 
-  async getDailyStats(tenantId: string, organisationId: string, months = 12): Promise<{
-    month: string
-    newCount: number
-    activeCount: number
-  }[]> {
+  async getDailyStats(
+    tenantId: string,
+    organisationId: string,
+    months = 12,
+  ): Promise<
+    {
+      month: string
+      newCount: number
+      activeCount: number
+    }[]
+  > {
     return this.prisma.$queryRaw<{ month: string; newCount: number; activeCount: number }[]>`
       SELECT
         TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS month,
@@ -478,13 +589,18 @@ export class MembershipsRepository {
    * Find active memberships whose endDate falls in [now + minDays, now + maxDays]
    * and for which a renewal reminder has not yet been sent.
    */
-  async findDueRenewalReminders(minDays: number, maxDays: number): Promise<{
-    id: string
-    tenantId: string
-    customerId: string | null
-    planName: string | null
-    endDate: Date | null
-  }[]> {
+  async findDueRenewalReminders(
+    minDays: number,
+    maxDays: number,
+  ): Promise<
+    {
+      id: string
+      tenantId: string
+      customerId: string | null
+      planName: string | null
+      endDate: Date | null
+    }[]
+  > {
     const from = new Date()
     from.setDate(from.getDate() + minDays)
     const to = new Date()

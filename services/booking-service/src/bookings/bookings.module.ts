@@ -14,7 +14,8 @@ import { PeopleModule } from '../people/people.module.js'
 import { OutboxModule } from '../outbox/outbox.module.js'
 
 @Module({
-  imports: [OutboxModule, 
+  imports: [
+    OutboxModule,
     PeopleModule,
     AvailabilityModule,
     BookingRulesModule,

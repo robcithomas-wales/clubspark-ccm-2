@@ -70,13 +70,13 @@ export class PaymentsRepository {
   ): Promise<Payment> {
     return this.prisma.write.$transaction(async (tx) => {
       const updated = await tx.payment.update({
-      where: { id },
-      data: {
-        status,
-        ...(opts?.gatewayRef ? { gatewayRef: opts.gatewayRef } : {}),
-        ...(opts?.failureReason ? { failureReason: opts.failureReason } : {}),
-      },
-    })
+        where: { id },
+        data: {
+          status,
+          ...(opts?.gatewayRef ? { gatewayRef: opts.gatewayRef } : {}),
+          ...(opts?.failureReason ? { failureReason: opts.failureReason } : {}),
+        },
+      })
       if (withinTx) await withinTx(tx, updated)
       return updated
     })

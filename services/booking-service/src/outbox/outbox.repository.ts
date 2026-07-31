@@ -68,7 +68,12 @@ export class OutboxRepository {
    * Backoff is exponential and capped, so a subscriber that is down for an hour
    * does not get hammered, and a transient blip still retries quickly.
    */
-  async markFailed(tx: Prisma.TransactionClient, id: string, attempts: number, error: string): Promise<void> {
+  async markFailed(
+    tx: Prisma.TransactionClient,
+    id: string,
+    attempts: number,
+    error: string,
+  ): Promise<void> {
     const delaySeconds = Math.min(2 ** attempts, 3600)
     await tx.$executeRaw`
       UPDATE booking.event_outbox

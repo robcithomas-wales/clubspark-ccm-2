@@ -2,7 +2,6 @@ import 'dotenv/config'
 import { PrismaClient } from '../../src/generated/prisma/index.js'
 import {
   TEST_TENANT_ID,
-  TEST_ORG_ID,
   TEST_VENUE_ID,
   TEST_RESOURCE_ID,
   TEST_UNIT_ID,

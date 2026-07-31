@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-  Logger,
-} from '@nestjs/common'
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common'
 import { MembershipsRepository } from './memberships.repository'
 import { MembershipPlansRepository } from '../membership-plans/membership-plans.repository'
 import { EventBusService } from '../event-bus/event-bus.service'
@@ -45,10 +40,10 @@ function computeEndDate(
 // State machine: action → { requiredFromStatuses, toStatus }
 const TRANSITIONS: Record<string, { from: string[]; to: string }> = {
   activate: { from: ['pending', 'suspended', 'lapsed'], to: 'active' },
-  suspend:  { from: ['active'],                          to: 'suspended' },
-  cancel:   { from: ['pending', 'active', 'suspended', 'lapsed'], to: 'cancelled' },
-  lapse:    { from: ['active', 'suspended'],             to: 'lapsed' },
-  expire:   { from: ['active', 'lapsed'],                to: 'expired' },
+  suspend: { from: ['active'], to: 'suspended' },
+  cancel: { from: ['pending', 'active', 'suspended', 'lapsed'], to: 'cancelled' },
+  lapse: { from: ['active', 'suspended'], to: 'lapsed' },
+  expire: { from: ['active', 'lapsed'], to: 'expired' },
 }
 
 @Injectable()
@@ -126,7 +121,8 @@ export class MembershipsService {
       ownerType = 'person'
       ownerId = dto.customerId
     } else if (plan.ownershipType === 'household') {
-      if (!dto.householdId) throw new BadRequestException('householdId is required for household plans')
+      if (!dto.householdId)
+        throw new BadRequestException('householdId is required for household plans')
       ownerType = 'household'
       ownerId = dto.householdId
     }
@@ -172,12 +168,7 @@ export class MembershipsService {
     return { data: m }
   }
 
-  async update(
-    tenantId: string,
-    organisationId: string,
-    id: string,
-    dto: UpdateMembershipDto,
-  ) {
+  async update(tenantId: string, organisationId: string, id: string, dto: UpdateMembershipDto) {
     const existing = await this.repo.findById(tenantId, organisationId, id)
     if (!existing) throw new NotFoundException('Membership not found')
 
@@ -185,8 +176,7 @@ export class MembershipsService {
     const plan = await this.plansRepo.findById(tenantId, organisationId, planId)
     if (!plan) throw new NotFoundException('Membership plan not found')
 
-    const customerId =
-      dto.customerId !== undefined ? dto.customerId || null : existing.customerId
+    const customerId = dto.customerId !== undefined ? dto.customerId || null : existing.customerId
     const householdId =
       dto.householdId !== undefined ? dto.householdId || null : existing.householdId
 
@@ -208,7 +198,10 @@ export class MembershipsService {
       customerId,
       ownerType,
       ownerId,
-      memberRole: dto.memberRole !== undefined ? dto.memberRole?.trim() || null : (existing as any).memberRole,
+      memberRole:
+        dto.memberRole !== undefined
+          ? dto.memberRole?.trim() || null
+          : (existing as any).memberRole,
       status: dto.status ?? existing.status,
       startDate: dto.startDate ?? existing.startDate,
       endDate: dto.endDate !== undefined ? dto.endDate || null : existing.endDate,
@@ -238,17 +231,17 @@ export class MembershipsService {
     if (!rule.from.includes(existing.status)) {
       throw new BadRequestException(
         `Cannot ${dto.action} a membership that is currently '${existing.status}'. ` +
-        `Valid from statuses: ${rule.from.join(', ')}.`,
+          `Valid from statuses: ${rule.from.join(', ')}.`,
       )
     }
 
     const now = new Date()
     const timestamps: Record<string, Date> = {}
-    if (rule.to === 'active')    timestamps['activatedAt'] = now
+    if (rule.to === 'active') timestamps['activatedAt'] = now
     if (rule.to === 'suspended') timestamps['suspendedAt'] = now
     if (rule.to === 'cancelled') timestamps['cancelledAt'] = now
-    if (rule.to === 'lapsed')    timestamps['lapsedAt']    = now
-    if (rule.to === 'expired')   timestamps['expiredAt']   = now
+    if (rule.to === 'lapsed') timestamps['lapsedAt'] = now
+    if (rule.to === 'expired') timestamps['expiredAt'] = now
 
     // The domain event is recorded in the SAME transaction as the status change
     // (MR-2), so a membership can never activate without its event, or emit one
@@ -266,7 +259,7 @@ export class MembershipsService {
           occurredAt: new Date().toISOString(),
           membershipId: updated.id,
           personId: updated.customerId ?? '',
-          personEmail: '',      // TODO: hydrate from people-service (see MR-1's PeopleClient)
+          personEmail: '', // TODO: hydrate from people-service (see MR-1's PeopleClient)
           personFirstName: '',
           planName: updated.plan?.name ?? '',
         }
@@ -341,7 +334,10 @@ export class MembershipsService {
     for (const id of ids) {
       try {
         const existing = await this.repo.findById(tenantId, organisationId, id)
-        if (!existing) { results.push({ id, success: false, error: 'Not found' }); continue }
+        if (!existing) {
+          results.push({ id, success: false, error: 'Not found' })
+          continue
+        }
         if (!rule.from.includes(existing.status)) {
           results.push({ id, success: false, error: `Cannot ${action} from '${existing.status}'` })
           continue
@@ -349,11 +345,11 @@ export class MembershipsService {
 
         const now = new Date()
         const timestamps: Record<string, Date> = {}
-        if (rule.to === 'active')    timestamps['activatedAt'] = now
+        if (rule.to === 'active') timestamps['activatedAt'] = now
         if (rule.to === 'suspended') timestamps['suspendedAt'] = now
         if (rule.to === 'cancelled') timestamps['cancelledAt'] = now
-        if (rule.to === 'lapsed')    timestamps['lapsedAt']    = now
-        if (rule.to === 'expired')   timestamps['expiredAt']   = now
+        if (rule.to === 'lapsed') timestamps['lapsedAt'] = now
+        if (rule.to === 'expired') timestamps['expiredAt'] = now
 
         await this.repo.transition(id, rule.to, timestamps, existing.status, reason, actorEmail)
         results.push({ id, success: true })
@@ -370,7 +366,12 @@ export class MembershipsService {
     tenantId: string,
     organisationId: string,
     id: string,
-    dto: { paymentStatus: string; paymentMethod?: string; paymentReference?: string; paymentAmount?: number },
+    dto: {
+      paymentStatus: string
+      paymentMethod?: string
+      paymentReference?: string
+      paymentAmount?: number
+    },
   ) {
     const existing = await this.repo.findById(tenantId, organisationId, id)
     if (!existing) throw new NotFoundException('Membership not found')

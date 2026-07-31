@@ -390,7 +390,7 @@ export class BookingsRepository {
     withinTx?: (tx: Prisma.TransactionClient, booking: BookingRow) => Promise<void>,
   ) {
     return this.prisma.write.$transaction(async (tx) => {
-    const rows = await tx.$queryRaw<BookingRow[]>`
+      const rows = await tx.$queryRaw<BookingRow[]>`
       UPDATE booking.bookings
       SET status       = 'cancelled',
           cancelled_at = now(),
