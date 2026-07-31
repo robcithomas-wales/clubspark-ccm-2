@@ -1,16 +1,34 @@
 #!/bin/sh
 #
 # Shared pre-push hook — committed, so every clone gets it.
+# Installed by the root `prepare` script (npm install points core.hooksPath here).
 #
-# Installed by the root `prepare` script (npm install sets core.hooksPath to
-# scripts/hooks). Previously this lived only in .git/hooks on one machine, so
-# nobody else had a test gate at all.
+# WHAT THIS IS FOR
 #
-# Two rules encoded here (both learned the hard way — see CLAUDE.md):
-#   1. Kill running services first. They hold Supabase connections; leaving them
-#      up exhausts the pooled connection limit and the suites fail with
-#      "Can't reach database" or hook timeouts that look like real failures.
-#   2. Run services sequentially, never in parallel, for the same reason.
+# Fast, deterministic local feedback. It deliberately does NOT run the integration
+# suites. CI is the gate that does: it builds the whole schema from empty on a
+# throwaway Postgres, runs every service suite against it, checks drift, and lints
+# changed files.
+#
+# WHY NO TESTS HERE
+#
+# The suites need a real database, and locally that is the shared Supabase
+# instance. Running several suites back-to-back against it is unreliable for two
+# reasons that have nothing to do with the code under test:
+#
+#   - they share one pgbouncer connection limit, so later suites fail with
+#     "Can't reach database" or hook timeouts;
+#   - they share fixture rows under fixed tenant ids, so a killed run leaves
+#     orphans that make the next run fail.
+#
+# We hit both repeatedly. A hook that fails for environmental reasons is worse
+# than no hook: it takes 20+ minutes and teaches people to reach for --no-verify,
+# which then skips the checks that DO work. So this hook runs only what is fast
+# and deterministic, and CI — which gets a clean, private Postgres every run —
+# does the real verification.
+#
+# To run the suites locally against a clean database, see
+# docs/engineering/database-migrations.md (migrate:all against a local Postgres).
 #
 # Skip in an emergency with: git push --no-verify
 #
@@ -19,32 +37,26 @@ set -u
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT" || exit 1
 
-# Services whose suites gate a push. Keep in sync with the suites that
-# actually have tests; CI runs the full set via scripts/test-services.sh.
-SERVICES="booking-service membership-service venue-service people-service admin-service"
-
-echo "→ Killing running services to free the DB connection pool..."
-pkill -f "nest start" 2>/dev/null || true
-pkill -f "dist/main.js" 2>/dev/null || true
-sleep 2
-
-failed=""
-for svc in $SERVICES; do
-  echo "→ Testing $svc..."
-  if ! ( cd "$ROOT/services/$svc" && npm test --silent ); then
-    failed="$failed $svc"
-    # Keep going: one report of everything broken beats fixing them one push
-    # at a time.
-  fi
-  sleep 3   # let pooled connections drain between suites
-done
-
-if [ -n "$failed" ]; then
+echo "→ Typechecking all services..."
+if ! npm run typecheck --silent; then
   echo ""
-  echo "✗ Push blocked — failing suites:$failed"
-  echo "  Re-run one with: npm test --workspace=services/<name>"
+  echo "✗ Push blocked — typecheck failed."
   echo "  Override (use sparingly): git push --no-verify"
   exit 1
 fi
 
-echo "✓ All pre-push suites passed."
+# Lint exactly what CI lints: the TypeScript files this push changes. Keeps the
+# two in step, so a green hook means a green lint job.
+UPSTREAM="$(git rev-parse --abbrev-ref '@{upstream}' 2>/dev/null || echo 'origin/main')"
+echo "→ Linting changed files..."
+if ! git diff -z --name-only --diff-filter=ACMR "$UPSTREAM"...HEAD -- '*.ts' '*.tsx' 2>/dev/null \
+     | grep -zv -E '(generated|dist|node_modules)/' \
+     | xargs -0 -r npx eslint; then
+  echo ""
+  echo "✗ Push blocked — lint failed on changed files."
+  echo "  Fix with: npx eslint <files> --fix"
+  echo "  Override (use sparingly): git push --no-verify"
+  exit 1
+fi
+
+echo "✓ Typecheck and lint passed. CI will run the full suites against a clean database."
