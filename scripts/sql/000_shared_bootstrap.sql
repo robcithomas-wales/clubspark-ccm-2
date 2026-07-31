@@ -33,27 +33,9 @@ CREATE EXTENSION IF NOT EXISTS btree_gist;
 
 -- gen_random_uuid() is built into PostgreSQL 13+, so pgcrypto is not required.
 
--- ─── TEMPORARY SHIM: auth.users ──────────────────────────────────────────────
+-- The auth.users shim that used to live here has been REMOVED (MR-1, 2026-07-31).
 --
--- ⚠️ Delete this block when WO-1.2(a) removes booking-service's auth.users joins.
---
--- booking-service's list/detail queries LEFT JOIN auth.users to fall back to
--- Supabase auth metadata for a customer's name and email:
---     bookings.repository.ts — findAll / findById
---
--- auth.users is created and owned by Supabase. It does not exist on a plain
--- PostgreSQL server, so without this shim those queries return 500 on any
--- non-Supabase database — CI, a local Postgres, and, importantly, Azure Database
--- for PostgreSQL. That last one makes this a migration blocker, not just a test
--- inconvenience: the target platform has no auth schema.
---
--- Created only if absent, so this is a no-op against Supabase and never shadows
--- the real table. Columns are limited to exactly what booking-service reads.
-
-CREATE SCHEMA IF NOT EXISTS auth;
-
-CREATE TABLE IF NOT EXISTS auth.users (
-  id                  uuid PRIMARY KEY,
-  email               text,
-  raw_user_meta_data  jsonb
-);
+-- booking-service no longer LEFT JOINs Supabase's auth.users for customer display
+-- fields; it calls people-service instead. That schema is Supabase-owned and does
+-- not exist on plain PostgreSQL or on Azure Database for PostgreSQL, so depending
+-- on it blocked the target platform, not just CI.

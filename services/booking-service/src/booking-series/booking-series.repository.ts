@@ -149,13 +149,8 @@ export class BookingSeriesRepository {
         b.series_id          AS "seriesId",
         b.cancelled_at       AS "cancelledAt",
         b.created_at         AS "createdAt",
-        b.updated_at         AS "updatedAt",
-        c.first_name         AS "customerFirstName",
-        c.last_name          AS "customerLastName",
-        c.email              AS "customerEmail",
-        c.phone              AS "customerPhone"
+        b.updated_at         AS "updatedAt"
       FROM booking.bookings b
-      LEFT JOIN people.persons c ON c.id = b.customer_id
       WHERE b.tenant_id = ${tenantId}::uuid
         AND b.series_id = ${seriesId}::uuid
       ORDER BY b.starts_at ASC

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common'
 import { Cron, CronExpression } from '@nestjs/schedule'
 import { BookingsRepository } from '../bookings.repository.js'
 import { EventBusService } from '../../event-bus/event-bus.service.js'
+import { PeopleClient } from '../../people/people.client.js'
 
 /**
  * Runs every hour and publishes `booking.reminder_due` events for every
@@ -19,6 +20,7 @@ export class BookingReminderTask {
   constructor(
     private readonly repo: BookingsRepository,
     private readonly eventBus: EventBusService,
+    private readonly people: PeopleClient,
   ) {}
 
   @Cron(CronExpression.EVERY_HOUR)
@@ -37,7 +39,22 @@ export class BookingReminderTask {
 
     this.logger.log({ count: bookings.length }, 'Sending booking reminders')
 
+    // Customer name/email come from people-service, not a SQL join — booking can
+    // no longer read people.persons (MR-1). Reminders group by tenant because the
+    // batch lookup is tenant-scoped; the cron spans all tenants.
+    const byTenant = new Map<string, typeof bookings>()
     for (const b of bookings) {
+      const list = byTenant.get(b.tenantId) ?? []
+      list.push(b)
+      byTenant.set(b.tenantId, list)
+    }
+    const customers = new Map<string, Awaited<ReturnType<PeopleClient['getDisplayFields']>>>()
+    for (const [tenantId, rows] of byTenant) {
+      customers.set(tenantId, await this.people.getDisplayFields(tenantId, rows.map((r) => r.customerId)))
+    }
+
+    for (const b of bookings) {
+      const person = b.customerId ? customers.get(b.tenantId)?.get(b.customerId) : undefined
       try {
         await this.eventBus.publish({
           type: 'booking.reminder_due',
@@ -46,9 +63,9 @@ export class BookingReminderTask {
           bookingId: b.id,
           bookingReference: b.bookingReference,
           customerId: b.customerId,
-          customerEmail: b.customerEmail,
-          customerFirstName: b.customerFirstName,
-          customerLastName: b.customerLastName,
+          customerEmail: person?.customerEmail ?? null,
+          customerFirstName: person?.customerFirstName ?? null,
+          customerLastName: person?.customerLastName ?? null,
           startsAt: b.startsAt,
           endsAt: b.endsAt,
           venueName: b.venueName,

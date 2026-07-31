@@ -78,6 +78,19 @@ export class CustomersService {
     return { data: customer }
   }
 
+  /**
+   * Batch display-field lookup for other services (see CustomersRepository.findManyByIds).
+   *
+   * Silently skips ids that do not exist or belong to another tenant — callers are
+   * hydrating a list and a missing person should leave blank fields, not fail the
+   * whole request. Duplicate ids are collapsed.
+   */
+  async findManyByIds(tenantId: string, ids: string[]) {
+    const unique = [...new Set(ids.filter(Boolean))]
+    const data = await this.repo.findManyByIds(tenantId, unique)
+    return { data }
+  }
+
   async create(tenantId: string, dto: CreateCustomerDto) {
     // If a Supabase user ID is provided, check whether this email already exists.
     // If it does, rehome the existing record to the new ID so everything stays linked.

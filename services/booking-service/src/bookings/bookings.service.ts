@@ -14,6 +14,7 @@ import { PricingService } from '../pricing/pricing.service.js'
 import { EventBusService } from '../event-bus/event-bus.service.js'
 import { RefundPoliciesRepository } from '../refund-policies/refund-policies.repository.js'
 import { OrderClient } from '../order-client/order.client.js'
+import { PeopleClient } from '../people/people.client.js'
 import type { CreateBookingDto } from './dto/create-booking.dto.js'
 import type { CreateBookingAddOnDto } from './dto/create-booking-add-on.dto.js'
 import type { UpdatePaymentStatusDto } from './dto/update-payment-status.dto.js'
@@ -34,6 +35,7 @@ export class BookingsService {
     private readonly eventBus: EventBusService,
     private readonly refundPolicies: RefundPoliciesRepository,
     private readonly orderClient: OrderClient,
+    private readonly people: PeopleClient,
   ) {}
 
   async list(
@@ -42,13 +44,16 @@ export class BookingsService {
     limit: number,
     filters: { status?: string; fromDate?: string; toDate?: string; customerId?: string } = {},
   ) {
-    return this.repo.list(ctx.tenantId, page, limit, filters)
+    const result = await this.repo.list(ctx.tenantId, page, limit, filters)
+    // Customer names come from people-service, not a SQL join — see PeopleClient.
+    return { ...result, rows: await this.people.hydrate(ctx.tenantId, result.rows) }
   }
 
   async getById(ctx: TenantContext, id: string) {
     const booking = await this.repo.findById(ctx.tenantId, id)
     if (!booking) throw new NotFoundException('Booking not found')
-    return booking
+    const [hydrated] = await this.people.hydrate(ctx.tenantId, [booking])
+    return hydrated ?? booking
   }
 
   async create(ctx: TenantContext, dto: CreateBookingDto) {
@@ -250,7 +255,19 @@ export class BookingsService {
   }
 
   async getTopCustomers(ctx: TenantContext, limit: number) {
-    return this.repo.getTopCustomers(ctx.tenantId, limit)
+    const rows = await this.repo.getTopCustomers(ctx.tenantId, limit)
+    // The aggregate is computed in SQL; names are attached afterwards so the
+    // report no longer needs to JOIN people.persons.
+    const people = await this.people.getDisplayFields(ctx.tenantId, rows.map((r) => r.customerId))
+    return rows.map((r) => {
+      const p = r.customerId ? people.get(r.customerId) : undefined
+      return {
+        ...r,
+        firstName: p?.customerFirstName ?? null,
+        lastName: p?.customerLastName ?? null,
+        email: p?.customerEmail ?? null,
+      }
+    })
   }
 
   async cancel(ctx: TenantContext, id: string) {

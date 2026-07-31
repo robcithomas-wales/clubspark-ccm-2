@@ -115,27 +115,11 @@ export class BookingsRepository {
           b.currency,
           b.created_at         AS "createdAt",
           b.updated_at         AS "updatedAt",
-          COALESCE(
-            c.first_name,
-            au.raw_user_meta_data->>'firstName',
-            au.raw_user_meta_data->>'first_name',
-            SPLIT_PART(NULLIF(COALESCE(au.raw_user_meta_data->>'full_name', au.raw_user_meta_data->>'name'), ''), ' ', 1)
-          ) AS "customerFirstName",
-          COALESCE(
-            c.last_name,
-            au.raw_user_meta_data->>'lastName',
-            au.raw_user_meta_data->>'last_name',
-            NULLIF(SUBSTRING(COALESCE(au.raw_user_meta_data->>'full_name', au.raw_user_meta_data->>'name', '') FROM POSITION(' ' IN COALESCE(au.raw_user_meta_data->>'full_name', au.raw_user_meta_data->>'name', '')) + 1), '')
-          ) AS "customerLastName",
-          COALESCE(c.email, au.email) AS "customerEmail",
-          c.phone              AS "customerPhone",
           v.name               AS "venueName",
           r.name               AS "resourceName",
           u.name               AS "unitName",
           COUNT(*) OVER()::int AS "totalCount"
         FROM booking.bookings b
-        LEFT JOIN people.persons c ON c.id = b.customer_id
-        LEFT JOIN auth.users au ON au.id = b.customer_id
         LEFT JOIN venue.venues v ON v.id = b.venue_id
         LEFT JOIN venue.resources r ON r.id = b.resource_id
         LEFT JOIN venue.bookable_units u ON u.id = b.bookable_unit_id
@@ -182,26 +166,10 @@ export class BookingsRepository {
           b.currency,
           b.created_at         AS "createdAt",
           b.updated_at         AS "updatedAt",
-          COALESCE(
-            c.first_name,
-            au.raw_user_meta_data->>'firstName',
-            au.raw_user_meta_data->>'first_name',
-            SPLIT_PART(NULLIF(COALESCE(au.raw_user_meta_data->>'full_name', au.raw_user_meta_data->>'name'), ''), ' ', 1)
-          ) AS "customerFirstName",
-          COALESCE(
-            c.last_name,
-            au.raw_user_meta_data->>'lastName',
-            au.raw_user_meta_data->>'last_name',
-            NULLIF(SUBSTRING(COALESCE(au.raw_user_meta_data->>'full_name', au.raw_user_meta_data->>'name', '') FROM POSITION(' ' IN COALESCE(au.raw_user_meta_data->>'full_name', au.raw_user_meta_data->>'name', '')) + 1), '')
-          ) AS "customerLastName",
-          COALESCE(c.email, au.email) AS "customerEmail",
-          c.phone              AS "customerPhone",
           v.name               AS "venueName",
           r.name               AS "resourceName",
           u.name               AS "unitName"
         FROM booking.bookings b
-        LEFT JOIN people.persons c ON c.id = b.customer_id
-        LEFT JOIN auth.users au ON au.id = b.customer_id
         LEFT JOIN venue.venues v ON v.id = b.venue_id
         LEFT JOIN venue.resources r ON r.id = b.resource_id
         LEFT JOIN venue.bookable_units u ON u.id = b.bookable_unit_id
@@ -838,19 +806,15 @@ export class BookingsRepository {
     }[]>`
       SELECT
         b.customer_id                                                                AS "customerId",
-        c.first_name                                                                 AS "firstName",
-        c.last_name                                                                  AS "lastName",
-        c.email,
         COUNT(DISTINCT b.id)::int                                                    AS "bookingCount",
         COALESCE(SUM(EXTRACT(EPOCH FROM (b.ends_at - b.starts_at)) / 3600), 0)::float AS "totalHours",
         COALESCE(SUM(ba.price * ba.quantity), 0)::float                             AS "addOnSpend"
       FROM booking.bookings b
-      JOIN people.persons c ON c.id = b.customer_id
       LEFT JOIN booking.booking_add_ons ba ON ba.booking_id = b.id AND ba.status = 'active'
       WHERE b.tenant_id    = ${tenantId}::uuid
         AND b.status       = 'active'
         AND b.customer_id IS NOT NULL
-      GROUP BY b.customer_id, c.first_name, c.last_name, c.email
+      GROUP BY b.customer_id
       ORDER BY "bookingCount" DESC
       LIMIT ${limit}
     `
@@ -907,13 +871,16 @@ export class BookingsRepository {
    * and have not yet had a reminder sent. The 2-hour window prevents
    * duplicate fires across hourly cron runs.
    */
+  /**
+   * Bookings due a reminder. Customer name/email are NOT selected here — they come
+   * from people-service via PeopleClient in BookingReminderTask. Keeping them out
+   * of the type is deliberate: leaving them declared but unselected would compile
+   * fine and be `undefined` at runtime.
+   */
   async findDueReminders(): Promise<{
     id: string
     tenantId: string
     customerId: string | null
-    customerEmail: string | null
-    customerFirstName: string | null
-    customerLastName: string | null
     bookingReference: string
     startsAt: Date
     endsAt: Date
@@ -930,16 +897,11 @@ export class BookingsRepository {
         b.booking_reference      AS "bookingReference",
         b.starts_at              AS "startsAt",
         b.ends_at                AS "endsAt",
-        p.email                  AS "customerEmail",
-        p.first_name             AS "customerFirstName",
-        p.last_name              AS "customerLastName",
         v.name                   AS "venueName",
         r.name                   AS "resourceName"
       FROM booking.bookings b
-      -- Every join is tenant-qualified. Nothing validates that a booking's
-      -- customer_id belongs to the booking's tenant, so an unqualified join would
-      -- resolve another tenant's person and email them about this booking.
-      LEFT JOIN people.persons p  ON p.id = b.customer_id  AND p.tenant_id = b.tenant_id
+      -- Venue joins stay tenant-qualified: nothing validates that a booking's
+      -- foreign ids belong to its tenant. (These venue reads go in MR-3.)
       LEFT JOIN venue.venues v    ON v.id = b.venue_id::uuid  AND v.tenant_id = b.tenant_id
       LEFT JOIN venue.resources r ON r.id = b.resource_id::uuid AND r.tenant_id = b.tenant_id
       WHERE b.status IN ('active', 'pending')
