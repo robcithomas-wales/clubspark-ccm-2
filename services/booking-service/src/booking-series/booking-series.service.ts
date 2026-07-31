@@ -13,6 +13,7 @@ import type { CancelBookingSeriesDto } from './dto/cancel-booking-series.dto.js'
 import type { UpdateBookingSeriesDto } from './dto/update-booking-series.dto.js'
 import type { TenantContext } from '../common/decorators/tenant-context.decorator.js'
 import { PeopleClient } from '../people/people.client.js'
+import { VenueClient } from '../venue/venue.client.js'
 
 @Injectable()
 export class BookingSeriesService {
@@ -23,6 +24,7 @@ export class BookingSeriesService {
     private readonly bookingsRepo: BookingsRepository,
     private readonly availabilityRepo: AvailabilityRepository,
     private readonly people: PeopleClient,
+    private readonly venue: VenueClient,
   ) {}
 
   async list(ctx: TenantContext) {
@@ -34,7 +36,8 @@ export class BookingSeriesService {
     if (!series) throw new NotFoundException('Booking series not found')
     const bookings = await this.seriesRepo.findBookingsForSeries(ctx.tenantId, id)
     // Customer names via people-service rather than a people.persons JOIN.
-    return { ...series, bookings: await this.people.hydrate(ctx.tenantId, bookings) }
+    const withCustomers = await this.people.hydrate(ctx.tenantId, bookings)
+    return { ...series, bookings: await this.venue.hydrate(ctx.tenantId, withCustomers) }
   }
 
   async create(ctx: TenantContext, dto: CreateBookingSeriesDto) {

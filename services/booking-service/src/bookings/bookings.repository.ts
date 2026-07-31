@@ -116,14 +116,8 @@ export class BookingsRepository {
           b.currency,
           b.created_at         AS "createdAt",
           b.updated_at         AS "updatedAt",
-          v.name               AS "venueName",
-          r.name               AS "resourceName",
-          u.name               AS "unitName",
           COUNT(*) OVER()::int AS "totalCount"
         FROM booking.bookings b
-        LEFT JOIN venue.venues v ON v.id = b.venue_id
-        LEFT JOIN venue.resources r ON r.id = b.resource_id
-        LEFT JOIN venue.bookable_units u ON u.id = b.bookable_unit_id
         WHERE b.tenant_id = ${tenantId}::uuid
         ${statusFilter}
         ${fromFilter}
@@ -166,14 +160,8 @@ export class BookingsRepository {
           b.price,
           b.currency,
           b.created_at         AS "createdAt",
-          b.updated_at         AS "updatedAt",
-          v.name               AS "venueName",
-          r.name               AS "resourceName",
-          u.name               AS "unitName"
+          b.updated_at         AS "updatedAt"
         FROM booking.bookings b
-        LEFT JOIN venue.venues v ON v.id = b.venue_id
-        LEFT JOIN venue.resources r ON r.id = b.resource_id
-        LEFT JOIN venue.bookable_units u ON u.id = b.bookable_unit_id
         WHERE b.tenant_id = ${tenantId}::uuid
           AND b.id = ${id}::uuid
       `,
@@ -941,8 +929,11 @@ export class BookingsRepository {
       bookingReference: string
       startsAt: Date
       endsAt: Date
-      venueName: string | null
-      resourceName: string | null
+      // Ids, not names: venue names are hydrated by VenueClient in the task (MR-3).
+      // Declaring names the SQL no longer selects would compile fine and be
+      // undefined at runtime — the same trap MR-1 hit.
+      venueId: string | null
+      resourceId: string | null
     }[]
   > {
     const windowStart = new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString()
@@ -955,13 +946,9 @@ export class BookingsRepository {
         b.booking_reference      AS "bookingReference",
         b.starts_at              AS "startsAt",
         b.ends_at                AS "endsAt",
-        v.name                   AS "venueName",
-        r.name                   AS "resourceName"
+        b.venue_id               AS "venueId",
+        b.resource_id            AS "resourceId"
       FROM booking.bookings b
-      -- Venue joins stay tenant-qualified: nothing validates that a booking's
-      -- foreign ids belong to its tenant. (These venue reads go in MR-3.)
-      LEFT JOIN venue.venues v    ON v.id = b.venue_id::uuid  AND v.tenant_id = b.tenant_id
-      LEFT JOIN venue.resources r ON r.id = b.resource_id::uuid AND r.tenant_id = b.tenant_id
       WHERE b.status IN ('active', 'pending')
         AND b.reminder_sent_at IS NULL
         AND b.starts_at >= ${windowStart}::timestamptz

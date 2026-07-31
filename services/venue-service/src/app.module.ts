@@ -20,9 +20,10 @@ import { NewsPostsModule } from './news-posts/news-posts.module.js'
 import { AffiliationsModule } from './affiliations/affiliations.module.js'
 import { SponsorsModule } from './sponsors/sponsors.module.js'
 import { SeasonalSchedulesModule } from './seasonal-schedules/seasonal-schedules.module.js'
+import { VenueReferenceModule } from './internal/venue-reference.module.js'
 
 @Module({
-  imports: [
+  imports: [VenueReferenceModule, 
     ConfigModule.forRoot({ isGlobal: true, load: [configuration], envFilePath: join(__dirname, '..', '.env') }),
     PrismaModule,
     HealthModule,

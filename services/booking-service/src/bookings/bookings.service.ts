@@ -16,6 +16,7 @@ import { RefundPoliciesRepository } from '../refund-policies/refund-policies.rep
 import { OrderClient } from '../order-client/order.client.js'
 import { PeopleClient } from '../people/people.client.js'
 import { OutboxRepository } from '../outbox/outbox.repository.js'
+import { VenueClient } from '../venue/venue.client.js'
 import type { CreateBookingDto } from './dto/create-booking.dto.js'
 import type { CreateBookingAddOnDto } from './dto/create-booking-add-on.dto.js'
 import type { UpdatePaymentStatusDto } from './dto/update-payment-status.dto.js'
@@ -38,6 +39,7 @@ export class BookingsService {
     private readonly orderClient: OrderClient,
     private readonly people: PeopleClient,
     private readonly outbox: OutboxRepository,
+    private readonly venue: VenueClient,
   ) {}
 
   async list(
@@ -47,14 +49,17 @@ export class BookingsService {
     filters: { status?: string; fromDate?: string; toDate?: string; customerId?: string } = {},
   ) {
     const result = await this.repo.list(ctx.tenantId, page, limit, filters)
-    // Customer names come from people-service, not a SQL join — see PeopleClient.
-    return { ...result, rows: await this.people.hydrate(ctx.tenantId, result.rows) }
+    // Customer names from people-service, venue names from venue-service —
+    // neither is a SQL join any more (MR-1, MR-3).
+    const withCustomers = await this.people.hydrate(ctx.tenantId, result.rows)
+    return { ...result, rows: await this.venue.hydrate(ctx.tenantId, withCustomers) }
   }
 
   async getById(ctx: TenantContext, id: string) {
     const booking = await this.repo.findById(ctx.tenantId, id)
     if (!booking) throw new NotFoundException('Booking not found')
-    const [hydrated] = await this.people.hydrate(ctx.tenantId, [booking])
+    const [withCustomer] = await this.people.hydrate(ctx.tenantId, [booking])
+    const [hydrated] = await this.venue.hydrate(ctx.tenantId, [withCustomer ?? booking])
     return hydrated ?? booking
   }
 
