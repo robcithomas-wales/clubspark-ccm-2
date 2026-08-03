@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  CanActivate,
-  ExecutionContext,
-  UnauthorizedException,
-} from '@nestjs/common'
+import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common'
 import type { FastifyRequest } from 'fastify'
 import { createHash, timingSafeEqual } from 'crypto'
 
