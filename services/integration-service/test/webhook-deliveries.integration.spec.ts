@@ -15,6 +15,31 @@ const INBOUND_HEADERS = {
   'x-internal-secret': process.env['INTERNAL_SECRET'],
 }
 
+/**
+ * Wait until `check` returns a non-empty result, or give up.
+ *
+ * Inbound events dispatch asynchronously, so these tests must wait for delivery
+ * rows to appear. They used fixed 200-300ms sleeps — ample against a local
+ * Postgres, not ample against remote Supabase. The suite passed locally and
+ * failed against the shared database, which is a property of the sleep, not the
+ * code under test.
+ *
+ * Polling adapts to whatever the run is pointed at: fast locally, patient
+ * remotely.
+ */
+async function waitFor<T>(
+  check: () => Promise<T>,
+  { timeoutMs = 10_000, intervalMs = 100 } = {},
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs
+  let last = await check()
+  while (Array.isArray(last) && last.length === 0 && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, intervalMs))
+    last = await check()
+  }
+  return last
+}
+
 const DB_AVAILABLE = await checkDbAvailable()
 
 async function createSubscription(
@@ -65,18 +90,19 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
   it('inbound event creates delivery rows for matching active subscriptions', async () => {
     const sub = await createSubscription(request)
 
-    await request.post('/v1/events/inbound').set(INBOUND_HEADERS).send({
+    // Assert the POST was accepted. Without this, a rejected request (the
+    // internal-secret guard refusing it, say) is indistinguishable from "no rows
+    // were created" — which is exactly how this failed silently once.
+    const inbound = await request.post('/v1/events/inbound').set(INBOUND_HEADERS).send({
       type: 'booking.confirmed',
       tenantId: TEST_TENANT_ID,
       occurredAt: new Date().toISOString(),
     })
+    expect(inbound.status).toBeLessThan(300)
 
-    // Allow async dispatch to complete
-    await new Promise((r) => setTimeout(r, 200))
-
-    const deliveries = await prisma.webhookDelivery.findMany({
-      where: { subscriptionId: sub.id },
-    })
+    const deliveries = await waitFor(() =>
+      prisma.webhookDelivery.findMany({ where: { subscriptionId: sub.id } }),
+    )
     expect(deliveries).toHaveLength(1)
     expect(deliveries[0].eventType).toBe('booking.confirmed')
     // Status is deliberately NOT asserted. A @Cron worker runs every 30s and
@@ -97,11 +123,9 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
       occurredAt: new Date().toISOString(),
     })
 
-    await new Promise((r) => setTimeout(r, 200))
-
-    const deliveries = await prisma.webhookDelivery.findMany({
-      where: { subscriptionId: sub.id },
-    })
+    const deliveries = await waitFor(() =>
+      prisma.webhookDelivery.findMany({ where: { subscriptionId: sub.id } }),
+    )
     expect(deliveries).toHaveLength(0)
   })
 
@@ -118,11 +142,9 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
       occurredAt: new Date().toISOString(),
     })
 
-    await new Promise((r) => setTimeout(r, 200))
-
-    const deliveries = await prisma.webhookDelivery.findMany({
-      where: { subscriptionId: sub.id },
-    })
+    const deliveries = await waitFor(() =>
+      prisma.webhookDelivery.findMany({ where: { subscriptionId: sub.id } }),
+    )
     expect(deliveries).toHaveLength(0)
   })
 
@@ -136,10 +158,12 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
       occurredAt: new Date().toISOString(),
     })
 
-    await new Promise((r) => setTimeout(r, 300))
-
-    const d1 = await prisma.webhookDelivery.findMany({ where: { subscriptionId: sub1.id } })
-    const d2 = await prisma.webhookDelivery.findMany({ where: { subscriptionId: sub2.id } })
+    const d1 = await waitFor(() =>
+      prisma.webhookDelivery.findMany({ where: { subscriptionId: sub1.id } }),
+    )
+    const d2 = await waitFor(() =>
+      prisma.webhookDelivery.findMany({ where: { subscriptionId: sub2.id } }),
+    )
     expect(d1).toHaveLength(1)
     expect(d2).toHaveLength(1)
   })
@@ -152,7 +176,8 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
       occurredAt: new Date().toISOString(),
     })
 
-    await new Promise((r) => setTimeout(r, 300))
+    // Wait for the row to exist before reading it back through the API.
+    await waitFor(() => prisma.webhookDelivery.findMany({ where: { subscriptionId: sub.id } }))
 
     const res = await request.get(`/v1/webhook-deliveries?subscriptionId=${sub.id}`).set(HEADERS)
 
