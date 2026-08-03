@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule'
 import { BookingsRepository } from '../bookings.repository.js'
 import { EventBusService } from '../../event-bus/event-bus.service.js'
 import { PeopleClient } from '../../people/people.client.js'
+import { VenueClient } from '../../venue/venue.client.js'
 
 /**
  * Runs every hour and publishes `booking.reminder_due` events for every
@@ -21,6 +22,7 @@ export class BookingReminderTask {
     private readonly repo: BookingsRepository,
     private readonly eventBus: EventBusService,
     private readonly people: PeopleClient,
+    private readonly venue: VenueClient,
   ) {}
 
   @Cron(CronExpression.EVERY_HOUR)
@@ -49,6 +51,10 @@ export class BookingReminderTask {
       byTenant.set(b.tenantId, list)
     }
     const customers = new Map<string, Awaited<ReturnType<PeopleClient['getDisplayFields']>>>()
+    const venues = new Map<
+      string,
+      Map<string, { venueName: string | null; resourceName: string | null }>
+    >()
     for (const [tenantId, rows] of byTenant) {
       customers.set(
         tenantId,
@@ -57,10 +63,19 @@ export class BookingReminderTask {
           rows.map((r) => r.customerId),
         ),
       )
+      // Venue names via venue-service too (MR-3) — booking no longer joins venue.*.
+      const hydrated = await this.venue.hydrate(tenantId, rows)
+      venues.set(
+        tenantId,
+        new Map(
+          hydrated.map((h) => [h.id, { venueName: h.venueName, resourceName: h.resourceName }]),
+        ),
+      )
     }
 
     for (const b of bookings) {
       const person = b.customerId ? customers.get(b.tenantId)?.get(b.customerId) : undefined
+      const place = venues.get(b.tenantId)?.get(b.id)
       try {
         await this.eventBus.publish({
           type: 'booking.reminder_due',
@@ -74,8 +89,8 @@ export class BookingReminderTask {
           customerLastName: person?.customerLastName ?? null,
           startsAt: b.startsAt,
           endsAt: b.endsAt,
-          venueName: b.venueName,
-          resourceName: b.resourceName,
+          venueName: place?.venueName ?? null,
+          resourceName: place?.resourceName ?? null,
         })
         await this.repo.markReminderSent(b.id)
       } catch (err) {

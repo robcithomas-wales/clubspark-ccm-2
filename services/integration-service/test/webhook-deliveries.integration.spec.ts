@@ -52,10 +52,11 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
   })
 
   it('inbound event returns { received: true }', async () => {
-    const res = await request
-      .post('/v1/events/inbound')
-      .set(INBOUND_HEADERS)
-      .send({ type: 'booking.confirmed', tenantId: TEST_TENANT_ID, occurredAt: new Date().toISOString() })
+    const res = await request.post('/v1/events/inbound').set(INBOUND_HEADERS).send({
+      type: 'booking.confirmed',
+      tenantId: TEST_TENANT_ID,
+      occurredAt: new Date().toISOString(),
+    })
 
     expect(res.status).toBe(201)
     expect(res.body.received).toBe(true)
@@ -64,10 +65,11 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
   it('inbound event creates delivery rows for matching active subscriptions', async () => {
     const sub = await createSubscription(request)
 
-    await request
-      .post('/v1/events/inbound')
-      .set(INBOUND_HEADERS)
-      .send({ type: 'booking.confirmed', tenantId: TEST_TENANT_ID, occurredAt: new Date().toISOString() })
+    await request.post('/v1/events/inbound').set(INBOUND_HEADERS).send({
+      type: 'booking.confirmed',
+      tenantId: TEST_TENANT_ID,
+      occurredAt: new Date().toISOString(),
+    })
 
     // Allow async dispatch to complete
     await new Promise((r) => setTimeout(r, 200))
@@ -77,16 +79,23 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
     })
     expect(deliveries).toHaveLength(1)
     expect(deliveries[0].eventType).toBe('booking.confirmed')
-    expect(deliveries[0].status).toBe('pending')
+    // Status is deliberately NOT asserted. A @Cron worker runs every 30s and
+    // moves pending -> failed/delivered/dead; the subscription URL here is
+    // unreachable, so a run landing mid-test flips it to 'failed'. That made this
+    // suite intermittently red in CI while passing locally. What this test is
+    // actually about is that a delivery row is CREATED for a matching
+    // subscription — the worker's behaviour is covered by its own tests.
+    expect(deliveries[0].subscriptionId).toBe(sub.id)
   })
 
   it('inbound event does not create deliveries for non-matching event type', async () => {
     const sub = await createSubscription(request, { eventTypes: ['membership.activated'] })
 
-    await request
-      .post('/v1/events/inbound')
-      .set(INBOUND_HEADERS)
-      .send({ type: 'booking.confirmed', tenantId: TEST_TENANT_ID, occurredAt: new Date().toISOString() })
+    await request.post('/v1/events/inbound').set(INBOUND_HEADERS).send({
+      type: 'booking.confirmed',
+      tenantId: TEST_TENANT_ID,
+      occurredAt: new Date().toISOString(),
+    })
 
     await new Promise((r) => setTimeout(r, 200))
 
@@ -98,12 +107,16 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
 
   it('inbound event does not create deliveries for inactive subscriptions', async () => {
     const sub = await createSubscription(request)
-    await request.patch(`/v1/webhook-subscriptions/${sub.id}`).set(JSON_HEADERS).send({ isActive: false })
-
     await request
-      .post('/v1/events/inbound')
-      .set(INBOUND_HEADERS)
-      .send({ type: 'booking.confirmed', tenantId: TEST_TENANT_ID, occurredAt: new Date().toISOString() })
+      .patch(`/v1/webhook-subscriptions/${sub.id}`)
+      .set(JSON_HEADERS)
+      .send({ isActive: false })
+
+    await request.post('/v1/events/inbound').set(INBOUND_HEADERS).send({
+      type: 'booking.confirmed',
+      tenantId: TEST_TENANT_ID,
+      occurredAt: new Date().toISOString(),
+    })
 
     await new Promise((r) => setTimeout(r, 200))
 
@@ -117,10 +130,11 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
     const sub1 = await createSubscription(request, { name: 'Sub 1' })
     const sub2 = await createSubscription(request, { name: 'Sub 2' })
 
-    await request
-      .post('/v1/events/inbound')
-      .set(INBOUND_HEADERS)
-      .send({ type: 'booking.confirmed', tenantId: TEST_TENANT_ID, occurredAt: new Date().toISOString() })
+    await request.post('/v1/events/inbound').set(INBOUND_HEADERS).send({
+      type: 'booking.confirmed',
+      tenantId: TEST_TENANT_ID,
+      occurredAt: new Date().toISOString(),
+    })
 
     await new Promise((r) => setTimeout(r, 300))
 
@@ -132,22 +146,24 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
 
   it('lists deliveries by subscriptionId with pagination', async () => {
     const sub = await createSubscription(request)
-    await request
-      .post('/v1/events/inbound')
-      .set(INBOUND_HEADERS)
-      .send({ type: 'booking.confirmed', tenantId: TEST_TENANT_ID, occurredAt: new Date().toISOString() })
+    await request.post('/v1/events/inbound').set(INBOUND_HEADERS).send({
+      type: 'booking.confirmed',
+      tenantId: TEST_TENANT_ID,
+      occurredAt: new Date().toISOString(),
+    })
 
     await new Promise((r) => setTimeout(r, 300))
 
-    const res = await request
-      .get(`/v1/webhook-deliveries?subscriptionId=${sub.id}`)
-      .set(HEADERS)
+    const res = await request.get(`/v1/webhook-deliveries?subscriptionId=${sub.id}`).set(HEADERS)
 
     expect(res.status).toBe(200)
     expect(res.body.data).toHaveLength(1)
     expect(res.body.pagination.total).toBe(1)
     expect(res.body.data[0].eventType).toBe('booking.confirmed')
-    expect(res.body.data[0].status).toBe('pending')
+    // Not asserting status — see the note above; the delivery worker owns it.
+    // The subscription filter is proven by the pagination total of exactly 1
+    // (this subscription's delivery, and no other's).
+    expect(res.body.data[0].id).toBeTruthy()
   })
 
   it('manual retry resets status to pending and attempts to 0', async () => {
@@ -169,7 +185,9 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
   })
 
   it('returns 404 on retry of non-existent delivery', async () => {
-    const res = await request.post(`/v1/webhook-deliveries/${TEST_NONEXISTENT_ID}/retry`).set(HEADERS)
+    const res = await request
+      .post(`/v1/webhook-deliveries/${TEST_NONEXISTENT_ID}/retry`)
+      .set(HEADERS)
     expect(res.status).toBe(404)
   })
 })

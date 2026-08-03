@@ -15,6 +15,8 @@ import { EventBusService } from '../event-bus/event-bus.service.js'
 import { RefundPoliciesRepository } from '../refund-policies/refund-policies.repository.js'
 import { OrderClient } from '../order-client/order.client.js'
 import { PeopleClient } from '../people/people.client.js'
+import { OutboxRepository } from '../outbox/outbox.repository.js'
+import { VenueClient } from '../venue/venue.client.js'
 import type { CreateBookingDto } from './dto/create-booking.dto.js'
 import type { CreateBookingAddOnDto } from './dto/create-booking-add-on.dto.js'
 import type { UpdatePaymentStatusDto } from './dto/update-payment-status.dto.js'
@@ -36,6 +38,8 @@ export class BookingsService {
     private readonly refundPolicies: RefundPoliciesRepository,
     private readonly orderClient: OrderClient,
     private readonly people: PeopleClient,
+    private readonly outbox: OutboxRepository,
+    private readonly venue: VenueClient,
   ) {}
 
   async list(
@@ -45,14 +49,17 @@ export class BookingsService {
     filters: { status?: string; fromDate?: string; toDate?: string; customerId?: string } = {},
   ) {
     const result = await this.repo.list(ctx.tenantId, page, limit, filters)
-    // Customer names come from people-service, not a SQL join — see PeopleClient.
-    return { ...result, rows: await this.people.hydrate(ctx.tenantId, result.rows) }
+    // Customer names from people-service, venue names from venue-service —
+    // neither is a SQL join any more (MR-1, MR-3).
+    const withCustomers = await this.people.hydrate(ctx.tenantId, result.rows)
+    return { ...result, rows: await this.venue.hydrate(ctx.tenantId, withCustomers) }
   }
 
   async getById(ctx: TenantContext, id: string) {
     const booking = await this.repo.findById(ctx.tenantId, id)
     if (!booking) throw new NotFoundException('Booking not found')
-    const [hydrated] = await this.people.hydrate(ctx.tenantId, [booking])
+    const [withCustomer] = await this.people.hydrate(ctx.tenantId, [booking])
+    const [hydrated] = await this.venue.hydrate(ctx.tenantId, [withCustomer ?? booking])
     return hydrated ?? booking
   }
 
@@ -157,6 +164,27 @@ export class BookingsService {
       ctx.organisationId,
       unitIds,
       resolvedDto,
+      // Recorded in the SAME transaction as the insert (MR-2). The relay delivers
+      // it; if this transaction rolls back, no event is emitted for a booking
+      // that never existed.
+      async (tx, created) => {
+        await this.outbox.enqueue(tx, {
+          type: 'booking.confirmed',
+          tenantId: ctx.tenantId,
+          occurredAt: new Date().toISOString(),
+          bookingId: created.id,
+          bookingReference: created.bookingReference,
+          bookerPersonId: created.customerId ?? '',
+          bookerEmail: (resolvedDto as { bookerEmail?: string }).bookerEmail ?? '',
+          bookerFirstName: (resolvedDto as { bookerFirstName?: string }).bookerFirstName ?? '',
+          venueId: created.venueId,
+          venueName: (resolvedDto as { venueName?: string }).venueName ?? '',
+          resourceName: (resolvedDto as { resourceName?: string }).resourceName ?? '',
+          bookableUnitName: (resolvedDto as { bookableUnitName?: string }).bookableUnitName ?? '',
+          startsAt: created.startsAt,
+          endsAt: created.endsAt,
+        } as never)
+      },
     )
 
     // Create order record in the shared commerce layer
@@ -180,30 +208,9 @@ export class BookingsService {
       })
     }
 
-    // Publish domain event — comms-service sends confirmation email
-    // NOTE: bookerEmail and name are not stored on the booking record itself;
-    // they are passed in from the caller (admin portal / customer portal).
-    // TODO: once people-service lookup is wired, fetch from there by customerId.
-    if (booking) {
-      void this.eventBus.publish({
-        type: 'booking.confirmed',
-        tenantId: ctx.tenantId,
-        occurredAt: new Date().toISOString(),
-        bookingId: booking.id,
-        bookingReference: booking.bookingReference,
-        bookerPersonId: booking.customerId ?? '',
-        bookerEmail: (resolvedDto as { bookerEmail?: string }).bookerEmail ?? '',
-        bookerFirstName: (resolvedDto as { bookerFirstName?: string }).bookerFirstName ?? '',
-        venueId: booking.venueId,
-        venueName: (resolvedDto as { venueName?: string }).venueName ?? '',
-        resourceName: (resolvedDto as { resourceName?: string }).resourceName ?? '',
-        bookableUnitName: (resolvedDto as { bookableUnitName?: string }).bookableUnitName ?? '',
-        startsAt: booking.startsAt.toISOString(),
-        endsAt: booking.endsAt.toISOString(),
-        price: booking.price ? Number(booking.price) : undefined,
-        currency: booking.currency,
-      })
-    }
+    // booking.confirmed is recorded in the outbox inside createAtomic's
+    // transaction (MR-2) and delivered by OutboxRelay — no fire-and-forget publish
+    // here any more.
 
     return booking
   }
@@ -284,7 +291,22 @@ export class BookingsService {
   }
 
   async cancel(ctx: TenantContext, id: string) {
-    const cancelled = await this.repo.cancel(ctx.tenantId, id)
+    const cancelled = await this.repo.cancel(ctx.tenantId, id, async (tx, row) => {
+      // Same transaction as the cancellation (MR-2).
+      await this.outbox.enqueue(tx, {
+        type: 'booking.cancelled',
+        tenantId: ctx.tenantId,
+        occurredAt: new Date().toISOString(),
+        bookingId: row.id,
+        bookingReference: row.bookingReference,
+        bookerPersonId: row.customerId ?? '',
+        bookerEmail: '',
+        bookerFirstName: '',
+        venueName: '',
+        resourceName: '',
+        startsAt: row.startsAt.toISOString(),
+      } as never)
+    })
 
     if (cancelled) {
       this.logger.log({ id, organisationId: ctx.organisationId }, 'Booking cancelled')
@@ -313,20 +335,7 @@ export class BookingsService {
         )
       }
 
-      // Publish domain event — comms-service sends cancellation email
-      void this.eventBus.publish({
-        type: 'booking.cancelled',
-        tenantId: ctx.tenantId,
-        occurredAt: new Date().toISOString(),
-        bookingId: cancelled.id,
-        bookingReference: cancelled.bookingReference,
-        bookerPersonId: cancelled.customerId ?? '',
-        bookerEmail: '', // TODO: fetch from people-service by customerId
-        bookerFirstName: '',
-        venueName: '', // TODO: fetch from venue-service by venueId
-        resourceName: '',
-        startsAt: cancelled.startsAt.toISOString(),
-      })
+      // booking.cancelled is recorded in the outbox inside the cancel transaction.
 
       return cancelled
     }

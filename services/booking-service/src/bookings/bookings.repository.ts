@@ -116,14 +116,8 @@ export class BookingsRepository {
           b.currency,
           b.created_at         AS "createdAt",
           b.updated_at         AS "updatedAt",
-          v.name               AS "venueName",
-          r.name               AS "resourceName",
-          u.name               AS "unitName",
           COUNT(*) OVER()::int AS "totalCount"
         FROM booking.bookings b
-        LEFT JOIN venue.venues v ON v.id = b.venue_id
-        LEFT JOIN venue.resources r ON r.id = b.resource_id
-        LEFT JOIN venue.bookable_units u ON u.id = b.bookable_unit_id
         WHERE b.tenant_id = ${tenantId}::uuid
         ${statusFilter}
         ${fromFilter}
@@ -166,14 +160,8 @@ export class BookingsRepository {
           b.price,
           b.currency,
           b.created_at         AS "createdAt",
-          b.updated_at         AS "updatedAt",
-          v.name               AS "venueName",
-          r.name               AS "resourceName",
-          u.name               AS "unitName"
+          b.updated_at         AS "updatedAt"
         FROM booking.bookings b
-        LEFT JOIN venue.venues v ON v.id = b.venue_id
-        LEFT JOIN venue.resources r ON r.id = b.resource_id
-        LEFT JOIN venue.bookable_units u ON u.id = b.bookable_unit_id
         WHERE b.tenant_id = ${tenantId}::uuid
           AND b.id = ${id}::uuid
       `,
@@ -262,11 +250,19 @@ export class BookingsRepository {
    * The btree_gist exclusion constraint on booking.bookings is the final safety
    * net — it rejects any overlapping insert at the database level.
    */
+  /**
+   * @param withinTx runs inside the SAME transaction as the insert, with the row
+   *   just created. Used to write the outbox event atomically: either the booking
+   *   and its event both commit, or neither does. Publishing after the commit —
+   *   which is what this used to do — loses the event if the process dies in
+   *   between, and emits one for a change that rolled back.
+   */
   async createAtomic(
     tenantId: string,
     organisationId: string,
     unitIds: string[],
     dto: CreateBookingDto,
+    withinTx?: (tx: Prisma.TransactionClient, booking: BookingRow) => Promise<void>,
   ) {
     const bookingReference = generateBookingReference()
 
@@ -350,7 +346,9 @@ export class BookingsRepository {
               updated_at             AS "updatedAt"
           `
 
-          return rows[0]
+          const created = rows[0]
+          if (created && withinTx) await withinTx(tx, created)
+          return created
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       )
@@ -369,8 +367,18 @@ export class BookingsRepository {
     }
   }
 
-  async cancel(tenantId: string, id: string) {
-    const rows = await this.prisma.write.$queryRaw<BookingRow[]>`
+  /**
+   * @param withinTx runs inside the same transaction as the cancellation, with
+   *   the updated row — used to record booking.cancelled in the outbox so the
+   *   state change and its event commit together (MR-2).
+   */
+  async cancel(
+    tenantId: string,
+    id: string,
+    withinTx?: (tx: Prisma.TransactionClient, booking: BookingRow) => Promise<void>,
+  ) {
+    return this.prisma.write.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<BookingRow[]>`
       UPDATE booking.bookings
       SET status       = 'cancelled',
           cancelled_at = now(),
@@ -391,7 +399,10 @@ export class BookingsRepository {
         cancelled_at     AS "cancelledAt",
         updated_at       AS "updatedAt"
     `
-    return rows[0] ?? null
+      const cancelled = rows[0] ?? null
+      if (cancelled && withinTx) await withinTx(tx, cancelled)
+      return cancelled
+    })
   }
 
   async bulkCancel(tenantId: string, ids: string[]): Promise<number> {
@@ -918,8 +929,11 @@ export class BookingsRepository {
       bookingReference: string
       startsAt: Date
       endsAt: Date
-      venueName: string | null
-      resourceName: string | null
+      // Ids, not names: venue names are hydrated by VenueClient in the task (MR-3).
+      // Declaring names the SQL no longer selects would compile fine and be
+      // undefined at runtime — the same trap MR-1 hit.
+      venueId: string | null
+      resourceId: string | null
     }[]
   > {
     const windowStart = new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString()
@@ -932,13 +946,9 @@ export class BookingsRepository {
         b.booking_reference      AS "bookingReference",
         b.starts_at              AS "startsAt",
         b.ends_at                AS "endsAt",
-        v.name                   AS "venueName",
-        r.name                   AS "resourceName"
+        b.venue_id               AS "venueId",
+        b.resource_id            AS "resourceId"
       FROM booking.bookings b
-      -- Venue joins stay tenant-qualified: nothing validates that a booking's
-      -- foreign ids belong to its tenant. (These venue reads go in MR-3.)
-      LEFT JOIN venue.venues v    ON v.id = b.venue_id::uuid  AND v.tenant_id = b.tenant_id
-      LEFT JOIN venue.resources r ON r.id = b.resource_id::uuid AND r.tenant_id = b.tenant_id
       WHERE b.status IN ('active', 'pending')
         AND b.reminder_sent_at IS NULL
         AND b.starts_at >= ${windowStart}::timestamptz

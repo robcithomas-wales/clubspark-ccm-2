@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service.js'
 import type { Payment, Refund, PaymentStatus } from '../generated/prisma/index.js'
+import { Prisma } from '../generated/prisma/index.js'
 
 @Injectable()
 export class PaymentsRepository {
@@ -54,18 +55,30 @@ export class PaymentsRepository {
     return this.prisma.write.payment.create({ data })
   }
 
+  /**
+   * @param withinTx runs inside the same transaction as the status change, with
+   *   the updated payment — used to record the domain event in the outbox so the
+   *   two commit together (MR-2). Payment state changes are the ones where a lost
+   *   event matters most: a succeeded payment whose event vanishes leaves the
+   *   customer charged with nothing downstream reacting.
+   */
   async updateStatus(
     id: string,
     status: PaymentStatus,
     opts?: { gatewayRef?: string; failureReason?: string },
+    withinTx?: (tx: Prisma.TransactionClient, payment: Payment) => Promise<void>,
   ): Promise<Payment> {
-    return this.prisma.write.payment.update({
-      where: { id },
-      data: {
-        status,
-        ...(opts?.gatewayRef ? { gatewayRef: opts.gatewayRef } : {}),
-        ...(opts?.failureReason ? { failureReason: opts.failureReason } : {}),
-      },
+    return this.prisma.write.$transaction(async (tx) => {
+      const updated = await tx.payment.update({
+        where: { id },
+        data: {
+          status,
+          ...(opts?.gatewayRef ? { gatewayRef: opts.gatewayRef } : {}),
+          ...(opts?.failureReason ? { failureReason: opts.failureReason } : {}),
+        },
+      })
+      if (withinTx) await withinTx(tx, updated)
+      return updated
     })
   }
 

@@ -2,7 +2,6 @@ import 'dotenv/config'
 import { PrismaClient } from '../../src/generated/prisma/index.js'
 import {
   TEST_TENANT_ID,
-  TEST_ORG_ID,
   TEST_VENUE_ID,
   TEST_RESOURCE_ID,
   TEST_UNIT_ID,
@@ -69,6 +68,11 @@ export async function seedFixtures(): Promise<void> {
  * Remove all test bookings. Call in afterEach to keep tests isolated.
  */
 export async function cleanBookings(): Promise<void> {
+  // Every booking write now enqueues an outbox event (MR-2), so rows accumulate
+  // across suites unless they are cleared with the bookings that produced them.
+  await prisma.$executeRaw`
+    DELETE FROM booking.event_outbox WHERE tenant_id = ${TEST_TENANT_ID}::uuid
+  `
   await prisma.$executeRaw`
     DELETE FROM booking.booking_add_ons
     WHERE booking_id IN (

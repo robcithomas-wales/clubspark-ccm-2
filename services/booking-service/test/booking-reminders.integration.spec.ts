@@ -130,9 +130,13 @@ describe.runIf(DB_AVAILABLE)('Booking reminders — cron regression', () => {
     // cannot read people.persons, so the task hydrates via people-service instead.
     // The row carries the id to hydrate with, and booking's own columns.
     expect(row!.customerId).toBe(TEST_PERSON_ID)
+    // Neither customer nor venue identity is selected here any more (MR-1, MR-3):
+    // booking reads neither people.* nor venue.*. The row carries the ids to
+    // hydrate with; the task fetches the names from the owning services.
     expect(row).not.toHaveProperty('customerEmail')
-    expect(row!.venueName).toBe('Test Venue')
-    expect(row!.resourceName).toBe('Test Court')
+    expect(row).not.toHaveProperty('venueName')
+    expect(row!.venueId).toBe(TEST_VENUE_ID)
+    expect(row!.resourceId).toBe(TEST_RESOURCE_ID)
   })
 
   it('excludes bookings outside the window, cancelled bookings, and already-reminded bookings', async () => {
