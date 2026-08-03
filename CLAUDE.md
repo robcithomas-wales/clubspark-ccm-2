@@ -4,6 +4,13 @@ Shared project context for Claude Code. This file is committed and loaded on eve
 session, so every engineer's agent starts with the same understanding of the platform.
 Keep it accurate — if you change how something works, update this file in the same PR.
 
+## Start here
+
+**New to this codebase?** Read [`docs/HANDOVER.md`](docs/HANDOVER.md) first — current state, how to
+run it, known issues, and the two configuration traps that will otherwise cost you an afternoon
+(`INTERNAL_SECRET` must match across services; Prisma migrations hang on Supabase's transaction
+pooler).
+
 ## What this is
 
 `clubspark-platform` — a multi-sport SaaS platform (bookings, people, membership,
