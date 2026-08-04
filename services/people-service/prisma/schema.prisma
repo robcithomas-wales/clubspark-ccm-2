@@ -3,67 +3,63 @@
 
 generator client {
   provider        = "prisma-client-js"
-  previewFeatures = ["multiSchema"]
   output          = "../src/generated/prisma"
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   // Migrations and introspection need a session-mode connection. Supabase's
   // transaction pooler (port 6543) silently HANGS on DDL; port 5432 works.
   directUrl = env("DIRECT_DATABASE_URL")
-  schemas  = ["people"]
+  schemas   = ["people"]
 }
 
 model Customer {
-  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId            String    @map("tenant_id") @db.Uuid
-  firstName           String?   @map("first_name")
-  lastName            String?   @map("last_name")
-  email               String?
-  phone               String?
-  marketingConsent    Boolean   @default(false) @map("marketing_consent")
-  consentRecordedAt   DateTime? @map("consent_recorded_at")
+  id                   String               @id(map: "customers_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId             String               @map("tenant_id") @db.Uuid
+  firstName            String?              @map("first_name")
+  lastName             String?              @map("last_name")
+  email                String?
+  phone                String?
+  createdAt            DateTime             @default(now()) @map("created_at")
+  marketingConsent     Boolean              @default(false) @map("marketing_consent")
+  consentRecordedAt    DateTime?            @map("consent_recorded_at") @db.Timestamptz(6)
+  updatedAt            DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  lifecycleState       String               @default("active") @map("lifecycle_state")
+  lifecycleChangedAt   DateTime?            @map("lifecycle_changed_at") @db.Timestamptz(6)
+  source               String?              @default("admin")
+  dateOfBirth          DateTime?            @map("date_of_birth") @db.Date
+  avatarUrl            String?              @map("avatar_url")
+  commsPreferences     Json                 @default("{}") @map("comms_preferences")
+  engagementScore      Int?                 @map("engagement_score") @db.SmallInt
+  engagementBand       String?              @map("engagement_band")
+  lastActivityAt       DateTime?            @map("last_activity_at") @db.Timestamptz(6)
+  mergedIntoId         String?              @map("merged_into_id") @db.Uuid
+  isPrimary            Boolean              @default(true) @map("is_primary")
+  addressLine1         String?              @map("address_line1")
+  addressLine2         String?              @map("address_line2")
+  city                 String?
+  county               String?
+  postcode             String?
+  country              String?              @default("GB")
+  householdMemberships HouseholdMember[]
+  lifecycleHistory     LifecycleHistory[]
+  person_activities    PersonActivity[]
+  relationshipsFrom    PersonRelationship[] @relation("RelationshipFrom")
+  relationshipsTo      PersonRelationship[] @relation("RelationshipTo")
+  personRoles          PersonRole[]
+  personTags           PersonTag[]
+  segment_memberships  SegmentMembership[]
 
-  // Address
-  addressLine1        String?   @map("address_line1")
-  addressLine2        String?   @map("address_line2")
-  city                String?
-  county              String?
-  postcode            String?
-  country             String?   @default("GB")
-
-  // People platform fields
-  lifecycleState      String    @default("active") @map("lifecycle_state")
-  lifecycleChangedAt  DateTime? @map("lifecycle_changed_at")
-  source              String?   @default("admin")
-  dateOfBirth         DateTime? @map("date_of_birth") @db.Date
-  avatarUrl           String?   @map("avatar_url")
-  commsPreferences    Json      @default("{}") @map("comms_preferences")
-  engagementScore     Int?      @map("engagement_score")
-  engagementBand      String?   @map("engagement_band")
-  lastActivityAt      DateTime? @map("last_activity_at")
-  mergedIntoId        String?   @map("merged_into_id") @db.Uuid
-  isPrimary           Boolean   @default(true) @map("is_primary")
-
-  createdAt           DateTime  @default(now()) @map("created_at")
-  updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at")
-
-  lifecycleHistory      LifecycleHistory[]
-  personTags            PersonTag[]
-  personRoles           PersonRole[]
-  householdMemberships  HouseholdMember[]
-  relationshipsFrom     PersonRelationship[] @relation("RelationshipFrom")
-  relationshipsTo       PersonRelationship[] @relation("RelationshipTo")
-
+  @@index([tenantId, email], map: "customers_tenant_email_idx")
+  @@index([tenantId, email], map: "customers_tenant_id_email_idx")
+  @@index([tenantId], map: "customers_tenant_id_idx")
+  @@index([tenantId, engagementBand], map: "idx_customers_tenant_engagement")
+  @@index([tenantId, lifecycleState], map: "idx_customers_tenant_lifecycle")
   @@map("persons")
   @@schema("people")
-  @@index([tenantId])
-  @@index([tenantId, email])
-  @@index([tenantId, lifecycleState])
-  @@index([tenantId, engagementBand])
-  @@index([tenantId, lastActivityAt])
 }
 
 model LifecycleHistory {
@@ -75,29 +71,26 @@ model LifecycleHistory {
   reason     String?
   changedBy  String?  @map("changed_by")
   changedAt  DateTime @default(now()) @map("changed_at")
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
-  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-
+  @@index([tenantId], map: "idx_lifecycle_history_tenant")
   @@map("lifecycle_history")
   @@schema("people")
-  @@index([customerId, changedAt])
-  @@index([tenantId])
 }
 
 model Tag {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId  String   @map("tenant_id") @db.Uuid
-  name      String
-  colour    String?
-  source    String   @default("manual")
-  createdAt DateTime @default(now()) @map("created_at")
-
+  id         String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId   String      @map("tenant_id") @db.Uuid
+  name       String
+  colour     String?
+  source     String      @default("manual")
+  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
   personTags PersonTag[]
 
   @@unique([tenantId, name])
+  @@index([tenantId], map: "idx_tags_tenant")
   @@map("tags")
   @@schema("people")
-  @@index([tenantId])
 }
 
 model PersonRole {
@@ -115,14 +108,13 @@ model PersonRole {
   assignedBy   String?   @map("assigned_by")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at")
+  customer     Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
-  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-
+  @@index([customerId], map: "idx_person_roles_customer")
+  @@index([tenantId], map: "idx_person_roles_tenant")
+  @@index([tenantId, role], map: "idx_person_roles_tenant_role")
   @@map("person_roles")
   @@schema("people")
-  @@index([tenantId])
-  @@index([customerId])
-  @@index([tenantId, role])
 }
 
 model PersonTag {
@@ -132,119 +124,101 @@ model PersonTag {
   appliedBy  String?   @map("applied_by")
   appliedAt  DateTime  @default(now()) @map("applied_at")
   expiresAt  DateTime? @map("expires_at")
-
-  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  tag      Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tag        Tag       @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([customerId, tagId])
+  @@index([customerId], map: "idx_person_tags_customer")
+  @@index([tagId], map: "idx_person_tags_tag")
+  @@index([tenantId], map: "idx_person_tags_tenant")
   @@map("person_tags")
   @@schema("people")
-  @@index([customerId])
-  @@index([tagId])
-  @@index([tenantId])
 }
 
 model Household {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId  String   @map("tenant_id") @db.Uuid
+  id        String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String            @map("tenant_id") @db.Uuid
   name      String
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @default(now()) @updatedAt @map("updated_at")
+  members   HouseholdMember[]
 
-  members HouseholdMember[]
-
+  @@index([tenantId], map: "idx_households_tenant")
   @@map("households")
   @@schema("people")
-  @@index([tenantId])
 }
 
 model HouseholdMember {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId    String   @map("tenant_id") @db.Uuid
-  householdId String   @map("household_id") @db.Uuid
-  customerId  String   @map("customer_id") @db.Uuid
-  role        String   @default("member")
-  createdAt   DateTime @default(now()) @map("created_at")
-
-  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
-  customer  Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  householdId String    @map("household_id") @db.Uuid
+  customerId  String    @map("customer_id") @db.Uuid
+  role        String    @default("member")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  customer    Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
 
   @@unique([householdId, customerId])
+  @@index([customerId], map: "idx_household_members_customer")
+  @@index([householdId], map: "idx_household_members_household")
+  @@index([tenantId], map: "idx_household_members_tenant")
   @@map("household_members")
   @@schema("people")
-  @@index([householdId])
-  @@index([customerId])
-  @@index([tenantId])
 }
 
 model PersonRelationship {
-  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId         String   @map("tenant_id") @db.Uuid
-  fromCustomerId   String   @map("from_customer_id") @db.Uuid
-  toCustomerId     String   @map("to_customer_id") @db.Uuid
-  relationship     String   // 'parent' | 'guardian' | 'child' | 'sibling' | 'spouse' | 'other'
-  createdAt        DateTime @default(now()) @map("created_at")
-
-  fromCustomer Customer @relation("RelationshipFrom", fields: [fromCustomerId], references: [id], onDelete: Cascade)
-  toCustomer   Customer @relation("RelationshipTo",   fields: [toCustomerId],   references: [id], onDelete: Cascade)
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  fromCustomerId String   @map("from_customer_id") @db.Uuid
+  toCustomerId   String   @map("to_customer_id") @db.Uuid
+  relationship   String
+  createdAt      DateTime @default(now()) @map("created_at")
+  fromCustomer   Customer @relation("RelationshipFrom", fields: [fromCustomerId], references: [id], onDelete: Cascade)
+  toCustomer     Customer @relation("RelationshipTo", fields: [toCustomerId], references: [id], onDelete: Cascade)
 
   @@unique([fromCustomerId, toCustomerId, relationship])
+  @@index([fromCustomerId], map: "idx_person_relationships_from")
+  @@index([tenantId], map: "idx_person_relationships_tenant")
+  @@index([toCustomerId], map: "idx_person_relationships_to")
   @@map("person_relationships")
   @@schema("people")
-  @@index([fromCustomerId])
-  @@index([toCustomerId])
-  @@index([tenantId])
 }
-
-// ─── Activity Timeline ────────────────────────────────────────────────────────
 
 model PersonActivity {
   id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId   String   @map("tenant_id") @db.Uuid
   personId   String   @map("person_id") @db.Uuid
-
-  // Domain event type that created this activity: 'booking.confirmed', 'membership.activated', etc.
   eventType  String   @map("event_type")
-
   title      String
-  // Additional structured data (booking ref, amount, etc.)
   meta       Json     @default("{}")
-
-  // Reference back to the source record in another service (no hard FK)
   sourceId   String?  @map("source_id")
-  occurredAt DateTime @map("occurred_at")
-  createdAt  DateTime @default(now()) @map("created_at")
+  occurredAt DateTime @map("occurred_at") @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  persons    Customer @relation(fields: [personId], references: [id], onDelete: Cascade)
 
+  @@index([tenantId, eventType], map: "idx_person_activities_event_type")
+  @@index([tenantId, personId, occurredAt(sort: Desc)], map: "idx_person_activities_person")
   @@map("person_activities")
   @@schema("people")
-  @@index([tenantId, personId, occurredAt(sort: Desc)])
-  @@index([tenantId, eventType])
 }
 
-// ─── Segments ────────────────────────────────────────────────────────────────
-
 model Segment {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId    String   @map("tenant_id") @db.Uuid
+  id          String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String              @map("tenant_id") @db.Uuid
   name        String
   description String?
-  // 'static' | 'dynamic'
-  type        String   @default("static")
-  // For dynamic segments: array of condition objects { field, op, value }
-  conditions  Json     @default("[]")
-  // Cached count for display — updated by rebuild task
-  memberCount Int      @default(0) @map("member_count")
-  lastBuiltAt DateTime? @map("last_built_at")
-
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
-
+  type        String              @default("static")
+  conditions  Json                @default("[]")
+  memberCount Int                 @default(0) @map("member_count")
+  lastBuiltAt DateTime?           @map("last_built_at") @db.Timestamptz(6)
+  createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   memberships SegmentMembership[]
 
+  @@index([tenantId], map: "idx_segments_tenant")
+  @@index([tenantId, type], map: "idx_segments_tenant_type")
   @@map("segments")
   @@schema("people")
-  @@index([tenantId])
-  @@index([tenantId, type])
 }
 
 model SegmentMembership {
@@ -252,14 +226,14 @@ model SegmentMembership {
   tenantId  String   @map("tenant_id") @db.Uuid
   segmentId String   @map("segment_id") @db.Uuid
   personId  String   @map("person_id") @db.Uuid
-  addedAt   DateTime @default(now()) @map("added_at")
-  addedBy   String?  @map("added_by") // 'system' (dynamic rebuild) | admin id
-
-  segment Segment @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+  addedAt   DateTime @default(now()) @map("added_at") @db.Timestamptz(6)
+  addedBy   String?  @map("added_by")
+  persons   Customer @relation(fields: [personId], references: [id], onDelete: Cascade)
+  segment   Segment  @relation(fields: [segmentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([segmentId, personId])
+  @@index([tenantId, personId], map: "idx_segment_memberships_person")
+  @@index([segmentId], map: "idx_segment_memberships_segment")
   @@map("segment_memberships")
   @@schema("people")
-  @@index([segmentId])
-  @@index([tenantId, personId])
 }

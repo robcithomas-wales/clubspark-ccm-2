@@ -18,8 +18,8 @@ interface CreateInput {
   name: string
   code?: string | null
   description?: string | null
-  ownershipType?: string | null
-  durationType?: string | null
+  ownershipType: string
+  durationType: string
   visibility?: string | null
   status?: string
   sortOrder?: number | null
@@ -92,11 +92,18 @@ export class MembershipPlansRepository {
         name: input.name,
         code: input.code ?? null,
         description: input.description ?? null,
-        ownershipType: input.ownershipType ?? null,
-        durationType: input.durationType ?? null,
-        visibility: input.visibility ?? null,
+        // These are NOT NULL in the database. schema.prisma previously declared
+        // them nullable, so `?? null` typechecked while being a guaranteed
+        // runtime failure whenever the caller omitted one. Introspection
+        // corrected the types and surfaced it.
+        //
+        // visibility and sortOrder have database defaults, so they are omitted
+        // when absent; ownershipType and durationType have none and are required.
+        ownershipType: input.ownershipType,
+        durationType: input.durationType,
+        ...(input.visibility != null ? { visibility: input.visibility } : {}),
         status: input.status ?? 'active',
-        sortOrder: input.sortOrder ?? null,
+        ...(input.sortOrder != null ? { sortOrder: input.sortOrder } : {}),
         membershipType: input.membershipType ?? null,
         sportCategory: input.sportCategory ?? null,
         maxMembers: input.maxMembers ?? null,
@@ -115,7 +122,12 @@ export class MembershipPlansRepository {
     return this.format(plan)
   }
 
-  async setEligibility(tenantId: string, organisationId: string, id: string, eligibility: Record<string, unknown>) {
+  async setEligibility(
+    tenantId: string,
+    organisationId: string,
+    id: string,
+    eligibility: Record<string, unknown>,
+  ) {
     const existing = await this.prisma.membershipPlan.findFirst({
       where: { id, tenantId, organisationId },
     })
@@ -142,23 +154,35 @@ export class MembershipPlansRepository {
         name: input.name ?? existing.name,
         code: input.code !== undefined ? input.code : existing.code,
         description: input.description !== undefined ? input.description : existing.description,
-        ownershipType: input.ownershipType !== undefined ? input.ownershipType : existing.ownershipType,
-        durationType: input.durationType !== undefined ? input.durationType : existing.durationType,
-        visibility: input.visibility !== undefined ? input.visibility : existing.visibility,
+        ownershipType: input.ownershipType ?? existing.ownershipType,
+        durationType: input.durationType ?? existing.durationType,
+        // NOT NULL columns: `null` from the caller means "leave unchanged",
+        // never "write null" — which the old nullable typings allowed.
+        visibility: input.visibility ?? existing.visibility,
         status: input.status ?? existing.status,
-        sortOrder: input.sortOrder !== undefined ? input.sortOrder : existing.sortOrder,
-        membershipType: input.membershipType !== undefined ? input.membershipType : existing.membershipType,
-        sportCategory: input.sportCategory !== undefined ? input.sportCategory : existing.sportCategory,
+        sortOrder: input.sortOrder ?? existing.sortOrder,
+        membershipType:
+          input.membershipType !== undefined ? input.membershipType : existing.membershipType,
+        sportCategory:
+          input.sportCategory !== undefined ? input.sportCategory : existing.sportCategory,
         maxMembers: input.maxMembers !== undefined ? input.maxMembers : existing.maxMembers,
         isPublic: input.isPublic !== undefined ? input.isPublic : existing.isPublic,
         pricingModel: input.pricingModel !== undefined ? input.pricingModel : existing.pricingModel,
         price: input.price !== undefined ? input.price : existing.price,
         currency: input.currency ?? existing.currency,
-        billingInterval: input.billingInterval !== undefined ? input.billingInterval : existing.billingInterval,
-        instalmentCount: input.instalmentCount !== undefined ? input.instalmentCount : existing.instalmentCount,
-        eligibility: (input.eligibility !== undefined ? input.eligibility : existing.eligibility) as any,
-        gracePeriodDays: input.gracePeriodDays !== undefined ? input.gracePeriodDays : existing.gracePeriodDays,
-        termsAndConditions: input.termsAndConditions !== undefined ? input.termsAndConditions : existing.termsAndConditions,
+        billingInterval:
+          input.billingInterval !== undefined ? input.billingInterval : existing.billingInterval,
+        instalmentCount:
+          input.instalmentCount !== undefined ? input.instalmentCount : existing.instalmentCount,
+        eligibility: (input.eligibility !== undefined
+          ? input.eligibility
+          : existing.eligibility) as any,
+        gracePeriodDays:
+          input.gracePeriodDays !== undefined ? input.gracePeriodDays : existing.gracePeriodDays,
+        termsAndConditions:
+          input.termsAndConditions !== undefined
+            ? input.termsAndConditions
+            : existing.termsAndConditions,
       },
       include: { scheme: { select: { name: true } } },
     })

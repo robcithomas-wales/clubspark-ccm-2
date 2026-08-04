@@ -41,6 +41,8 @@ interface ListInput {
   paymentStatus?: string | null
   renewingWithinDays?: number | null
   customerId?: string | null
+  // Nullable here on purpose, unlike WriteInput below: these are query filters,
+  // where absent means "do not filter by owner" rather than "no owner".
   ownerType?: string | null
   ownerId?: string | null
   search?: string | null
@@ -53,8 +55,9 @@ interface WriteInput {
   organisationId: string
   planId: string
   customerId?: string | null
-  ownerType?: string | null
-  ownerId?: string | null
+  // NOT NULL in the database with no default — a membership must have an owner.
+  ownerType: string
+  ownerId: string
   memberRole?: string | null
   status: string
   startDate: string
@@ -147,15 +150,16 @@ export class MembershipsRepository {
         organisationId: input.organisationId,
         planId: input.planId,
         customerId: input.customerId ?? null,
-        ownerType: input.ownerType ?? null,
-        ownerId: input.ownerId ?? null,
+        ownerType: input.ownerType,
+        ownerId: input.ownerId,
         memberRole: input.memberRole ?? null,
         status: input.status,
         startDate: new Date(input.startDate),
         endDate: input.endDate ? new Date(input.endDate) : null,
         renewalDate: input.renewalDate ? new Date(input.renewalDate) : null,
         autoRenew: input.autoRenew,
-        paymentStatus: input.paymentStatus ?? null,
+        // NOT NULL with a database default — omit rather than write null.
+        ...(input.paymentStatus != null ? { paymentStatus: input.paymentStatus } : {}),
         reference: input.reference ?? null,
         source: input.source ?? null,
         notes: input.notes ?? null,
@@ -190,7 +194,7 @@ export class MembershipsRepository {
         endDate: input.endDate ? new Date(input.endDate) : null,
         renewalDate: input.renewalDate ? new Date(input.renewalDate) : null,
         autoRenew: input.autoRenew,
-        paymentStatus: input.paymentStatus ?? null,
+        ...(input.paymentStatus != null ? { paymentStatus: input.paymentStatus } : {}),
         reference: input.reference ?? null,
         source: input.source ?? null,
         notes: input.notes ?? null,

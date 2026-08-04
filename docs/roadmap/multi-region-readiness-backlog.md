@@ -94,10 +94,16 @@ execution can follow, but the decision shapes every auth touchpoint.
 
 ## MR-8 — Residual cleanups 🟢
 
-- **3 services in `KNOWN_DRIFT`** (booking, membership, people): they declare relations with no
-  backing foreign key, so introspection drops the field and the code stops compiling. Needs a
-  decision per relation — add the FK, or keep it application-level?
-- **3 orphaned schemas** (`identity`, `crm`, `customer` — 13 empty, unreferenced tables).
+- ~~3 services in `KNOWN_DRIFT`~~ ✅ **Done 2026-08-04.** The 15 missing foreign keys were added, all
+  14 services are clean, and the allowlist is empty.
+- **3 orphaned schemas** (`identity`, `crm`, `customer` — 13 empty, unreferenced tables). These now
+  hold the platform's **only remaining cross-schema foreign keys — 16 of them**, all internal to the
+  three dead schemas plus two `crm -> identity` keys. Every service schema is clean. Dropping the
+  schemas removes all 16 at once.
+  ⚠️ No service owns these schemas, so the drop has nowhere natural to live — it belongs in
+  `scripts/sql/` alongside the shared bootstrap, not in a service's migrations. That ownership
+  question is the only reason this is still open; the SQL itself is three `DROP SCHEMA ... CASCADE`
+  statements against empty tables.
 - **`public._prisma_migrations_pre_20260731`** — the retired shared migrations table.
 
 ---

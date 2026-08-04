@@ -8,105 +8,95 @@
 
 generator client {
   provider        = "prisma-client-js"
-  previewFeatures = ["multiSchema"]
   output          = "../src/generated/prisma"
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   // Migrations and introspection need a session-mode connection. Supabase's
   // transaction pooler (port 6543) silently HANGS on DDL; port 5432 works.
   directUrl = env("DIRECT_DATABASE_URL")
-  schemas  = ["booking"]
+  schemas   = ["booking"]
 }
 
-// ─── booking schema (owned) ───────────────────────────────────────────────────
-
 model BookingSeries {
-  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId       String    @map("tenant_id") @db.Uuid
-  organisationId String?   @map("organisation_id") @db.Uuid
-  venueId        String    @map("venue_id") @db.Uuid
-  resourceId     String    @map("resource_id") @db.Uuid
-  bookableUnitId String    @map("bookable_unit_id") @db.Uuid
-  customerId     String?   @map("customer_id") @db.Uuid
-  bookingSource  String?   @map("booking_source")
-  rrule          String
-  slotStartsAt   String    @map("slot_starts_at")
-  slotEndsAt     String    @map("slot_ends_at")
-  paymentStatus  String    @default("unpaid") @map("payment_status")
-  notes            String?
-  minSessions      Int?      @map("min_sessions")
-  maxSessions      Int?      @map("max_sessions")
-  // Series discount: stored price per session and discount percentage applied at booking creation
-  pricePerSession  Decimal?  @map("price_per_session") @db.Decimal(10, 2)
-  discountPct      Decimal?  @map("discount_pct") @db.Decimal(5, 2)
-  currency         String    @default("GBP") @db.Char(3)
-  status      String    @default("active")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String    @map("tenant_id") @db.Uuid
+  organisationId  String?   @map("organisation_id") @db.Uuid
+  venueId         String    @map("venue_id") @db.Uuid
+  resourceId      String    @map("resource_id") @db.Uuid
+  bookableUnitId  String    @map("bookable_unit_id") @db.Uuid
+  customerId      String?   @map("customer_id") @db.Uuid
+  bookingSource   String?   @map("booking_source")
+  rrule           String
+  slotStartsAt    String    @map("slot_starts_at")
+  slotEndsAt      String    @map("slot_ends_at")
+  paymentStatus   String    @default("unpaid") @map("payment_status")
+  notes           String?
+  status          String    @default("active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
+  minSessions     Int?      @map("min_sessions")
+  maxSessions     Int?      @map("max_sessions")
+  pricePerSession Decimal?  @map("price_per_session") @db.Decimal(10, 2)
+  discountPct     Decimal?  @map("discount_pct") @db.Decimal(5, 2)
+  currency        String    @default("GBP") @db.Char(3)
+  bookings        Booking[]
 
-  bookings Booking[]
-
+  @@index([tenantId], map: "booking_series_tenant_idx")
+  @@index([tenantId, status], map: "booking_series_tenant_status_idx")
   @@map("booking_series")
   @@schema("booking")
-  @@index([tenantId])
-  @@index([tenantId, status])
 }
 
 model Booking {
-  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId         String    @map("tenant_id") @db.Uuid
-  organisationId   String?   @map("organisation_id") @db.Uuid
-  venueId          String    @map("venue_id") @db.Uuid
-  resourceId       String    @map("resource_id") @db.Uuid
-  bookableUnitId   String    @map("bookable_unit_id") @db.Uuid
-  customerId       String?   @map("customer_id") @db.Uuid
-  bookingSource    String?   @map("booking_source")
-  startsAt         DateTime  @map("starts_at")
-  endsAt           DateTime  @map("ends_at")
-  status           String    @default("active")
-  paymentStatus    String    @default("unpaid") @map("payment_status")
-  bookingReference String    @map("booking_reference")
-  notes           String?
-  optionalUnitIds String[]  @default([]) @map("optional_unit_ids") @db.Uuid
-  adminOverride   Boolean   @default(false) @map("admin_override")
-  approvedBy      String?   @map("approved_by")
-  approvedAt      DateTime? @map("approved_at")
-  cancelledAt     DateTime? @map("cancelled_at")
-  price           Decimal?  @db.Decimal(10, 2)
-  currency        String    @default("GBP") @db.Char(3)
-  seriesId        String?   @map("series_id") @db.Uuid
-  // Cross-service references to coaching-service (no hard FK constraint)
-  coachId         String?   @map("coach_id") @db.Uuid
-  lessonTypeId    String?   @map("lesson_type_id") @db.Uuid
-  // Set by the reminder cron task so each booking only receives one reminder
-  reminderSentAt  DateTime? @map("reminder_sent_at")
-  // When an admin or parent books on behalf of another person (e.g. parent → child)
-  bookedForPersonId String? @map("booked_for_person_id") @db.Uuid
-  // Computed by refund policy on cancellation — null = no refund applicable
-  refundPct    Decimal? @map("refund_pct") @db.Decimal(5, 2)
-  refundAmount Decimal? @map("refund_amount") @db.Decimal(10, 2)
-  refundStatus String?  @map("refund_status") // pending | processed | waived
-  // Cross-service reference to order-service (no hard FK)
-  orderId      String?  @map("order_id") @db.Uuid
-  createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
+  id                String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String                @map("tenant_id") @db.Uuid
+  venueId           String                @map("venue_id") @db.Uuid
+  resourceId        String                @map("resource_id") @db.Uuid
+  bookableUnitId    String                @map("bookable_unit_id") @db.Uuid
+  customerId        String?               @map("customer_id") @db.Uuid
+  startsAt          DateTime              @map("starts_at") @db.Timestamptz(6)
+  endsAt            DateTime              @map("ends_at") @db.Timestamptz(6)
+  status            String                @default("active")
+  bookingReference  String?               @map("booking_reference")
+  notes             String?
+  createdAt         DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime              @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  cancelledAt       DateTime?             @map("cancelled_at") @db.Timestamptz(6)
+  bookingSource     String?               @map("booking_source")
+  organisationId    String?               @map("organisation_id") @db.Uuid
+  paymentStatus     String                @default("unpaid") @map("payment_status") @db.VarChar(20)
+  seriesId          String?               @map("series_id") @db.Uuid
+  optionalUnitIds   String[]              @default([]) @map("optional_unit_ids") @db.Uuid
+  approvedBy        String?               @map("approved_by")
+  approvedAt        DateTime?             @map("approved_at") @db.Timestamptz(6)
+  adminOverride     Boolean               @default(false) @map("admin_override")
+  price             Decimal?              @db.Decimal(10, 2)
+  currency          String                @default("GBP") @db.Char(3)
+  lessonTypeId      String?               @map("lesson_type_id") @db.Uuid
+  coachId           String?               @map("coach_id") @db.Uuid
+  reminderSentAt    DateTime?             @map("reminder_sent_at") @db.Timestamptz(6)
+  bookedForPersonId String?               @map("booked_for_person_id") @db.Uuid
+  refundPct         Decimal?              @map("refund_pct") @db.Decimal(5, 2)
+  refundAmount      Decimal?              @map("refund_amount") @db.Decimal(10, 2)
+  refundStatus      String?               @map("refund_status")
+  addOns            BookingAddOn[]
+  participants      BookingParticipant[]
+  paymentSplits     BookingPaymentSplit[]
+  series            BookingSeries?        @relation(fields: [seriesId], references: [id])
 
-  series        BookingSeries?       @relation(fields: [seriesId], references: [id])
-  addOns        BookingAddOn[]
-  participants  BookingParticipant[]
-  paymentSplits BookingPaymentSplit[]
-
+  @@index([tenantId])
+  @@index([tenantId, customerId], map: "bookings_tenant_customer_idx")
+  @@index([tenantId, paymentStatus], map: "bookings_tenant_payment_status_idx")
+  @@index([tenantId, startsAt, endsAt], map: "bookings_tenant_starts_ends_idx")
+  @@index([tenantId, status], map: "bookings_tenant_status_idx")
+  @@index([tenantId, bookableUnitId], map: "bookings_tenant_unit_idx")
+  @@index([tenantId], map: "idx_bookings_tenant_id")
   @@map("bookings")
   @@schema("booking")
-  @@index([tenantId])
-  @@index([tenantId, startsAt, endsAt])
-  @@index([tenantId, bookableUnitId])
-  @@index([tenantId, customerId])
-  @@index([tenantId, status])
-  @@index([seriesId])
 }
 
 model BookingAddOn {
@@ -120,279 +110,201 @@ model BookingAddOn {
   endsAt    DateTime @map("ends_at")
   status    String   @default("active")
   createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  booking Booking @relation(fields: [bookingId], references: [id])
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  booking   Booking  @relation(fields: [bookingId], references: [id])
 
   @@map("booking_add_ons")
   @@schema("booking")
-  @@index([bookingId])
 }
 
 model BookingRule {
-  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId             String    @map("tenant_id") @db.Uuid
+  id                   String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId             String                    @map("tenant_id") @db.Uuid
   name                 String
   description          String?
-
-  subjectType          String    @default("everyone") @map("subject_type")
-  subjectRef           String?   @map("subject_ref")
-
-  scopeType            String    @default("organisation") @map("scope_type")
-  scopeId              String?   @map("scope_id") @db.Uuid
-
-  daysOfWeek           Int[]     @map("days_of_week")
-  timeFrom             String?   @map("time_from")
-  timeTo               String?   @map("time_to")
-
-  canBook              Boolean   @default(true) @map("can_book")
-  requiresApproval     Boolean   @default(false) @map("requires_approval")
-
-  advanceDays          Int?      @map("advance_days")
-  minSlotMinutes       Int?      @map("min_slot_minutes")
-  maxSlotMinutes       Int?      @map("max_slot_minutes")
-  bookingPeriodDays    Int?      @map("booking_period_days")
-  maxBookingsPerPeriod Int?      @map("max_bookings_per_period")
-  allowSeries          Boolean   @default(true) @map("allow_series")
-
-  pricePerSlot         Decimal?  @map("price_per_slot") @db.Decimal(10, 2)
-  priceCurrency        String    @default("GBP") @map("price_currency") @db.VarChar(3)
-
-  minParticipants      Int?      @map("min_participants")
-  maxParticipants      Int?      @map("max_participants")
-
-  priority             Int       @default(0)
-  isActive             Boolean   @default(true) @map("is_active")
-  createdAt            DateTime  @default(now()) @map("created_at")
-  updatedAt            DateTime  @updatedAt @map("updated_at")
-
+  subjectType          String                    @default("everyone") @map("subject_type")
+  subjectRef           String?                   @map("subject_ref")
+  scopeType            String                    @default("organisation") @map("scope_type")
+  scopeId              String?                   @map("scope_id") @db.Uuid
+  daysOfWeek           Int[]                     @map("days_of_week")
+  timeFrom             String?                   @map("time_from")
+  timeTo               String?                   @map("time_to")
+  canBook              Boolean                   @default(true) @map("can_book")
+  requiresApproval     Boolean                   @default(false) @map("requires_approval")
+  advanceDays          Int?                      @map("advance_days")
+  minSlotMinutes       Int?                      @map("min_slot_minutes")
+  maxSlotMinutes       Int?                      @map("max_slot_minutes")
+  bookingPeriodDays    Int?                      @map("booking_period_days")
+  maxBookingsPerPeriod Int?                      @map("max_bookings_per_period")
+  allowSeries          Boolean                   @default(true) @map("allow_series")
+  pricePerSlot         Decimal?                  @map("price_per_slot") @db.Decimal(10, 2)
+  priceCurrency        String                    @default("GBP") @map("price_currency") @db.VarChar(3)
+  minParticipants      Int?                      @map("min_participants")
+  maxParticipants      Int?                      @map("max_participants")
+  priority             Int                       @default(0)
+  isActive             Boolean                   @default(true) @map("is_active")
+  createdAt            DateTime                  @default(now()) @map("created_at")
+  updatedAt            DateTime                  @default(now()) @updatedAt @map("updated_at")
   purposePrices        BookingRulePurposePrice[]
 
+  @@index([tenantId, scopeType, scopeId], map: "booking_rules_scope_idx")
+  @@index([tenantId, isActive], map: "booking_rules_tenant_active_idx")
+  @@index([tenantId], map: "booking_rules_tenant_idx")
   @@map("booking_rules")
   @@schema("booking")
-  @@index([tenantId])
-  @@index([tenantId, isActive])
-  @@index([tenantId, scopeType, scopeId])
 }
 
 model BookingRulePurposePrice {
-  id       String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  ruleId   String  @map("rule_id") @db.Uuid
+  id       String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ruleId   String      @map("rule_id") @db.Uuid
   purpose  String
-  price    Decimal @db.Decimal(10, 2)
-  currency String  @default("GBP") @db.VarChar(3)
-
-  rule BookingRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  price    Decimal     @db.Decimal(10, 2)
+  currency String      @default("GBP") @db.VarChar(3)
+  rule     BookingRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
 
   @@unique([ruleId, purpose])
+  @@index([ruleId], map: "booking_rule_purpose_prices_rule_idx")
   @@map("booking_rule_purpose_prices")
   @@schema("booking")
-  @@index([ruleId])
 }
 
 model PricingRule {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId    String   @map("tenant_id") @db.Uuid
-  name        String
-  label       String?  // displayed in price breakdowns: "Peak", "Off-Peak", "Evening"
-  description String?
-
-  // Scope — rules narrow from organisation down to individual bookable unit.
-  // More specific scopes take precedence via priority ordering.
-  scopeType   String  @default("organisation") @map("scope_type")
-  // 'organisation' | 'venue' | 'resource_group' | 'resource' | 'bookable_unit'
-  scopeId     String? @map("scope_id") @db.Uuid
-
-  // Time window — empty daysOfWeek = all days; null time = all hours
-  daysOfWeek  Int[]   @default([]) @map("days_of_week") // 0=Sun … 6=Sat
-  timeFrom    String? @map("time_from")                 // "HH:MM"
-  timeTo      String? @map("time_to")                   // "HH:MM"
-
-  // Pricing
+  id                       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId                 String   @map("tenant_id") @db.Uuid
+  name                     String
+  label                    String?
+  description              String?
+  scopeType                String   @default("organisation") @map("scope_type")
+  scopeId                  String?  @map("scope_id") @db.Uuid
+  daysOfWeek               Int[]    @default([]) @map("days_of_week")
+  timeFrom                 String?  @map("time_from")
+  timeTo                   String?  @map("time_to")
   ratePerHour              Decimal  @map("rate_per_hour") @db.Decimal(10, 2)
   currency                 String   @default("GBP") @db.VarChar(3)
-  // Applied on top of ratePerHour when the resource has hasLighting = true
   lightingSurchargePerHour Decimal? @map("lighting_surcharge_per_hour") @db.Decimal(10, 2)
-  // Override the membership-service discount. Null = use membership-service value.
   memberDiscountPct        Decimal? @map("member_discount_pct") @db.Decimal(5, 2)
+  priority                 Int      @default(0)
+  isActive                 Boolean  @default(true) @map("is_active")
+  createdAt                DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  priority  Int     @default(0)
-  isActive  Boolean @default(true) @map("is_active")
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
+  @@index([tenantId, scopeType, scopeId], map: "pricing_rules_scope_idx")
+  @@index([tenantId, isActive], map: "pricing_rules_tenant_active_idx")
+  @@index([tenantId], map: "pricing_rules_tenant_idx")
   @@map("pricing_rules")
   @@schema("booking")
-  @@index([tenantId])
-  @@index([tenantId, isActive])
-  @@index([tenantId, scopeType, scopeId])
 }
 
 model RefundPolicy {
   id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId         String   @map("tenant_id") @db.Uuid
   name             String
-  // Scope: null venueId = applies to all venues for this tenant
   venueId          String?  @map("venue_id") @db.Uuid
-  // If cancelled >= hoursBeforeStart hours before start, this refundPct applies
   hoursBeforeStart Int      @map("hours_before_start")
   refundPct        Decimal  @map("refund_pct") @db.Decimal(5, 2)
-  // Lower priority number wins (most specific policy wins)
   priority         Int      @default(100)
   isActive         Boolean  @default(true) @map("is_active")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  @@index([tenantId], map: "idx_refund_policies_tenant")
+  @@index([tenantId, isActive], map: "idx_refund_policies_tenant_active")
+  @@index([tenantId, venueId], map: "idx_refund_policies_venue")
   @@map("refund_policies")
   @@schema("booking")
-  @@index([tenantId])
-  @@index([tenantId, isActive])
-  @@index([tenantId, venueId])
 }
-
-// ─── Booking Participants — additional players on a single booking ────────────
 
 model BookingParticipant {
-  id        String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  bookingId String @map("booking_id") @db.Uuid
-  tenantId  String @map("tenant_id") @db.Uuid
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId String   @map("booking_id") @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  personId  String?  @map("person_id") @db.Uuid
+  name      String
+  email     String?
+  phone     String?
+  notes     String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  // Optional link to people-service person (no hard FK)
-  personId String? @map("person_id") @db.Uuid
-
-  // Captured at time of adding (denormalised so display works without people-service)
-  name  String
-  email String?
-  phone String?
-  notes String?
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-
+  @@index([bookingId], map: "idx_booking_participants_booking_id")
+  @@index([tenantId, bookingId], map: "idx_booking_participants_tenant_booking")
   @@map("booking_participants")
   @@schema("booking")
-  @@index([bookingId])
-  @@index([tenantId, bookingId])
-  @@index([tenantId, personId])
 }
 
-// ─── Group Sessions — open bookable sessions with participant slots ───────────
-// Distinct from coaching-service LessonSession (coach-led individual/group lessons).
-// A GroupSession is a bookable slot (e.g. pay-and-play group court) with a
-// participant capacity and per-person pricing.
-
 model GroupSession {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId       String   @map("tenant_id") @db.Uuid
-  organisationId String?  @map("organisation_id") @db.Uuid
+  id                  String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId            String                    @map("tenant_id") @db.Uuid
+  organisationId      String?                   @map("organisation_id") @db.Uuid
+  venueId             String                    @map("venue_id") @db.Uuid
+  resourceId          String                    @map("resource_id") @db.Uuid
+  bookableUnitId      String                    @map("bookable_unit_id") @db.Uuid
+  name                String
+  description         String?
+  startsAt            DateTime                  @map("starts_at") @db.Timestamptz(6)
+  endsAt              DateTime                  @map("ends_at") @db.Timestamptz(6)
+  pricePerParticipant Decimal?                  @map("price_per_participant") @db.Decimal(10, 2)
+  currency            String                    @default("GBP") @db.Char(3)
+  minParticipants     Int?                      @map("min_participants")
+  maxParticipants     Int?                      @map("max_participants")
+  status              String                    @default("open")
+  coachId             String?                   @map("coach_id") @db.Uuid
+  notes               String?
+  createdAt           DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime                  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  participants        GroupSessionParticipant[]
 
-  venueId        String   @map("venue_id") @db.Uuid
-  resourceId     String   @map("resource_id") @db.Uuid
-  bookableUnitId String   @map("bookable_unit_id") @db.Uuid
-
-  name           String
-  description    String?
-  startsAt       DateTime @map("starts_at")
-  endsAt         DateTime @map("ends_at")
-
-  // Pricing — per participant
-  pricePerParticipant Decimal? @map("price_per_participant") @db.Decimal(10, 2)
-  currency            String   @default("GBP") @db.Char(3)
-
-  minParticipants Int? @map("min_participants")
-  maxParticipants Int? @map("max_participants")
-
-  // 'open' | 'full' | 'cancelled' | 'completed'
-  status String @default("open")
-
-  // Optional link to coaching-service coach (no hard FK)
-  coachId String? @map("coach_id") @db.Uuid
-
-  notes String?
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  participants GroupSessionParticipant[]
-
+  @@index([tenantId], map: "sessions_tenant_idx")
+  @@index([tenantId, startsAt], map: "sessions_tenant_starts_idx")
+  @@index([tenantId, status], map: "sessions_tenant_status_idx")
+  @@index([tenantId, bookableUnitId], map: "sessions_unit_idx")
   @@map("sessions")
   @@schema("booking")
-  @@index([tenantId])
-  @@index([tenantId, status])
-  @@index([tenantId, startsAt])
-  @@index([tenantId, bookableUnitId])
 }
 
 model GroupSessionParticipant {
-  id        String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  sessionId String @map("session_id") @db.Uuid
-  tenantId  String @map("tenant_id") @db.Uuid
+  id               String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId        String       @map("session_id") @db.Uuid
+  tenantId         String       @map("tenant_id") @db.Uuid
+  customerId       String?      @map("customer_id") @db.Uuid
+  participantName  String       @map("participant_name")
+  participantEmail String?      @map("participant_email")
+  status           String       @default("registered")
+  paymentStatus    String       @default("unpaid") @map("payment_status")
+  joinedAt         DateTime     @default(now()) @map("joined_at") @db.Timestamptz(6)
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  session          GroupSession @relation(fields: [sessionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  // Optional link to people-service (no hard FK)
-  customerId String? @map("customer_id") @db.Uuid
-
-  // Captured at registration time (denormalised for display without people-service lookup)
-  participantName  String  @map("participant_name")
-  participantEmail String? @map("participant_email")
-
-  // 'registered' | 'attended' | 'cancelled' | 'no_show'
-  status String @default("registered")
-
-  paymentStatus String @default("unpaid") @map("payment_status")
-
-  joinedAt  DateTime  @default(now()) @map("joined_at")
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-
-  session GroupSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-
+  @@index([tenantId, customerId], map: "session_participants_customer_idx")
+  @@index([sessionId], map: "session_participants_session_idx")
+  @@index([tenantId, sessionId], map: "session_participants_tenant_idx")
   @@map("session_participants")
   @@schema("booking")
-  @@index([sessionId])
-  @@index([tenantId, sessionId])
-  @@index([tenantId, customerId])
 }
-
-// ─── Booking Payment Splits — multiple payers contributing to a booking ──────
 
 model BookingPaymentSplit {
   id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   bookingId     String   @map("booking_id") @db.Uuid
   tenantId      String   @map("tenant_id") @db.Uuid
-  // Optional cross-service person link (no hard FK)
   payerPersonId String?  @map("payer_person_id") @db.Uuid
   payerName     String   @map("payer_name")
   payerEmail    String?  @map("payer_email")
   amountDue     Decimal  @map("amount_due") @db.Decimal(10, 2)
   amountPaid    Decimal  @default(0) @map("amount_paid") @db.Decimal(10, 2)
   currency      String   @default("GBP") @db.Char(3)
-  // unpaid | paid | partial | waived
   paymentStatus String   @default("unpaid") @map("payment_status")
   notes         String?
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  booking       Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-
+  @@index([bookingId], map: "idx_booking_payment_splits_booking")
+  @@index([tenantId, bookingId], map: "idx_booking_payment_splits_tenant")
   @@map("booking_payment_splits")
   @@schema("booking")
-  @@index([bookingId])
-  @@index([tenantId, bookingId])
 }
-
-// ─── venue schema ─────────────────────────────────────────────────────────────
-//
-// Deliberately NOT modelled here. venue.bookable_units / venue.resources are owned
-// by venue-service; booking-service reaches them only through raw SQL today, and
-// that coupling is being removed — see WO-1.1 in docs/roadmap/phase-1-backlog.md.
-//
-// Do not re-add them as models: including another service's tables in this schema
-// makes `prisma migrate` believe it owns them (it would emit DROP TABLE against
-// venue's real data if the models were ever removed while "venue" stayed in the
-// datasource `schemas` list above).
 
 /// Transactional outbox (MR-2). Written in the same transaction as the state
 /// change that produced the event; delivered by OutboxRelay.

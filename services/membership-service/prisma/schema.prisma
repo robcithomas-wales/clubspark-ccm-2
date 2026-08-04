@@ -5,170 +5,170 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   // Migrations and introspection need a session-mode connection. Supabase's
   // transaction pooler (port 6543) silently HANGS on DDL; port 5432 works.
   directUrl = env("DIRECT_DATABASE_URL")
-  schemas  = ["membership"]
+  schemas   = ["membership"]
 }
 
 model MembershipScheme {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId       String   @map("tenant_id") @db.Uuid
-  organisationId String   @map("organisation_id") @db.Uuid
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String           @map("tenant_id") @db.Uuid
+  organisationId String           @map("organisation_id") @db.Uuid
   name           String
   description    String?
-  status         String   @default("active")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  status         String           @default("active")
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  plans          MembershipPlan[]
 
-  plans MembershipPlan[]
-
+  @@index([tenantId, organisationId, name], map: "membership_schemes_name_idx")
+  @@index([tenantId, organisationId], map: "membership_schemes_tenant_org_idx")
   @@map("membership_schemes")
   @@schema("membership")
 }
 
 model MembershipPlan {
-  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId         String   @map("tenant_id") @db.Uuid
-  organisationId   String   @map("organisation_id") @db.Uuid
-  schemeId         String   @map("scheme_id") @db.Uuid
-  name             String
-  code             String?
-  description      String?
-  ownershipType    String?  @map("ownership_type")
-  durationType     String?  @map("duration_type")
-  visibility       String?
-  status           String   @default("active")
-  sortOrder        Int?     @map("sort_order")
+  id                                String                             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId                          String                             @map("tenant_id") @db.Uuid
+  organisationId                    String                             @map("organisation_id") @db.Uuid
+  schemeId                          String                             @map("scheme_id") @db.Uuid
+  name                              String
+  code                              String?
+  description                       String?
+  ownershipType                     String                             @map("ownership_type")
+  durationType                      String                             @map("duration_type")
+  visibility                        String                             @default("public")
+  status                            String                             @default("active")
+  sortOrder                         Int                                @default(0) @map("sort_order")
+  createdAt                         DateTime                           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                         DateTime                           @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  membershipType                    String?                            @map("membership_type")
+  sportCategory                     String?                            @map("sport_category")
+  maxMembers                        Int?                               @map("max_members")
+  isPublic                          Boolean                            @default(false) @map("is_public")
+  pricingModel                      String?                            @map("pricing_model")
+  price                             Decimal?                           @db.Decimal(10, 2)
+  currency                          String                             @default("GBP")
+  billingInterval                   String?                            @map("billing_interval")
+  instalmentCount                   Int?                               @map("instalment_count")
+  eligibility                       Json?
+  gracePeriodDays                   Int?                               @map("grace_period_days")
+  termsAndConditions                String?                            @map("terms_and_conditions")
+  membership_plan_coverage_rules    membership_plan_coverage_rules?
+  membership_plan_duration          membership_plan_duration?
+  membership_plan_eligibility_rules membership_plan_eligibility_rules?
+  entitlements                      MembershipPlanEntitlement[]
+  membership_plan_payment_methods   membership_plan_payment_methods[]
+  membership_plan_pricing           membership_plan_pricing?
+  scheme                            MembershipScheme                   @relation(fields: [schemeId], references: [id])
+  memberships                       Membership[]
 
-  // Phase 1: membership type & structure
-  membershipType   String?  @map("membership_type")   // individual | family | group | team | organisation
-  sportCategory    String?  @map("sport_category")
-  maxMembers       Int?     @map("max_members")        // for family/group/team plans
-  isPublic         Boolean  @default(false) @map("is_public")
-
-  // Phase 1: pricing model
-  pricingModel     String?  @map("pricing_model")     // fixed | instalment | recurring | variable
-  price            Decimal? @db.Decimal(10, 2)
-  currency         String   @default("GBP")
-  billingInterval  String?  @map("billing_interval")  // monthly | quarterly | annual
-  instalmentCount  Int?     @map("instalment_count")
-
-  // Phase 1: eligibility rules (JSONB: minAge, maxAge, requiresExistingMembership, notes, etc.)
-  eligibility      Json?
-
-  // Phase 2: grace period and T&C
-  gracePeriodDays      Int?    @map("grace_period_days")
-  termsAndConditions   String? @map("terms_and_conditions")
-
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
-
-  scheme       MembershipScheme            @relation(fields: [schemeId], references: [id])
-  memberships  Membership[]
-  entitlements MembershipPlanEntitlement[]
-
+  @@index([tenantId, organisationId, name], map: "membership_plans_name_idx")
+  @@index([tenantId, schemeId], map: "membership_plans_scheme_idx")
+  @@index([tenantId, organisationId], map: "membership_plans_tenant_org_idx")
   @@map("membership_plans")
   @@schema("membership")
 }
 
 model Membership {
-  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId       String    @map("tenant_id") @db.Uuid
-  organisationId String    @map("organisation_id") @db.Uuid
-  planId         String    @map("plan_id") @db.Uuid
-  customerId     String?   @map("customer_id") @db.Uuid
-  ownerType      String?   @map("owner_type")
-  ownerId        String?   @map("owner_id") @db.Uuid
-  // status: pending | active | suspended | lapsed | cancelled | expired
-  status         String    @default("pending")
-  startDate      DateTime  @map("start_date") @db.Date
-  endDate        DateTime? @map("end_date") @db.Date
-  renewalDate    DateTime? @map("renewal_date") @db.Date
-  autoRenew      Boolean   @default(false) @map("auto_renew")
-  paymentStatus  String?   @map("payment_status")
-  reference      String?
-  source         String?
-  notes          String?
+  id                      String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId                String                     @map("tenant_id") @db.Uuid
+  organisationId          String                     @map("organisation_id") @db.Uuid
+  planId                  String                     @map("plan_id") @db.Uuid
+  customerId              String?                    @map("customer_id") @db.Uuid
+  ownerType               String                     @map("owner_type")
+  ownerId                 String                     @map("owner_id") @db.Uuid
+  status                  String                     @default("pending")
+  startDate               DateTime                   @map("start_date") @db.Date
+  endDate                 DateTime?                  @map("end_date") @db.Date
+  renewalDate             DateTime?                  @map("renewal_date") @db.Date
+  autoRenew               Boolean                    @default(false) @map("auto_renew")
+  paymentStatus           String                     @default("unpaid") @map("payment_status")
+  createdAt               DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime                   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  reference               String?
+  source                  String?
+  notes                   String?
+  activatedAt             DateTime?                  @map("activated_at") @db.Timestamptz(6)
+  suspendedAt             DateTime?                  @map("suspended_at") @db.Timestamptz(6)
+  cancelledAt             DateTime?                  @map("cancelled_at") @db.Timestamptz(6)
+  lapsedAt                DateTime?                  @map("lapsed_at") @db.Timestamptz(6)
+  expiredAt               DateTime?                  @map("expired_at") @db.Timestamptz(6)
+  paymentRecordedAt       DateTime?                  @map("payment_recorded_at") @db.Timestamptz(6)
+  paymentReference        String?                    @map("payment_reference")
+  paymentMethod           String?                    @map("payment_method")
+  paymentAmount           Decimal?                   @map("payment_amount") @db.Decimal(10, 2)
+  memberRole              String?                    @map("member_role")
+  renewalReminderSentAt   DateTime?                  @map("renewal_reminder_sent_at") @db.Timestamptz(6)
+  membership_audit        membership_audit[]
+  lifecycleEvents         MembershipLifecycleEvent[]
+  membership_participants membership_participants[]
+  plan                    MembershipPlan             @relation(fields: [planId], references: [id])
 
-  // Phase 1: lifecycle timestamps
-  activatedAt    DateTime? @map("activated_at")
-  suspendedAt    DateTime? @map("suspended_at")
-  cancelledAt    DateTime? @map("cancelled_at")
-  lapsedAt       DateTime? @map("lapsed_at")
-  expiredAt      DateTime? @map("expired_at")
-
-  // Phase 2: member role within the plan (player | coach | parent | manager | admin | junior)
-  memberRole     String?   @map("member_role")
-
-  // Phase 2: manual payment recording
-  paymentRecordedAt DateTime? @map("payment_recorded_at")
-  paymentReference  String?   @map("payment_reference")
-  paymentMethod     String?   @map("payment_method")
-  paymentAmount     Decimal?  @map("payment_amount") @db.Decimal(10, 2)
-
-  // Renewal reminder — stamped when the reminder event is published to prevent duplicates
-  renewalReminderSentAt DateTime? @map("renewal_reminder_sent_at")
-
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
-
-  plan            MembershipPlan           @relation(fields: [planId], references: [id])
-  lifecycleEvents MembershipLifecycleEvent[]
-
+  @@index([customerId], map: "idx_memberships_customer_id")
+  @@index([tenantId, customerId], map: "memberships_customer_idx")
+  @@index([tenantId, ownerType, ownerId], map: "memberships_owner_idx")
+  @@index([tenantId, planId], map: "memberships_plan_idx")
+  @@index([tenantId, organisationId, status], map: "memberships_status_idx")
+  @@index([tenantId, organisationId], map: "memberships_tenant_org_idx")
   @@map("memberships")
   @@schema("membership")
 }
 
 model MembershipLifecycleEvent {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  membershipId String   @map("membership_id") @db.Uuid
-  fromStatus   String   @map("from_status")
-  toStatus     String   @map("to_status")
+  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  membershipId String     @map("membership_id") @db.Uuid
+  fromStatus   String     @map("from_status")
+  toStatus     String     @map("to_status")
   reason       String?
-  createdBy    String?  @map("created_by")
-  createdAt    DateTime @default(now()) @map("created_at")
-
-  membership Membership @relation(fields: [membershipId], references: [id])
+  createdBy    String?    @map("created_by")
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  membership   Membership @relation(fields: [membershipId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@map("membership_lifecycle_events")
   @@schema("membership")
 }
 
 model EntitlementPolicy {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId       String   @map("tenant_id") @db.Uuid
-  organisationId String   @map("organisation_id") @db.Uuid
-  name           String
-  policyType     String?  @map("policy_type")
-  description    String?
-  status         String   @default("active")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
-
+  id               String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String                      @map("tenant_id") @db.Uuid
+  organisationId   String                      @map("organisation_id") @db.Uuid
+  name             String
+  policyType       String?                     @map("policy_type")
+  description      String?
+  status           String                      @default("active")
+  createdAt        DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime                    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   planEntitlements MembershipPlanEntitlement[]
 
+  @@index([tenantId, organisationId], map: "entitlement_policies_tenant_org_idx")
+  @@index([tenantId, organisationId, policyType], map: "entitlement_policies_type_idx")
+  @@index([tenantId, organisationId], map: "idx_entitlement_policies_tenant")
   @@map("entitlement_policies")
   @@schema("membership")
 }
 
 model MembershipPlanEntitlement {
-  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId            String   @map("tenant_id") @db.Uuid
-  planId              String   @map("plan_id") @db.Uuid
-  entitlementPolicyId String   @map("entitlement_policy_id") @db.Uuid
-  scopeType           String?  @map("scope_type")
-  scopeId             String?  @map("scope_id") @db.Uuid
-  configuration       Json     @default("{}")
-  priority            Int      @default(100)
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @updatedAt @map("updated_at")
+  id                  String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId            String            @map("tenant_id") @db.Uuid
+  planId              String            @map("plan_id") @db.Uuid
+  entitlementPolicyId String            @map("entitlement_policy_id") @db.Uuid
+  scopeType           String?           @map("scope_type")
+  scopeId             String?           @map("scope_id") @db.Uuid
+  configuration       Json              @default("{}")
+  priority            Int               @default(100)
+  createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  entitlementPolicy   EntitlementPolicy @relation(fields: [entitlementPolicyId], references: [id])
+  plan                MembershipPlan    @relation(fields: [planId], references: [id])
 
-  plan              MembershipPlan    @relation(fields: [planId], references: [id])
-  entitlementPolicy EntitlementPolicy @relation(fields: [entitlementPolicyId], references: [id])
-
+  @@index([tenantId, planId], map: "idx_plan_entitlements_plan")
+  @@index([tenantId, planId], map: "membership_plan_entitlements_plan_idx")
+  @@index([tenantId, entitlementPolicyId], map: "membership_plan_entitlements_policy_idx")
+  @@index([tenantId, scopeType, scopeId], map: "membership_plan_entitlements_scope_idx")
   @@map("membership_plan_entitlements")
   @@schema("membership")
 }
@@ -190,5 +190,123 @@ model EventOutbox {
 
   @@index([publishedAt, nextAttemptAt], map: "event_outbox_pending_idx")
   @@map("event_outbox")
+  @@schema("membership")
+}
+
+model membership_audit {
+  id            String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id     String     @db.Uuid
+  membership_id String     @db.Uuid
+  action        String
+  performed_by  String?    @db.Uuid
+  metadata      Json       @default("{}")
+  created_at    DateTime   @default(now()) @db.Timestamptz(6)
+  memberships   Membership @relation(fields: [membership_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "membership_audit_membership_fk")
+
+  @@index([tenant_id, membership_id], map: "membership_audit_membership_idx")
+  @@schema("membership")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model membership_participants {
+  id                String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id         String     @db.Uuid
+  membership_id     String     @db.Uuid
+  person_id         String     @db.Uuid
+  participant_role  String     @default("member")
+  is_primary_member Boolean    @default(false)
+  created_at        DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime   @default(now()) @db.Timestamptz(6)
+  memberships       Membership @relation(fields: [membership_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "membership_participants_membership_fk")
+
+  @@unique([membership_id, person_id], map: "membership_participants_unique")
+  @@index([tenant_id, membership_id], map: "membership_participants_membership_idx")
+  @@index([tenant_id, person_id], map: "membership_participants_person_idx")
+  @@schema("membership")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model membership_plan_coverage_rules {
+  id                           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                    String         @db.Uuid
+  plan_id                      String         @unique(map: "membership_plan_coverage_rules_plan_unique_idx") @db.Uuid
+  min_members                  Int?
+  max_members                  Int?
+  min_adults                   Int?
+  max_adults                   Int?
+  min_children                 Int?
+  max_children                 Int?
+  same_household_required      Boolean        @default(false)
+  payer_required               Boolean        @default(false)
+  guardian_required_for_minors Boolean        @default(false)
+  created_at                   DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at                   DateTime       @default(now()) @db.Timestamptz(6)
+  membership_plans             MembershipPlan @relation(fields: [plan_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "membership_plan_coverage_rules_plan_fk")
+
+  @@schema("membership")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model membership_plan_duration {
+  id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id         String         @db.Uuid
+  plan_id           String         @unique(map: "membership_plan_duration_plan_unique_idx") @db.Uuid
+  fixed_start_date  DateTime?      @db.Date
+  fixed_end_date    DateTime?      @db.Date
+  rolling_length    Int?
+  rolling_unit      String?
+  grace_period_days Int            @default(0)
+  created_at        DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime       @default(now()) @db.Timestamptz(6)
+  membership_plans  MembershipPlan @relation(fields: [plan_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "membership_plan_duration_plan_fk")
+
+  @@schema("membership")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model membership_plan_eligibility_rules {
+  id                          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                   String         @db.Uuid
+  plan_id                     String         @unique(map: "membership_plan_eligibility_rules_plan_unique_idx") @db.Uuid
+  min_age                     Int?
+  max_age                     Int?
+  requires_guardian_under_age Int?
+  gender                      String?
+  custom_rules                Json           @default("{}")
+  created_at                  DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at                  DateTime       @default(now()) @db.Timestamptz(6)
+  membership_plans            MembershipPlan @relation(fields: [plan_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "membership_plan_eligibility_rules_plan_fk")
+
+  @@schema("membership")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model membership_plan_payment_methods {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id        String         @db.Uuid
+  plan_id          String         @db.Uuid
+  payment_method   String
+  created_at       DateTime       @default(now()) @db.Timestamptz(6)
+  membership_plans MembershipPlan @relation(fields: [plan_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "membership_plan_payment_methods_plan_fk")
+
+  @@unique([plan_id, payment_method], map: "membership_plan_payment_methods_unique")
+  @@index([tenant_id, plan_id], map: "membership_plan_payment_methods_plan_idx")
+  @@schema("membership")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model membership_plan_pricing {
+  id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id         String         @db.Uuid
+  plan_id           String         @unique(map: "membership_plan_pricing_plan_unique_idx") @db.Uuid
+  currency          String
+  join_fee          Decimal        @default(0) @db.Decimal(12, 2)
+  price             Decimal        @db.Decimal(12, 2)
+  renewal_price     Decimal?       @db.Decimal(12, 2)
+  billing_frequency String
+  created_at        DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime       @default(now()) @db.Timestamptz(6)
+  membership_plans  MembershipPlan @relation(fields: [plan_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "membership_plan_pricing_plan_fk")
+
   @@schema("membership")
 }

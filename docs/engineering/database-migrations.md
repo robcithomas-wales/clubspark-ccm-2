@@ -123,16 +123,42 @@ foreign-key naming.
 
 Eleven services were reconciled with `prisma db pull`, giving exactly zero drift.
 
-**Three services could not be** — booking, membership and people, listed in `KNOWN_DRIFT` in
-[`../../scripts/check-migration-drift.sh`](../../scripts/check-migration-drift.sh). They declare
-relations in `schema.prisma` that have **no foreign key in the database** (people's `personTags`,
+**Three could not be, and now are.** booking, membership and people declared relations in
+`schema.prisma` with **no foreign key in the database** (people's `personTags`,
 `householdMemberships`, `relationshipsFrom`/`To`, and similar). Introspection cannot see a relation
-with no FK, so it drops the field — and the code that uses it stops compiling.
+with no FK, so `db pull` dropped the field and the code stopped compiling — which is why those three
+sat in a `KNOWN_DRIFT` allowlist rather than being fixed.
 
-Reconciling them means answering a real question per relation: **add the missing foreign key to the
-database, or keep it as an application-level relation?** That is design work, not a mechanical fix.
-Shrinking `KNOWN_DRIFT` to empty is the remaining task; each name removed is one more service that
-can never silently drift again.
+Resolving it meant answering, per relation, **add the missing foreign key, or keep the relation
+application-level?** The answer was to add them: 15 keys across the three services
+(`20260804000000_add_missing_foreign_keys`). They are all *intra*-schema, so they cost nothing in
+regional terms, and the pilot had no meaningful data to reconcile — this gets materially harder once
+there are customers.
+
+**`KNOWN_DRIFT` is now empty, and all 14 services are clean.** Keep it that way: while the list held
+three names it also masked the outbox tables being absent from `schema.prisma`, and only the one
+service *not* on the list failed the build.
+
+Three things fell out of doing this, each worth knowing:
+
+- **Adding FKs surfaced a latent bug.** With the relations visible, introspection also corrected four
+  membership columns from nullable to `NOT NULL` — matching the database, which had always been
+  `NOT NULL`. The code wrote `?? null` into them. It had never failed only because those paths were
+  untested; `schema.prisma` being wrong is what hid it from the compiler.
+- **Deduplicate constraints by table+column, not by name.** The first pass filtered existing keys by
+  constraint *name*; four relations already had one under a hand-written `_fk` name, so it added a
+  second identical constraint to each. Both were enforced — nothing was unprotected — but Prisma
+  expects exactly one per relation, so it read as permanent, unfixable drift.
+- **Never edit a migration that has already been applied.** Those four drops were first appended to
+  the migration that caused them, which had already run against Supabase — so live would never have
+  received them. They belong in `20260804010000_drop_legacy_and_orphan_fks`, a new migration, written
+  entirely with `DROP CONSTRAINT IF EXISTS` so it is a no-op on a database built from scratch.
+
+That last migration also drops `membership_participants.person_id -> identity.people`: a
+**cross-schema** foreign key, applied by hand, in no migration file, pointing into one of the three
+orphaned schemas. It had only ever validated because both tables are empty. Live and a from-scratch
+build now produce an identical set of 98 service foreign keys, with **zero cross-schema keys** in any
+service schema.
 
 ### A caveat about `check:drift`
 

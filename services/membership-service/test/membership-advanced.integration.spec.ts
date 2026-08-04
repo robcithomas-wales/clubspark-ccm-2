@@ -8,7 +8,13 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest'
 import supertest from 'supertest'
 import { getApp, closeApp } from './helpers/app.js'
-import { prisma, seedFixtures, cleanMemberships, teardownFixtures, checkDbAvailable } from './helpers/db.js'
+import {
+  prisma,
+  seedFixtures,
+  cleanMemberships,
+  teardownFixtures,
+  checkDbAvailable,
+} from './helpers/db.js'
 import {
   TEST_TENANT_ID,
   TEST_ORG_ID,
@@ -52,7 +58,16 @@ describe.runIf(DB_AVAILABLE)('Membership service — advanced integration', () =
 
   afterEach(async () => {
     await cleanMemberships()
-    // Clean up any entitlement policies created during tests
+    // Clean up any entitlement policies created during tests. Delete the plan
+    // links first: membership_plan_entitlements → entitlement_policies is ON
+    // DELETE RESTRICT, because deleting a policy a plan still grants would
+    // silently strip that entitlement from every member on the plan.
+    await prisma.membershipPlanEntitlement.deleteMany({
+      where: {
+        tenantId: TEST_TENANT_ID,
+        entitlementPolicy: { name: { startsWith: 'Test Policy' } },
+      },
+    })
     await prisma.entitlementPolicy.deleteMany({
       where: { tenantId: TEST_TENANT_ID, name: { startsWith: 'Test Policy' } },
     })
@@ -77,7 +92,9 @@ describe.runIf(DB_AVAILABLE)('Membership service — advanced integration', () =
     })
 
     it('lists entitlement policies for the org', async () => {
-      await request.post('/entitlement-policies').set(JSON_HEADERS)
+      await request
+        .post('/entitlement-policies')
+        .set(JSON_HEADERS)
         .send({ name: 'Test Policy Beta' })
 
       const res = await request.get('/entitlement-policies').set(HEADERS)
@@ -93,9 +110,7 @@ describe.runIf(DB_AVAILABLE)('Membership service — advanced integration', () =
         .set(JSON_HEADERS)
         .send({ name: 'Test Policy Gamma' })
 
-      const res = await request
-        .get(`/entitlement-policies/${created.body.data.id}`)
-        .set(HEADERS)
+      const res = await request.get(`/entitlement-policies/${created.body.data.id}`).set(HEADERS)
 
       expect(res.status).toBe(200)
       expect(res.body.data.id).toBe(created.body.data.id)
@@ -103,9 +118,7 @@ describe.runIf(DB_AVAILABLE)('Membership service — advanced integration', () =
     })
 
     it('returns 404 for a non-existent policy', async () => {
-      const res = await request
-        .get(`/entitlement-policies/${TEST_NONEXISTENT_ID}`)
-        .set(HEADERS)
+      const res = await request.get(`/entitlement-policies/${TEST_NONEXISTENT_ID}`).set(HEADERS)
 
       expect(res.status).toBe(404)
     })
@@ -172,9 +185,7 @@ describe.runIf(DB_AVAILABLE)('Membership service — advanced integration', () =
 
   describe('Plan Entitlements', () => {
     it('returns empty list when plan has no entitlements', async () => {
-      const res = await request
-        .get(`/membership-plans/${TEST_PLAN_ID}/entitlements`)
-        .set(HEADERS)
+      const res = await request.get(`/membership-plans/${TEST_PLAN_ID}/entitlements`).set(HEADERS)
 
       expect(res.status).toBe(200)
       expect(Array.isArray(res.body.data)).toBe(true)
@@ -192,9 +203,7 @@ describe.runIf(DB_AVAILABLE)('Membership service — advanced integration', () =
         .put(`/membership-plans/${TEST_PLAN_ID}/entitlements`)
         .set(JSON_HEADERS)
         .send({
-          entitlements: [
-            { entitlementPolicyId: policy.body.data.id, priority: 100 },
-          ],
+          entitlements: [{ entitlementPolicyId: policy.body.data.id, priority: 100 }],
         })
 
       expect(res.status).toBe(200)
@@ -263,9 +272,13 @@ describe.runIf(DB_AVAILABLE)('Membership service — advanced integration', () =
   describe('POST /memberships/bulk-transition', () => {
     it('activates multiple memberships in one call', async () => {
       const [m1, m2] = await Promise.all([
-        request.post('/memberships').set(JSON_HEADERS)
+        request
+          .post('/memberships')
+          .set(JSON_HEADERS)
           .send({ planId: TEST_PLAN_ID, customerId: TEST_CUSTOMER_ID, startDate: '2026-01-01' }),
-        request.post('/memberships').set(JSON_HEADERS)
+        request
+          .post('/memberships')
+          .set(JSON_HEADERS)
           .send({ planId: TEST_PLAN_ID, customerId: TEST_CUSTOMER_ID, startDate: '2026-02-01' }),
       ])
 
@@ -314,12 +327,14 @@ describe.runIf(DB_AVAILABLE)('Membership service — advanced integration', () =
   describe('GET /memberships/renewals-due', () => {
     it('returns an empty list when no memberships are expiring soon', async () => {
       // Create a membership with far-future end date
-      await request.post('/memberships').set(JSON_HEADERS)
-        .send({ planId: TEST_PLAN_ID, customerId: TEST_CUSTOMER_ID, startDate: '2026-01-01', endDate: '2099-12-31' })
+      await request.post('/memberships').set(JSON_HEADERS).send({
+        planId: TEST_PLAN_ID,
+        customerId: TEST_CUSTOMER_ID,
+        startDate: '2026-01-01',
+        endDate: '2099-12-31',
+      })
 
-      const res = await request
-        .get('/memberships/renewals-due?days=7')
-        .set(HEADERS)
+      const res = await request.get('/memberships/renewals-due?days=7').set(HEADERS)
 
       expect(res.status).toBe(200)
       expect(Array.isArray(res.body.data)).toBe(true)
@@ -332,21 +347,22 @@ describe.runIf(DB_AVAILABLE)('Membership service — advanced integration', () =
       expiresAt.setDate(expiresAt.getDate() + 2)
       const endDate = expiresAt.toISOString().slice(0, 10)
 
-      await request.post('/memberships').set(JSON_HEADERS)
-        .send({ planId: TEST_PLAN_ID, customerId: TEST_CUSTOMER_ID, startDate: '2026-01-01', endDate, status: 'active' })
+      await request.post('/memberships').set(JSON_HEADERS).send({
+        planId: TEST_PLAN_ID,
+        customerId: TEST_CUSTOMER_ID,
+        startDate: '2026-01-01',
+        endDate,
+        status: 'active',
+      })
 
-      const res = await request
-        .get('/memberships/renewals-due?days=7')
-        .set(HEADERS)
+      const res = await request.get('/memberships/renewals-due?days=7').set(HEADERS)
 
       expect(res.status).toBe(200)
       expect(res.body.data.length).toBeGreaterThanOrEqual(1)
     })
 
     it('defaults to 30-day window when days param is omitted', async () => {
-      const res = await request
-        .get('/memberships/renewals-due')
-        .set(HEADERS)
+      const res = await request.get('/memberships/renewals-due').set(HEADERS)
 
       expect(res.status).toBe(200)
       expect(Array.isArray(res.body.data)).toBe(true)
@@ -360,18 +376,15 @@ describe.runIf(DB_AVAILABLE)('Membership service — advanced integration', () =
   describe('Auto end-date calculation', () => {
     it('calculates endDate for a monthly plan when not supplied', async () => {
       // Create a plan with durationType=recurring, billingInterval=monthly
-      const plan = await request
-        .post('/membership-plans')
-        .set(JSON_HEADERS)
-        .send({
-          schemeId: TEST_SCHEME_ID,
-          name: 'Monthly Auto Plan',
-          ownershipType: 'person',
-          durationType: 'recurring',
-          billingInterval: 'monthly',
-          visibility: 'public',
-          sortOrder: 0,
-        })
+      const plan = await request.post('/membership-plans').set(JSON_HEADERS).send({
+        schemeId: TEST_SCHEME_ID,
+        name: 'Monthly Auto Plan',
+        ownershipType: 'person',
+        durationType: 'recurring',
+        billingInterval: 'monthly',
+        visibility: 'public',
+        sortOrder: 0,
+      })
 
       expect(plan.status).toBe(201)
 
@@ -392,18 +405,15 @@ describe.runIf(DB_AVAILABLE)('Membership service — advanced integration', () =
     })
 
     it('calculates endDate for an annual plan when not supplied', async () => {
-      const plan = await request
-        .post('/membership-plans')
-        .set(JSON_HEADERS)
-        .send({
-          schemeId: TEST_SCHEME_ID,
-          name: 'Annual Auto Plan',
-          ownershipType: 'person',
-          durationType: 'recurring',
-          billingInterval: 'annual',
-          visibility: 'public',
-          sortOrder: 0,
-        })
+      const plan = await request.post('/membership-plans').set(JSON_HEADERS).send({
+        schemeId: TEST_SCHEME_ID,
+        name: 'Annual Auto Plan',
+        ownershipType: 'person',
+        durationType: 'recurring',
+        billingInterval: 'annual',
+        visibility: 'public',
+        sortOrder: 0,
+      })
 
       const res = await request
         .post('/memberships')
@@ -421,15 +431,12 @@ describe.runIf(DB_AVAILABLE)('Membership service — advanced integration', () =
     })
 
     it('preserves a manually supplied endDate', async () => {
-      const res = await request
-        .post('/memberships')
-        .set(JSON_HEADERS)
-        .send({
-          planId: TEST_PLAN_ID,
-          customerId: TEST_CUSTOMER_ID,
-          startDate: '2026-01-01',
-          endDate: '2027-06-30',
-        })
+      const res = await request.post('/memberships').set(JSON_HEADERS).send({
+        planId: TEST_PLAN_ID,
+        customerId: TEST_CUSTOMER_ID,
+        startDate: '2026-01-01',
+        endDate: '2027-06-30',
+      })
 
       expect(res.status).toBe(201)
       expect(res.body.data.endDate).toContain('2027-06-30')

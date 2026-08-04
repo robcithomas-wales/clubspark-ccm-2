@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, IsBoolean } from 'class-validator'
+import { IsNotEmpty, IsString, IsOptional, IsNumber, IsBoolean } from 'class-validator'
 
 export class CreateMembershipPlanDto {
   @IsString()
@@ -15,13 +15,20 @@ export class CreateMembershipPlanDto {
   @IsString()
   description?: string
 
-  @IsOptional()
+  /**
+   * Required. NOT NULL in the database with no default, so a plan created
+   * without one has always failed at runtime — the DTO said optional, the
+   * database disagreed, and schema.prisma wrongly declared the column nullable
+   * which hid it from the compiler.
+   */
   @IsString()
-  ownershipType?: string
+  @IsNotEmpty()
+  ownershipType!: string
 
-  @IsOptional()
+  /** Required, for the same reason as ownershipType. */
   @IsString()
-  durationType?: string
+  @IsNotEmpty()
+  durationType!: string
 
   @IsOptional()
   @IsString()
@@ -38,7 +45,7 @@ export class CreateMembershipPlanDto {
   // Phase 1: membership type & structure
   @IsOptional()
   @IsString()
-  membershipType?: string  // individual | family | group | team | organisation
+  membershipType?: string // individual | family | group | team | organisation
 
   @IsOptional()
   @IsString()
@@ -55,7 +62,7 @@ export class CreateMembershipPlanDto {
   // Phase 1: pricing model
   @IsOptional()
   @IsString()
-  pricingModel?: string  // fixed | instalment | recurring | variable
+  pricingModel?: string // fixed | instalment | recurring | variable
 
   @IsOptional()
   @IsNumber()
@@ -67,7 +74,7 @@ export class CreateMembershipPlanDto {
 
   @IsOptional()
   @IsString()
-  billingInterval?: string  // monthly | quarterly | annual
+  billingInterval?: string // monthly | quarterly | annual
 
   @IsOptional()
   @IsNumber()

@@ -105,10 +105,11 @@ not have run on the target platform at all.
    exception — it uses `FOR UPDATE SKIP LOCKED` and is already safe.)
 4. **Auth is Supabase JWKS** — single-region by construction. Moving to Entra External ID is a
    decision that shapes every auth touchpoint.
-5. **Three services have known schema drift** (booking, membership, people) — listed in `KNOWN_DRIFT`
-   in `scripts/check-migration-drift.sh`. They declare Prisma relations with no backing foreign key,
-   so introspection drops the field and the code stops compiling. Resolving each needs a decision:
-   add the FK, or keep the relation application-level.
+5. ~~Three services have known schema drift.~~ **Resolved 2026-08-04.** All 14 services are clean and
+   `KNOWN_DRIFT` in `scripts/check-migration-drift.sh` is empty — keep it empty; a name added there
+   silences a real signal. Fixing it required adding the 15 missing foreign keys, which in turn
+   surfaced a latent bug (four membership columns the code wrote `null` into are `NOT NULL` in the
+   database). See [`engineering/database-migrations.md`](engineering/database-migrations.md).
 6. **~15,000 lint problems**, overwhelmingly Prettier formatting. CI lints only changed files so new
    work stays clean; clearing the backlog is a separate, mechanical PR.
 7. **Three orphaned schemas** (`identity`, `crm`, `customer` — 13 empty, unreferenced tables) and a

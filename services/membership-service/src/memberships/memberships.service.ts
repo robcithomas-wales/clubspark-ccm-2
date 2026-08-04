@@ -127,6 +127,16 @@ export class MembershipsService {
       ownerId = dto.householdId
     }
 
+    // owner_type / owner_id are NOT NULL. An unrecognised plan.ownershipType used
+    // to leave them null and fail deep in Postgres with an opaque constraint
+    // violation; schema.prisma wrongly declared the columns nullable, so the
+    // compiler could not see it. Fail here, with something actionable.
+    if (!ownerType || !ownerId) {
+      throw new BadRequestException(
+        `Plan '${plan.id}' has ownershipType '${plan.ownershipType ?? 'unset'}', which is not 'person' or 'household' — cannot determine the membership owner`,
+      )
+    }
+
     // Auto-calculate endDate / renewalDate from plan duration if not supplied
     let endDate = dto.endDate ?? null
     let renewalDate = dto.renewalDate ?? null

@@ -37,20 +37,17 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 : "${DATABASE_URL:?DATABASE_URL must be set (a database built by scripts/migrate-all.sh)}"
 export DIRECT_DATABASE_URL="${DIRECT_DATABASE_URL:-$DATABASE_URL}"
 
-# Services whose drift is KNOWN and not yet reconciled. Reported, not fatal.
+# Services with known, unreconciled drift. Reported, not fatal.
 #
-# All three declare relations in schema.prisma that have no foreign key in the
-# database, so `prisma db pull` cannot see them and drops the relation fields —
-# which breaks the code that uses them (people's personTags, householdMemberships,
-# relationshipsFrom/To, and similar in booking and membership).
+# EMPTY as of 2026-08-04 — every service's schema.prisma now matches the database
+# exactly. Adding the 15 missing foreign keys is what made this possible:
+# introspection cannot see a relation without one, so `db pull` used to drop the
+# relation fields and break compilation.
 #
-# Reconciling them means answering a real question per relation: add the missing
-# FK to the database, or keep it as an application-level relation? That is design
-# work, not a mechanical fix, so it is tracked rather than guessed at.
-#
-# ⚠️ Shrink this list to empty. Each name removed is one more service that can
-# never silently drift again. See docs/engineering/database-migrations.md.
-KNOWN_DRIFT="booking-service membership-service people-service"
+# Keep it empty. Adding a name here silences a real signal — while this list held
+# three services it masked the outbox tables being absent from schema.prisma, and
+# only the one service NOT on the list failed the build.
+KNOWN_DRIFT=""
 
 clean=0; drifted=0; skipped=0; known=0; drifted_names=""; known_names=""
 

@@ -169,10 +169,16 @@ Any audit of this platform's schema that reads only `prisma/migrations/` will dr
 
 | Constraint | Child | Parent | Status |
 |---|---|---|---|
-| `memberships_customer_fk` | `membership.memberships` | `people.persons` | **Live and blocking** — dropped by `20260729_drop_cross_schema_customer_fk` |
-| `membership_participants_person_fk` | `membership.membership_participants` | `identity.people` | Legacy — child table empty, no code references |
-| `customers_person_fk` | `crm.customers` | `identity.people` | Legacy — child table empty, no code references |
-| `customers_household_fk` | `crm.customers` | `identity.households` | Legacy — child table empty, no code references |
+| `memberships_customer_fk` | `membership.memberships` | `people.persons` | ✅ Dropped — `20260729_drop_cross_schema_customer_fk` |
+| `membership_participants_person_fk` | `membership.membership_participants` | `identity.people` | ✅ Dropped — `20260804010000_drop_legacy_and_orphan_fks` |
+| `customers_person_fk` | `crm.customers` | `identity.people` | Remains — both ends are orphaned schemas; goes with MR-8 |
+| `customers_household_fk` | `crm.customers` | `identity.households` | Remains — both ends are orphaned schemas; goes with MR-8 |
+
+**Status as of 2026-08-04: no service schema has a cross-schema foreign key.** A full
+`pg_constraint` comparison of live against a database built only from the migrations shows an
+identical set of 98 foreign keys across the 14 service schemas, and none of them crosses a schema
+boundary. The only two left on the platform sit entirely between the orphaned `crm` and `identity`
+schemas and disappear when those are dropped (MR-8).
 
 `memberships_customer_fk` was the true reason the customer merge ran with
 `session_replication_role = replica`: re-pointing `people.persons.id` tripped a constraint owned by
@@ -181,11 +187,14 @@ shared-database coupling — it makes separate regional databases physically imp
 dropped rather than worked around. Integrity across that boundary is now a contract (the idempotent,
 compensated reassign API), which is the standard and unavoidable trade when a system distributes.
 
-**Also found: two orphaned schemas.** `identity` (`people`, `households`) and `crm` (`customers`)
-are all empty and referenced by no code — leftovers from the rename in
+**Also found: three orphaned schemas.** `identity` (`people`, `households`, `household_members`,
+`person_relationships`), `crm` (`customers`) and `customer` (`customers`, `households`,
+`household_members`, `lifecycle_history`, `person_relationships`, `person_roles`, `person_tags`,
+`tags`) are all empty and referenced by no code — leftovers from the rename in
 `0007_rename_schema_customer_to_people`. They are harmless but they are why the reminder bug in §4
-looked plausible (`identity.people` really did exist once). Dropping them is a separate, deliberate
-cleanup — deleting schemas is destructive and is **not** part of this work.
+looked plausible (`identity.people` really did exist once). Between them they still hold 16 foreign
+keys, which is every remaining cross-schema key on the platform. Dropping them is a separate,
+deliberate cleanup — deleting schemas is destructive and is **not** part of this work.
 
 ---
 
