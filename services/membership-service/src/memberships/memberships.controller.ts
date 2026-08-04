@@ -15,8 +15,8 @@ import {
   BadRequestException,
 } from '@nestjs/common'
 import { IsString, IsArray, IsOptional, IsNotEmpty, ArrayMinSize } from 'class-validator'
-import { InternalSecretGuard } from '../common/guards/internal-secret.guard'
-import { SkipTenant } from '../common/decorators/skip-tenant.decorator'
+import { InternalSecretGuard } from '@clubspark/auth'
+import { SkipTenant } from '@clubspark/auth'
 import { MembershipsService } from './memberships.service'
 import { CreateMembershipDto } from './dto/create-membership.dto'
 import { UpdateMembershipDto } from './dto/update-membership.dto'
@@ -85,14 +85,13 @@ export class MembershipsController {
   @Get('stats/daily')
   getDailyStats(@Req() req: any, @Query('months') months?: number) {
     const { tenantId, organisationId } = req.tenantContext
-    return this.service.getDailyStats(tenantId, organisationId, Number(months) || 12).then((data) => ({ data }))
+    return this.service
+      .getDailyStats(tenantId, organisationId, Number(months) || 12)
+      .then((data) => ({ data }))
   }
 
   @Get('renewals-due')
-  listExpiringRenewals(
-    @Req() req: any,
-    @Query('days') days?: number,
-  ) {
+  listExpiringRenewals(@Req() req: any, @Query('days') days?: number) {
     const { tenantId, organisationId } = req.tenantContext
     return this.service.listExpiringRenewals(tenantId, organisationId, Number(days) || 30)
   }
@@ -119,9 +118,16 @@ export class MembershipsController {
   ) {
     const { tenantId, organisationId } = req.tenantContext
     return this.service.list(tenantId, organisationId, {
-      planId, status, paymentStatus,
+      planId,
+      status,
+      paymentStatus,
       renewingWithinDays: renewingWithinDays ? Number(renewingWithinDays) : undefined,
-      customerId, ownerType, ownerId, search, limit, offset,
+      customerId,
+      ownerType,
+      ownerId,
+      search,
+      limit,
+      offset,
     })
   }
 
@@ -147,7 +153,14 @@ export class MembershipsController {
   bulkTransition(@Req() req: any, @Body() dto: BulkTransitionDto) {
     const { tenantId, organisationId } = req.tenantContext
     const actorEmail: string | null = req.tenantContext.email ?? null
-    return this.service.bulkTransition(tenantId, organisationId, dto.ids, dto.action, dto.reason ?? null, actorEmail)
+    return this.service.bulkTransition(
+      tenantId,
+      organisationId,
+      dto.ids,
+      dto.action,
+      dto.reason ?? null,
+      actorEmail,
+    )
   }
 
   @Post(':id/transition')

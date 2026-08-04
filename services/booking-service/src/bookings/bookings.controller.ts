@@ -25,8 +25,8 @@ import { ApproveBookingDto, RejectBookingDto } from './dto/approve-booking.dto.j
 import { BulkCancelBookingsDto } from './dto/bulk-cancel-bookings.dto.js'
 import { ReassignCustomerDto } from './dto/reassign-customer.dto.js'
 import { TenantCtx, type TenantContext } from '../common/decorators/tenant-context.decorator.js'
-import { SkipTenant } from '../common/decorators/skip-tenant.decorator.js'
-import { InternalSecretGuard } from '../common/guards/internal-secret.guard.js'
+import { SkipTenant } from '@clubspark/auth'
+import { InternalSecretGuard } from '@clubspark/auth'
 
 @ApiTags('bookings')
 @ApiSecurity('tenant-id')
@@ -49,7 +49,12 @@ export class BookingsController {
     @Query('toDate') toDate?: string,
     @Query('customerId') customerId?: string,
   ) {
-    const result = await this.service.list(ctx, Number(page), Number(limit), { status, fromDate, toDate, customerId })
+    const result = await this.service.list(ctx, Number(page), Number(limit), {
+      status,
+      fromDate,
+      toDate,
+      customerId,
+    })
     return {
       data: result.rows,
       pagination: {
@@ -92,7 +97,7 @@ export class BookingsController {
     return { data: stats }
   }
 
-    @Get('unit-busy-times')
+  @Get('unit-busy-times')
   @ApiQuery({ name: 'unitIds', required: true, type: String })
   @ApiQuery({ name: 'date', required: true, type: String })
   async getUnitBusyTimes(

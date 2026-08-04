@@ -2,7 +2,7 @@ import { Controller, Get, Put, Delete, Param, Body, Req } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { OverridesService } from './overrides.service.js'
 import { UpsertOverrideDto } from './dto/upsert-override.dto.js'
-import type { TenantContext } from '../common/guards/tenant-context.guard.js'
+import type { TenantContext } from '@clubspark/auth'
 
 type RequestWithCtx = { tenantContext?: TenantContext }
 

@@ -2,7 +2,8 @@ import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
 import { join } from 'node:path'
 import { ScheduleModule } from '@nestjs/schedule'
-import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core'
+import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core'
+import { AuthModule, supabaseAuth } from '@clubspark/auth'
 import configuration from './config/configuration'
 import { PrismaModule } from './prisma/prisma.module'
 import { HealthModule } from './health/health.module'
@@ -11,12 +12,15 @@ import { MembershipPlansModule } from './membership-plans/membership-plans.modul
 import { MembershipsModule } from './memberships/memberships.module'
 import { EntitlementPoliciesModule } from './entitlement-policies/entitlement-policies.module'
 import { EventBusModule } from './event-bus/event-bus.module'
-import { TenantContextGuard } from './common/guards/tenant-context.guard'
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter'
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor'
 
 @Module({
   imports: [
+    // Authentication for every route: verifies the JWT, sets tenant context,
+    // and registers the global guard. supabaseAuth() is the only line naming an
+    // identity provider — the Azure move swaps it for entraAuth({...}) here.
+    AuthModule.forRoot(supabaseAuth()),
     ConfigModule.forRoot({
       isGlobal: true,
       load: [configuration],
@@ -39,7 +43,6 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor'
     EntitlementPoliciesModule,
   ],
   providers: [
-    { provide: APP_GUARD, useClass: TenantContextGuard },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
   ],

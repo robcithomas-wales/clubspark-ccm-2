@@ -1,7 +1,7 @@
 import { Controller, Post, Body, Logger, UseGuards } from '@nestjs/common'
 import { ApiTags, ApiOperation, ApiSecurity } from '@nestjs/swagger'
-import { SkipTenant } from '../common/decorators/skip-tenant.decorator.js'
-import { InternalSecretGuard } from '../common/guards/internal-secret.guard.js'
+import { SkipTenant } from '@clubspark/auth'
+import { InternalSecretGuard } from '@clubspark/auth'
 import { WebhookDeliveriesService } from '../webhook-deliveries/webhook-deliveries.service.js'
 import { AccountingSyncService } from '../accounting-sync/accounting-sync.service.js'
 import type { DomainEvent } from './domain-events.js'
@@ -44,7 +44,7 @@ export class EventsController {
     if (event.type === 'payment.refund_issued') {
       void this.accountingSync.onPaymentRefundIssued({
         paymentId: event['paymentId'] as string,
-        refundId: (event['refundId'] as string) ?? event['paymentId'] as string,
+        refundId: (event['refundId'] as string) ?? (event['paymentId'] as string),
         tenantId: event.tenantId,
         memberName: (event['memberName'] as string) ?? 'Member',
         memberEmail: (event['memberEmail'] as string) ?? '',

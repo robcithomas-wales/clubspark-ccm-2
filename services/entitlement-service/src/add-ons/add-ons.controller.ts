@@ -2,7 +2,7 @@ import { Controller, Get, Post, Delete, Param, Body, Req } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { AddOnsService } from './add-ons.service.js'
 import { AttachAddOnDto } from './dto/attach-add-on.dto.js'
-import type { TenantContext } from '../common/guards/tenant-context.guard.js'
+import type { TenantContext } from '@clubspark/auth'
 
 type RequestWithCtx = { tenantContext?: TenantContext }
 

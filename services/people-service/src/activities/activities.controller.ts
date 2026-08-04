@@ -13,8 +13,8 @@ import { ApiTags, ApiSecurity } from '@nestjs/swagger'
 import type { FastifyRequest } from 'fastify'
 import { Request } from '@nestjs/common'
 import { ActivitiesService } from './activities.service.js'
-import { SkipTenant } from '../common/decorators/skip-tenant.decorator.js'
-import { InternalSecretGuard } from '../common/guards/internal-secret.guard.js'
+import { SkipTenant } from '@clubspark/auth'
+import { InternalSecretGuard } from '@clubspark/auth'
 
 @ApiTags('activities')
 @Controller()

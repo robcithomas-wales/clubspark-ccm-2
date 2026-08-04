@@ -1,4 +1,15 @@
-import { Controller, Get, Put, Patch, Post, Body, Query, HttpCode, HttpStatus, BadRequestException } from '@nestjs/common'
+import {
+  Controller,
+  Get,
+  Put,
+  Patch,
+  Post,
+  Body,
+  Query,
+  HttpCode,
+  HttpStatus,
+  BadRequestException,
+} from '@nestjs/common'
 import { ApiTags, ApiSecurity } from '@nestjs/swagger'
 import { SetMetadata } from '@nestjs/common'
 import { OrganisationsService } from './organisations.service.js'
@@ -6,7 +17,7 @@ import { UpsertOrganisationDto, PublicRegisterDto } from './dto/upsert-organisat
 import { PatchHomePageDto } from './dto/patch-home-page.dto.js'
 import { PatchDesignDto } from './dto/patch-design.dto.js'
 import { TenantCtx, type TenantContext } from '../common/decorators/tenant-context.decorator.js'
-import { SKIP_TENANT_KEY } from '../common/guards/tenant-context.guard.js'
+import { SKIP_TENANT_KEY } from '@clubspark/auth'
 
 const SkipTenant = () => SetMetadata(SKIP_TENANT_KEY, true)
 
@@ -76,8 +87,8 @@ export class OrganisationsController {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'apikey': serviceRoleKey,
-        'Authorization': `Bearer ${serviceRoleKey}`,
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
       },
       body: JSON.stringify({
         email: dto.email,
@@ -89,11 +100,11 @@ export class OrganisationsController {
     })
 
     if (!res.ok) {
-      const body = await res.json() as { message?: string }
+      const body = (await res.json()) as { message?: string }
       throw new BadRequestException(body.message ?? 'Registration failed')
     }
 
-    const { user } = await res.json() as { user: { id: string } }
+    const { user } = (await res.json()) as { user: { id: string } }
 
     const customerServiceUrl = process.env['PEOPLE_SERVICE_URL']
     if (customerServiceUrl && user?.id) {
@@ -104,8 +115,15 @@ export class OrganisationsController {
           'x-tenant-id': dto.tenantId,
           'x-customer-id-override': user.id,
         },
-        body: JSON.stringify({ id: user.id, firstName: dto.firstName, lastName: dto.lastName, email: dto.email }),
-      }).catch(() => { /* non-fatal */ })
+        body: JSON.stringify({
+          id: user.id,
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          email: dto.email,
+        }),
+      }).catch(() => {
+        /* non-fatal */
+      })
     }
 
     return { data: { message: 'Account created. Please sign in.' } }

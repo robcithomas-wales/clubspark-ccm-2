@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // CommonJS to match every consuming service. Despite CLAUDE.md describing the
+    // services as ESM, all 15 compile with "module": "CommonJS" and none declares
+    // "type": "module" — so a package emitting ESM would not be requireable.
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "outDir": "dist",
+    "rootDir": "src",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

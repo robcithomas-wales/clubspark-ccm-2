@@ -1,10 +1,22 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, Query, HttpCode, HttpStatus, Request } from '@nestjs/common'
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  Query,
+  HttpCode,
+  HttpStatus,
+  Request,
+} from '@nestjs/common'
 import { ApiTags, ApiOperation } from '@nestjs/swagger'
 import type { FastifyRequest } from 'fastify'
 import { TeamsService } from './teams.service.js'
 import { CreateTeamDto } from './dto/create-team.dto.js'
 import { UpdateTeamDto } from './dto/update-team.dto.js'
-import { SkipTenant } from '../common/decorators/skip-tenant.decorator.js'
+import { SkipTenant } from '@clubspark/auth'
 
 @ApiTags('teams')
 @Controller('teams')

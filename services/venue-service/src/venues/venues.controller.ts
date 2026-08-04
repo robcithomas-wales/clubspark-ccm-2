@@ -17,7 +17,7 @@ import { randomUUID } from 'node:crypto'
 import { SetMetadata } from '@nestjs/common'
 import { VenuesService } from './venues.service.js'
 import { TenantCtx, type TenantContext } from '../common/decorators/tenant-context.decorator.js'
-import { SKIP_TENANT_KEY } from '../common/guards/tenant-context.guard.js'
+import { SKIP_TENANT_KEY } from '@clubspark/auth'
 import { isFeatureBlockedError } from '../common/entitlement.js'
 
 // ─── Inline decorator so we don't need a separate file ───────────────────────
@@ -35,12 +35,12 @@ class UpsertVenueSettingsDto {
   @IsOptional() @IsBoolean() addOnsEnabled?: boolean
   @IsOptional() @IsBoolean() pendingApprovals?: boolean
   @IsOptional() @IsBoolean() splitPayments?: boolean
-  @IsOptional() @IsString()  publicBookingView?: string
+  @IsOptional() @IsString() publicBookingView?: string
 }
 
 class CustomerRegisterDto {
   @IsString() @IsNotEmpty() clubCode!: string
-  @IsEmail()               email!: string
+  @IsEmail() email!: string
   @IsString() @IsNotEmpty() password!: string
   @IsString() @IsNotEmpty() firstName!: string
   @IsString() @IsNotEmpty() lastName!: string
@@ -140,8 +140,8 @@ export class VenuesController {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'apikey': serviceRoleKey,
-        'Authorization': `Bearer ${serviceRoleKey}`,
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
       },
       body: JSON.stringify({
         email: dto.email,
@@ -160,11 +160,11 @@ export class VenuesController {
     })
 
     if (!res.ok) {
-      const body = await res.json() as { message?: string }
+      const body = (await res.json()) as { message?: string }
       throw new BadRequestException(body.message ?? 'Registration failed')
     }
 
-    const { user } = await res.json() as { user: { id: string } }
+    const { user } = (await res.json()) as { user: { id: string } }
 
     // Create the customer record using the Supabase user ID so they stay in sync
     const customerServiceUrl = process.env['PEOPLE_SERVICE_URL']
@@ -182,7 +182,9 @@ export class VenuesController {
           lastName: dto.lastName,
           email: dto.email,
         }),
-      }).catch(() => { /* non-fatal — customer record can be created on first login */ })
+      }).catch(() => {
+        /* non-fatal — customer record can be created on first login */
+      })
     }
 
     return {

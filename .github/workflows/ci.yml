@@ -37,11 +37,26 @@ jobs:
       - name: Generate Prisma clients
         run: npm run prisma:generate:all
 
+      # @clubspark/auth guards every request in all 15 services and needs no
+      # database, so it is tested here rather than behind the Postgres job — a
+      # break in it is a break everywhere, and this fails in seconds.
+      - name: Test shared packages
+        run: |
+          npm run build:packages
+          npm run test:packages
+
+      # build:services builds packages first — services resolve @clubspark/auth
+      # to its compiled dist/, so nothing compiles until that exists.
       - name: Build all 15 services
         run: npm run build:services
 
       - name: Typecheck
         run: npm run typecheck
+
+      # The blueprint checker also enforces that no service has re-forked a local
+      # copy of the shared auth guards — which is how six variants appeared.
+      - name: Verify every service matches the blueprint
+        run: ./scripts/check-service.sh --all
 
   # ─────────────────────────────────────────────────────────────────────────
   # Lint — changed files only.

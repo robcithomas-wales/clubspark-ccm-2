@@ -1,5 +1,5 @@
 import { Controller, Get } from '@nestjs/common'
-import { SkipTenant } from '../common/decorators/skip-tenant.decorator'
+import { SkipTenant } from '@clubspark/auth'
 
 @Controller('health')
 export class HealthController {

@@ -103,6 +103,9 @@ only" are incompatible.
 
 ### G1.6 — Identity decision (S to decide, L to execute)
 Auth is Supabase JWKS — single-region. **Decide now** whether to move to Microsoft Entra External ID.
+The decision still matters; the *execution* is no longer expensive. Auth lives in
+[`packages/auth`](../../packages/auth/README.md) and each service picks a provider in one line,
+so this stopped being a one-way door in August 2026.
 Execution can land in Gate 2, but the decision shapes every auth touchpoint.
 
 ---

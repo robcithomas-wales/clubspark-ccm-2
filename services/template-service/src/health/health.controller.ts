@@ -1,7 +1,7 @@
 import { Controller, Get } from '@nestjs/common'
 import { ApiTags, ApiOperation } from '@nestjs/swagger'
 import { PrismaService } from '../prisma/prisma.service.js'
-import { SkipTenant } from '../common/decorators/skip-tenant.decorator.js'
+import { SkipTenant } from '@clubspark/auth'
 
 /**
  * Health check endpoints — used by Azure Container Apps readiness/liveness probes.

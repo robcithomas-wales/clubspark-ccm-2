@@ -74,6 +74,20 @@ being rejected and the rejection discarded.
 There is now a transactional outbox in booking, membership and payment: the event is written in the
 same transaction as the state change, and a relay delivers it with backoff and dead-lettering.
 
+### Auth is one package, not fifteen copies
+
+Every service used to carry its own `tenant-context.guard.ts`. Fifteen copies had become **six
+different implementations** — and in two of them `@SkipTenant()` did nothing at all, because
+their guard had no `Reflector`. Their health probes only worked via a separate hard-coded
+`/health` path check; applying the decorator anywhere else would have produced a silent 401.
+
+It is now [`packages/auth`](../packages/auth/README.md) (`@clubspark/auth`), imported by all 15.
+`AuthModule.forRoot(supabaseAuth())` registers the guard globally, so a new route is authenticated
+by default, and `check-service.sh` fails the build if a service re-forks a local copy.
+
+**This is what makes the Azure identity move tractable**: `supabaseAuth()` → `entraAuth({...})`,
+one line per service, and nothing else knows which provider issued the token.
+
 ### Cross-service coupling is partly removed
 
 This is the work that decides whether multi-region is possible. Progress is tracked in
@@ -103,8 +117,11 @@ not have run on the target platform at all.
 3. **10 `@Cron` jobs across 6 services fire on every replica.** The platform cannot run more than one
    replica of anything without duplicate charges, emails and reminders. (The outbox relay is the
    exception — it uses `FOR UPDATE SKIP LOCKED` and is already safe.)
-4. **Auth is Supabase JWKS** — single-region by construction. Moving to Entra External ID is a
-   decision that shapes every auth touchpoint.
+4. **Auth is Supabase JWKS** — single-region by construction. Moving to Entra External ID is
+   still a decision that shapes the platform, but it is no longer a fifteen-service refactor:
+   auth now lives in [`packages/auth`](../packages/auth/README.md) and each service selects a
+   provider with one line (`supabaseAuth()` → `entraAuth({...})`). Extracting it also fixed two
+   services whose `@SkipTenant()` was silently inert.
 5. ~~Three services have known schema drift.~~ **Resolved 2026-08-04.** All 14 services are clean and
    `KNOWN_DRIFT` in `scripts/check-migration-drift.sh` is empty — keep it empty; a name added there
    silences a real signal. Fixing it required adding the 15 missing foreign keys, which in turn
@@ -119,7 +136,8 @@ not have run on the target platform at all.
 
 - **The live database has objects that appear in no migration.** Four cross-schema foreign keys were
   applied by hand. Auditing the schema from `prisma/migrations/` alone gives wrong answers — query
-  `pg_constraint`. One of those FKs is now dropped; three remain on empty legacy tables.
+  `pg_constraint`. Two are now dropped; the two that remain sit entirely between the orphaned
+  `crm` and `identity` schemas, so **no service schema has a cross-schema foreign key any more**.
 - **Removing a column from raw SQL never fails the compiler.** `$queryRaw<T>` trusts the declared
   type. This bit twice: both times a query stopped selecting customer/venue fields while the type
   still declared them, so reminders would have gone out with no recipient. If you edit raw SQL,

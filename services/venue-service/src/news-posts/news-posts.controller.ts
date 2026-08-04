@@ -1,10 +1,21 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, HttpCode, HttpStatus } from '@nestjs/common'
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  Query,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common'
 import { ApiTags, ApiSecurity } from '@nestjs/swagger'
 import { SetMetadata } from '@nestjs/common'
 import { NewsPostsService } from './news-posts.service.js'
 import { UpsertNewsPostDto } from './dto/upsert-news-post.dto.js'
 import { TenantCtx, type TenantContext } from '../common/decorators/tenant-context.decorator.js'
-import { SKIP_TENANT_KEY } from '../common/guards/tenant-context.guard.js'
+import { SKIP_TENANT_KEY } from '@clubspark/auth'
 
 const SkipTenant = () => SetMetadata(SKIP_TENANT_KEY, true)
 

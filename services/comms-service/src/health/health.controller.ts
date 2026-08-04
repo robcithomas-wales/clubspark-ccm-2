@@ -1,6 +1,6 @@
 import { Controller, Get } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
-import { SkipTenant } from '../common/guards/tenant-context.guard.js'
+import { SkipTenant } from '@clubspark/auth'
 
 @ApiTags('Health')
 @Controller('health')

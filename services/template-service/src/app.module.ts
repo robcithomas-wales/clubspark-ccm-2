@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
 import { join } from 'node:path'
-import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core'
+import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core'
+import { AuthModule, supabaseAuth } from '@clubspark/auth'
 import { configuration } from './config/configuration.js'
 import { PrismaModule } from './prisma/prisma.module.js'
-import { TenantContextGuard } from './common/guards/tenant-context.guard.js'
 import { AllExceptionsFilter } from './common/filters/http-exception.filter.js'
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor.js'
 import { HealthController } from './health/health.controller.js'
@@ -16,7 +16,8 @@ import { HealthController } from './health/health.controller.js'
  * Root application module.
  *
  * Global providers registered here apply to every route automatically:
- * - TenantContextGuard  — extracts x-tenant-id / x-organisation-id headers
+ * - AuthModule          — verifies the JWT and sets tenant context on every
+ *                         request, via a global guard it registers itself
  * - AllExceptionsFilter — normalises error responses
  * - LoggingInterceptor  — request/response logging
  *
@@ -30,17 +31,16 @@ import { HealthController } from './health/health.controller.js'
       load: [configuration],
       envFilePath: join(__dirname, '..', '.env'),
     }),
+    // Authentication for every route. `supabaseAuth()` is the only line that
+    // names an identity provider — switching to Azure Entra External ID means
+    // replacing it with `entraAuth({...})` here and nowhere else.
+    AuthModule.forRoot(supabaseAuth()),
     PrismaModule,
     // Add domain modules here:
     // BookingsModule,
   ],
   controllers: [HealthController],
   providers: [
-    // Global guard — tenant context on every request
-    {
-      provide: APP_GUARD,
-      useClass: TenantContextGuard,
-    },
     // Global exception filter — consistent error shape
     {
       provide: APP_FILTER,

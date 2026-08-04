@@ -1,7 +1,7 @@
 import { Controller, Get, Param, Query, Req, BadRequestException } from '@nestjs/common'
 import { ApiTags, ApiQuery } from '@nestjs/swagger'
 import { EntitlementsService } from './entitlements.service.js'
-import type { TenantContext } from '../common/guards/tenant-context.guard.js'
+import type { TenantContext } from '@clubspark/auth'
 
 type RequestWithCtx = { tenantContext?: TenantContext }
 

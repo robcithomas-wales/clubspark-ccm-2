@@ -10,8 +10,8 @@ import {
 } from '@nestjs/common'
 import { ApiExcludeEndpoint } from '@nestjs/swagger'
 import { IsArray, IsString, IsOptional, ArrayMaxSize } from 'class-validator'
-import { SkipTenant } from '../common/decorators/skip-tenant.decorator.js'
-import { InternalSecretGuard } from '../common/guards/internal-secret.guard.js'
+import { SkipTenant } from '@clubspark/auth'
+import { InternalSecretGuard } from '@clubspark/auth'
 import { VenueReferenceService } from './venue-reference.service.js'
 
 /** Body for the internal reference lookup. Each list is optional. */

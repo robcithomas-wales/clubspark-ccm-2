@@ -1,9 +1,15 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest'
 import supertest from 'supertest'
 import type { ExecutionContext } from '@nestjs/common'
-import { InternalSecretGuard } from '../src/common/guards/internal-secret.guard.js'
+import { InternalSecretGuard } from '@clubspark/auth'
 import { getApp, closeApp } from './helpers/app.js'
-import { prisma, seedFixtures, cleanBookings, teardownFixtures, checkDbAvailable } from './helpers/db.js'
+import {
+  prisma,
+  seedFixtures,
+  cleanBookings,
+  teardownFixtures,
+  checkDbAvailable,
+} from './helpers/db.js'
 import {
   TEST_TENANT_ID,
   TEST_ORG_ID,
@@ -182,10 +188,12 @@ describe.runIf(DB_AVAILABLE)('Bookings — internal customer reassignment', () =
     const a = await insertBooking(OLD_CUSTOMER)
 
     const first = await request
-      .post(ENDPOINT).set(HEADERS)
+      .post(ENDPOINT)
+      .set(HEADERS)
       .send({ fromCustomerId: OLD_CUSTOMER, toCustomerId: NEW_CUSTOMER })
     const second = await request
-      .post(ENDPOINT).set(HEADERS)
+      .post(ENDPOINT)
+      .set(HEADERS)
       .send({ fromCustomerId: OLD_CUSTOMER, toCustomerId: NEW_CUSTOMER })
 
     expect(first.body.data.updated).toBe(1)
@@ -197,21 +205,26 @@ describe.runIf(DB_AVAILABLE)('Bookings — internal customer reassignment', () =
   it('is reversible — reassigning back restores the original id', async () => {
     const a = await insertBooking(OLD_CUSTOMER)
 
-    await request.post(ENDPOINT).set(HEADERS)
+    await request
+      .post(ENDPOINT)
+      .set(HEADERS)
       .send({ fromCustomerId: OLD_CUSTOMER, toCustomerId: NEW_CUSTOMER })
     // This is exactly what the caller's compensation step does on failure.
-    await request.post(ENDPOINT).set(HEADERS)
+    await request
+      .post(ENDPOINT)
+      .set(HEADERS)
       .send({ fromCustomerId: NEW_CUSTOMER, toCustomerId: OLD_CUSTOMER })
 
     expect(await customerOf(a)).toBe(OLD_CUSTOMER)
   })
 
-  it('never touches another tenant\'s bookings', async () => {
+  it("never touches another tenant's bookings", async () => {
     const mine = await insertBooking(OLD_CUSTOMER)
     const theirs = await insertBooking(OLD_CUSTOMER, OTHER_TENANT)
 
     const res = await request
-      .post(ENDPOINT).set(HEADERS)
+      .post(ENDPOINT)
+      .set(HEADERS)
       .send({ fromCustomerId: OLD_CUSTOMER, toCustomerId: NEW_CUSTOMER })
 
     expect(res.body.data.updated).toBe(1)

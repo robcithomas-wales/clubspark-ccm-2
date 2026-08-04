@@ -2,7 +2,7 @@ import { Controller, Post, Param, Req, Headers, HttpCode, HttpStatus } from '@ne
 import { ApiTags, ApiExcludeEndpoint } from '@nestjs/swagger'
 import type { FastifyRequest } from 'fastify'
 import { WebhooksService } from './webhooks.service.js'
-import { SkipTenant } from '../common/decorators/skip-tenant.decorator.js'
+import { SkipTenant } from '@clubspark/auth'
 
 // Webhook endpoints are called by external gateways, not by our frontend.
 // They are excluded from auth (@SkipTenant) and use the tenantId path param

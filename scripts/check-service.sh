@@ -17,7 +17,7 @@
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-REQUIRED_FILES="src/main.ts src/app.module.ts src/config/configuration.ts src/prisma/prisma.module.ts src/prisma/prisma.service.ts src/common/guards/tenant-context.guard.ts src/health/health.controller.ts prisma/schema.prisma package.json tsconfig.json nest-cli.json"
+REQUIRED_FILES="src/main.ts src/app.module.ts src/config/configuration.ts src/prisma/prisma.module.ts src/prisma/prisma.service.ts src/health/health.controller.ts prisma/schema.prisma package.json tsconfig.json nest-cli.json"
 REQUIRED_SCRIPTS="build dev start test prisma:generate"
 
 check_one() {
@@ -47,11 +47,25 @@ check_one() {
     errs="$errs\n      ✗ app.module.ts: ConfigModule missing cwd-independent envFilePath"
   fi
 
-  # 4. Fail-closed tenant guard (x-tenant-id header path must be NODE_ENV-gated)
-  g="$dir/src/common/guards/tenant-context.guard.ts"
-  if [ -f "$g" ] && grep -q "x-tenant-id" "$g" && ! grep -q "NODE_ENV'] !== 'test'" "$g"; then
-    errs="$errs\n      ✗ tenant-context.guard.ts: x-tenant-id fallback not fail-closed (missing NODE_ENV gate)"
+  # 4. Authentication comes from the shared package, not a local copy.
+  #
+  #    Every service used to carry its own tenant-context.guard.ts. They drifted
+  #    into six variants, and two of them silently ignored @SkipTenant() because
+  #    their copy had no Reflector. The guard now lives in @clubspark/auth, is
+  #    fail-closed there, and AuthModule.forRoot() registers it globally.
+  if [ -f "$dir/package.json" ]; then
+    node -e "process.exit((require('$dir/package.json').dependencies||{})['@clubspark/auth']?0:1)" 2>/dev/null \
+      || errs="$errs\n      ✗ package.json: missing dependency @clubspark/auth"
   fi
+  if [ -f "$dir/src/app.module.ts" ] && ! grep -q "AuthModule.forRoot(" "$dir/src/app.module.ts"; then
+    errs="$errs\n      ✗ app.module.ts: no AuthModule.forRoot() — the service is unauthenticated"
+  fi
+  # A re-forked local guard is how the drift started. Fail on it, don't warn.
+  for stale in src/common/guards/tenant-context.guard.ts \
+               src/common/guards/internal-secret.guard.ts \
+               src/common/decorators/skip-tenant.decorator.ts; do
+    [ -f "$dir/$stale" ] && errs="$errs\n      ✗ $stale: local copy of shared auth — import from @clubspark/auth instead"
+  done
 
   # 5. Health routes exempt from the tenant guard (probes send no JWT/tenant header)
   #    The guard is global and fail-closed, so a health controller without @SkipTenant()

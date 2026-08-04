@@ -1,7 +1,7 @@
 import { Controller, Post, Body, Logger, UseGuards } from '@nestjs/common'
 import { ApiTags, ApiOperation, ApiSecurity } from '@nestjs/swagger'
-import { SkipTenant } from '../common/guards/tenant-context.guard.js'
-import { InternalSecretGuard } from '../common/guards/internal-secret.guard.js'
+import { SkipTenant } from '@clubspark/auth'
+import { InternalSecretGuard } from '@clubspark/auth'
 import { NotificationsService } from '../notifications/notifications.service.js'
 import type { DomainEvent } from './domain-events.js'
 

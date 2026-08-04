@@ -19,8 +19,8 @@ import { CustomersService } from './customers.service.js'
 import { CreateCustomerDto } from './dto/create-customer.dto.js'
 import { UpdateCustomerDto } from './dto/update-customer.dto.js'
 import { BatchPeopleDto } from './dto/batch-people.dto.js'
-import { SkipTenant } from '../common/decorators/skip-tenant.decorator.js'
-import { InternalSecretGuard } from '../common/guards/internal-secret.guard.js'
+import { SkipTenant } from '@clubspark/auth'
+import { InternalSecretGuard } from '@clubspark/auth'
 
 @ApiTags('people')
 @Controller('people')

@@ -20,6 +20,21 @@ pkill -f "dist/main.js" 2>/dev/null || true
 sleep 2
 
 pass=0; skip=0; fail=0; failed=""
+
+# Shared packages first. @clubspark/auth guards every request in every service,
+# so a break here is a break everywhere — and its suite needs no database, so it
+# costs a fraction of a second and fails fast before the slow work starts.
+for pd in "$ROOT"/packages/*/; do
+  pname="$(basename "$pd")"
+  [ -d "$pd/test" ] || continue
+  plog="$LOGDIR/test-package-$pname.log"
+  if ( cd "$ROOT" && npm run test --workspace="packages/$pname" ) >"$plog" 2>&1; then
+    echo "  PASS: packages/$pname"; pass=$((pass+1))
+  else
+    echo "  FAIL: packages/$pname  (see $plog)"; fail=$((fail+1)); failed="$failed packages/$pname"
+  fi
+done
+
 for d in "$ROOT"/services/*/; do
   name="$(basename "$d")"
   log="$LOGDIR/test-$name.log"

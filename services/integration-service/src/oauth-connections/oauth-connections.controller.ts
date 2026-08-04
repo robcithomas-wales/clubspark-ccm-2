@@ -3,7 +3,7 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger'
 import type { FastifyReply } from 'fastify'
 import { OAuthConnectionsService } from './oauth-connections.service.js'
 import { TenantCtx, type TenantContext } from '../common/decorators/tenant-context.decorator.js'
-import { SkipTenant } from '../common/decorators/skip-tenant.decorator.js'
+import { SkipTenant } from '@clubspark/auth'
 import { ConfigService } from '@nestjs/config'
 import type { AppConfig } from '../config/configuration.js'
 
@@ -48,7 +48,9 @@ export class OAuthConnectionsController {
   ) {
     const tenantId = await this.service.handleXeroCallback(code, state)
     const adminUrl = this.config.get('adminPortalUrl', { infer: true })
-    void res.redirect(`${adminUrl}/settings/integrations/accounting?connected=xero&tenant=${tenantId}`)
+    void res.redirect(
+      `${adminUrl}/settings/integrations/accounting?connected=xero&tenant=${tenantId}`,
+    )
   }
 
   // ── QuickBooks OAuth flow ─────────────────────────────────────────────────
@@ -72,7 +74,9 @@ export class OAuthConnectionsController {
   ) {
     const tenantId = await this.service.handleQuickBooksCallback(code, state, realmId)
     const adminUrl = this.config.get('adminPortalUrl', { infer: true })
-    void res.redirect(`${adminUrl}/settings/integrations/accounting?connected=quickbooks&tenant=${tenantId}`)
+    void res.redirect(
+      `${adminUrl}/settings/integrations/accounting?connected=quickbooks&tenant=${tenantId}`,
+    )
   }
 
   // ── Initiate connect via API (returns auth URL for SPA redirect) ──────────

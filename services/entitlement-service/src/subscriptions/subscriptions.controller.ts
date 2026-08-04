@@ -3,7 +3,7 @@ import { ApiTags } from '@nestjs/swagger'
 import { SubscriptionsService } from './subscriptions.service.js'
 import { AssignPlanDto } from './dto/assign-plan.dto.js'
 import { UpdateSubscriptionDto } from './dto/update-subscription.dto.js'
-import type { TenantContext } from '../common/guards/tenant-context.guard.js'
+import type { TenantContext } from '@clubspark/auth'
 
 type RequestWithCtx = { tenantContext?: TenantContext }
 

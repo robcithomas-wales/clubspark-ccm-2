@@ -17,13 +17,16 @@ pooler).
 coaching, teams, competitions, payments, comms, analytics). Monorepo managed with
 **npm workspaces**. Backend is **NestJS on Fastify**; data is **PostgreSQL via Prisma**;
 front-ends are **Next.js**. Auth is **Supabase (JWT)** — services validate a Supabase
-JWT and read tenant context from it. Multi-tenant: tenant/organisation context comes from
+JWT and read tenant context from it, all through the shared **`@clubspark/auth`**
+package (one guard, not fifteen copies; swapping to Azure Entra is a one-line change
+per service). Multi-tenant: tenant/organisation context comes from
 the JWT and/or `x-tenant-id` / `x-organisation-id` headers for service-to-service calls.
 
 ## Repository layout
 
 | Path | What it is |
 |---|---|
+| `packages/*` | Shared libraries used by the services — currently `@clubspark/auth` |
 | `services/*` | 15 NestJS microservices (see table below) |
 | `admin-portal/` | Next.js admin app |
 | `customer-portal/` | Next.js customer app |
@@ -64,7 +67,7 @@ Run from the repo root unless noted.
 # Install everything (workspaces)
 npm install
 
-# Build all services
+# Build all services (builds packages/* first — services need their dist/)
 npm run build:services
 
 # Run all services (+ admin portal)
@@ -147,8 +150,17 @@ deploys there.
   ⚠️ Prisma migrate **hangs** on Supabase's transaction pooler (6543) — it needs the session
   connection (5432), which is what `DIRECT_DATABASE_URL` / `directUrl` is for. Full detail:
   [`docs/engineering/database-migrations.md`](docs/engineering/database-migrations.md).
+- **Auth comes from `@clubspark/auth` — never re-implement it.** A service wires it with
+  `AuthModule.forRoot(supabaseAuth())` in `app.module.ts`, which registers the tenant guard
+  globally, so **every route is authenticated unless it carries `@SkipTenant()`**. Use
+  `InternalSecretGuard` for service-to-service routes. Do not copy the guard into a service:
+  fifteen local copies drifted into six variants, two of which silently ignored `@SkipTenant()`,
+  and `check-service.sh` now fails on a local copy. Full detail:
+  [`packages/auth/README.md`](packages/auth/README.md).
 - **TypeScript ESM:** services import with explicit `.js` extensions (e.g.
-  `./app.module.js`). Match the existing style.
+  `./app.module.js`). Match the existing style. (Note: despite this, every service actually
+  *compiles* to CommonJS — `"module": "CommonJS"` with no `"type": "module"`. Shared packages
+  must emit CommonJS to be requireable.)
 - **API versioning:** URI-based (`enableVersioning({ type: VersioningType.URI })`);
   Swagger is served in non-production.
 
@@ -211,5 +223,6 @@ Reviewer agents (invoke before opening a PR):
 Adding a service? Use `/new-service <name> <port> [schema]` (wraps `scripts/new-service.sh`) —
 it clones `template-service` and registers the service in the port table, `build:services`, and
 `run-all.sh`. Then `./scripts/check-service.sh <name>` (or `--all`) verifies blueprint
-compliance — the standard service shape plus the fail-closed tenant guard and cwd-independent env
+compliance — the standard service shape, `AuthModule.forRoot()` wiring (and no re-forked
+local copy of the shared guards), and cwd-independent env
 loading. `@architecture-reviewer` runs this checker as its first pass.

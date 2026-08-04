@@ -92,6 +92,16 @@ incompatible.
 Auth is Supabase JWKS — single-region by construction. **Decide** on Microsoft Entra External ID;
 execution can follow, but the decision shapes every auth touchpoint.
 
+✅ **The execution cost is now much lower.** Auth was extracted into
+[`packages/auth`](../../packages/auth/README.md) on 2026-08-04: fifteen copies of the tenant
+guard (six divergent variants) collapsed into one, and provider choice is a single call —
+`supabaseAuth()` or `entraAuth({...})` — in each service's `app.module.ts`. Nothing else in the
+codebase knows which provider issued the token.
+
+⚠️ The remaining work is **not** in our code: Entra does not emit `tenantId` / `organisationId`
+by default. They need optional claims / a claims-mapping policy on the app registration. Until
+that exists every request fails with "Token is missing tenantId claim".
+
 ## MR-8 — Residual cleanups 🟢
 
 - ~~3 services in `KNOWN_DRIFT`~~ ✅ **Done 2026-08-04.** The 15 missing foreign keys were added, all

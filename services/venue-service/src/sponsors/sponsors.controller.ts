@@ -1,10 +1,21 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, Query, HttpCode, HttpStatus } from '@nestjs/common'
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  Query,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common'
 import { ApiTags, ApiOperation } from '@nestjs/swagger'
 import { SponsorsService } from './sponsors.service.js'
 import { CreateSponsorDto } from './dto/create-sponsor.dto.js'
 import { UpdateSponsorDto } from './dto/update-sponsor.dto.js'
 import { TenantCtx, type TenantContext } from '../common/decorators/tenant-context.decorator.js'
-import { SkipTenant } from '../common/decorators/skip-tenant.decorator.js'
+import { SkipTenant } from '@clubspark/auth'
 
 @ApiTags('sponsors')
 @Controller('sponsors')
