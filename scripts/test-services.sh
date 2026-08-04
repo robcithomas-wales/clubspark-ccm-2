@@ -19,6 +19,17 @@ pkill -f "nest start" 2>/dev/null || true
 pkill -f "dist/main.js" 2>/dev/null || true
 sleep 2
 
+# Build shared packages before anything imports them. Services resolve
+# @clubspark/auth to its compiled dist/, which is git-ignored — without this the
+# suites die with "Failed to resolve entry for package @clubspark/auth" on any
+# clean checkout, which is exactly what happened in CI.
+echo "Building shared packages..."
+if ! ( cd "$ROOT" && npm run build:packages ) >"$LOGDIR/build-packages.log" 2>&1; then
+  echo "  FAIL: shared packages did not build (see $LOGDIR/build-packages.log)"
+  tail -20 "$LOGDIR/build-packages.log"
+  exit 1
+fi
+
 pass=0; skip=0; fail=0; failed=""
 
 # Shared packages first. @clubspark/auth guards every request in every service,
