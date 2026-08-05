@@ -17,12 +17,14 @@ Technical specifications and architectural decisions for the Club and Coach plat
 | [engineering/security-and-data-boundaries.md](engineering/security-and-data-boundaries.md) | Multi-tenant isolation, secret handling, client/server boundary |
 | [engineering/testing-strategy.md](engineering/testing-strategy.md) | Pool-safe service tests + Playwright e2e |
 | [engineering/ai-provider-operations.md](engineering/ai-provider-operations.md) | Provisioning/operating Anthropic access for AI features |
+| [engineering/azure-migration-runbook.md](engineering/azure-migration-runbook.md) | Leaving Supabase for Azure — Postgres and Auth, what is done and what is not |
 
 ## Architecture
 
 | Document | Description |
 |---|---|
 | [architecture/platform-architecture.md](architecture/platform-architecture.md) | Platform architecture, service responsibilities, DB schemas, and phased implementation plan |
+| [architecture/data-classification.md](architecture/data-classification.md) | Which data is global vs regional — the residency boundary, per entity |
 | [architecture/azure-reference-architecture.md](architecture/azure-reference-architecture.md) | Azure hybrid serverless reference architecture for the platform |
 | [architecture/azure-aks-reference-architecture.md](architecture/azure-aks-reference-architecture.md) | Azure AKS reference architecture with Kubernetes-hosted services |
 

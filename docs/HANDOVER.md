@@ -158,6 +158,18 @@ not have run on the target platform at all.
 - **`@Cron` jobs are not registered when `NODE_ENV=test`**, because a job firing mid-test races the
   assertions. Tests that exercise a job call its method directly.
 
+## Moving to Azure
+
+[`engineering/azure-migration-runbook.md`](engineering/azure-migration-runbook.md). The short
+version: Supabase is used for **only** Postgres hosting and Auth — no Storage, Realtime, Edge
+Functions or RLS — so it is two independent workstreams.
+
+The backend is ready: `@clubspark/auth` means one line per service, and the repo builds its own
+schema from empty. **The work is in the four front-ends**, which still call the Supabase SDK
+directly from 176 files. Two traps: `btree_gist` must be allow-listed via `azure.extensions` before
+any migration will run, and Entra emits none of our custom claims until a claims-mapping policy is
+configured.
+
 ## Where to start
 
 1. **Enable branch protection** — everything else assumes CI is enforced.
