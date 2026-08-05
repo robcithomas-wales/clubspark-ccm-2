@@ -79,19 +79,26 @@ messaging *is* the consistency mechanism — and G1.1's projections depend on it
 *Why now:* retrofitting delivery guarantees under features that already assume them is far worse than
 building them first.
 
-### G1.3 — Tenant → region as a first-class concept (M)
-No `home_region` exists anywhere. Add it to the tenant registry **now, with one region**, and make
-every service resolve tenant context through it.
+### G1.3 — Tenant → region as a first-class concept (M) ✅ Done 2026-08-05
+`admin.organisations.home_region` (NOT NULL, defaulted to `eu-west-2`), and every request now carries
+`tenantContext.region` from `CLUBSPARK_REGION`. A service that cannot determine its region **refuses
+to start** rather than booting and reporting healthy. A token whose home-region claim disagrees with
+the serving region is refused with a 403 — inert today because Supabase does not emit the claim, live
+the moment an IdP is configured to.
 
-*Why now:* this is the cheapest item on the list today and one of the most expensive later — it
-touches every request path. One region simply means every tenant resolves to the same value.
+Deliberately *not* reusing the existing `admin.organisations.region`: that column is nullable,
+free-text, NULL on every row and used only as a list filter. Overloading a filter field with a legal
+boundary is how residency incidents happen.
 
-### G1.4 — Data classification: global vs regional (S)
-Decide per entity which data is regional (all customer/PII — the default) and which is global (tenant
-registry, plan catalogue, platform config). Write it down and enforce it in review.
+### G1.4 — Data classification: global vs regional (S) ✅ Done 2026-08-05
+[`../architecture/data-classification.md`](../architecture/data-classification.md). 120 models: 89
+directly tenant-scoped, 27 inheriting tenancy through a foreign-key chain, 4 genuinely global (the
+plan catalogue), plus 2 tenant-registry tables.
 
-*Why now:* pure thinking, near-zero cost. Getting it wrong means migrating live customer data across
-a legal boundary.
+Two findings worth knowing: the tenant registry is **split across `admin.organisations` and
+`venue.organisations`**, and the 27 inherited-tenancy tables cannot be selected by tenant without a
+join — so any "export/erase all of a tenant's data" operation that filters on `tenant_id` silently
+misses them.
 
 ### G1.5 — Cron leader election (M)
 **10 scheduled jobs across 6 services**, all unguarded — they fire on *every* replica. Until this is

@@ -9,14 +9,16 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import type { ExecutionContext } from '@nestjs/common'
-import { UnauthorizedException } from '@nestjs/common'
+import { ForbiddenException, UnauthorizedException } from '@nestjs/common'
 import type { Reflector } from '@nestjs/core'
 import { TenantContextGuard } from '../src/tenant-context.guard.js'
 import { InternalSecretGuard } from '../src/internal-secret.guard.js'
 import { SKIP_TENANT_KEY } from '../src/constants.js'
+import { resolveRegion } from '../src/presets.js'
 import type { AuthOptions, VerifiedClaims } from '../src/types.js'
 import type { TokenVerifier } from '../src/token-verifier.js'
 
+const REGION = 'eu-west-2'
 const TENANT = '11111111-1111-1111-1111-111111111111'
 const ORG = '22222222-2222-2222-2222-222222222222'
 const USER = '33333333-3333-3333-3333-333333333333'
@@ -51,6 +53,7 @@ function buildGuard(
   } as unknown as TokenVerifier
 
   const resolved: AuthOptions = {
+    region: REGION,
     jwks: { url: 'https://example.test/jwks' },
     claims: () => ({}),
     allowHeaderFallback: false,
@@ -87,7 +90,12 @@ describe('TenantContextGuard', () => {
       const req: RequestShape = { url: '/v1/plans', headers: { authorization: 'Bearer token' } }
 
       await expect(guard.canActivate(contextFor(req))).resolves.toBe(true)
-      expect(req.tenantContext).toEqual({ userId: USER, tenantId: TENANT, organisationId: ORG })
+      expect(req.tenantContext).toEqual({
+        userId: USER,
+        tenantId: TENANT,
+        organisationId: ORG,
+        region: REGION,
+      })
     })
 
     it('rejects a token with no tenantId claim', async () => {
@@ -111,7 +119,7 @@ describe('TenantContextGuard', () => {
       const req: RequestShape = { url: '/v1/plans', headers: { authorization: 'Bearer token' } }
 
       await guard.canActivate(contextFor(req))
-      expect(req.tenantContext).toEqual({ tenantId: TENANT })
+      expect(req.tenantContext).toEqual({ tenantId: TENANT, region: REGION })
     })
   })
 
@@ -131,7 +139,12 @@ describe('TenantContextGuard', () => {
       }
 
       await expect(guard.canActivate(contextFor(req))).resolves.toBe(true)
-      expect(req.tenantContext).toEqual({ userId: USER, tenantId: TENANT, organisationId: ORG })
+      expect(req.tenantContext).toEqual({
+        userId: USER,
+        tenantId: TENANT,
+        organisationId: ORG,
+        region: REGION,
+      })
     })
 
     it('still refuses when enabled but no tenant header is sent', async () => {
@@ -147,6 +160,57 @@ describe('TenantContextGuard', () => {
 
       await guard.canActivate(contextFor(req))
       expect(verifier.verify).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('region', () => {
+    it('stamps the serving region onto every authenticated request', async () => {
+      const { guard } = buildGuard()
+      const req: RequestShape = { url: '/v1/plans', headers: { authorization: 'Bearer token' } }
+
+      await guard.canActivate(contextFor(req))
+      expect((req.tenantContext as { region: string }).region).toBe(REGION)
+    })
+
+    // Data residency is a legal boundary. A request that reached the wrong
+    // region must be refused, not served.
+    it('refuses a tenant whose home region is elsewhere', async () => {
+      const { guard } = buildGuard({}, { claims: { tenantId: TENANT, homeRegion: 'us-east-1' } })
+      const req: RequestShape = { url: '/v1/plans', headers: { authorization: 'Bearer token' } }
+
+      await expect(guard.canActivate(contextFor(req))).rejects.toThrow(ForbiddenException)
+    })
+
+    // 403 not 401: the caller IS authenticated, and a fresh token would not help.
+    it('refuses with 403 rather than 401, since re-authenticating would not help', async () => {
+      const { guard } = buildGuard({}, { claims: { tenantId: TENANT, homeRegion: 'us-east-1' } })
+      const req: RequestShape = { url: '/v1/plans', headers: { authorization: 'Bearer token' } }
+
+      await expect(guard.canActivate(contextFor(req))).rejects.toMatchObject({ status: 403 })
+    })
+
+    it('allows a tenant whose home region matches', async () => {
+      const { guard } = buildGuard({}, { claims: { tenantId: TENANT, homeRegion: REGION } })
+      const req: RequestShape = { url: '/v1/plans', headers: { authorization: 'Bearer token' } }
+
+      await expect(guard.canActivate(contextFor(req))).resolves.toBe(true)
+    })
+
+    // Supabase does not emit the claim today, so this is the live path: absent
+    // means "no opinion", not "wrong region".
+    it('allows a token with no home-region claim at all', async () => {
+      const { guard } = buildGuard({}, { claims: { tenantId: TENANT } })
+      const req: RequestShape = { url: '/v1/plans', headers: { authorization: 'Bearer token' } }
+
+      await expect(guard.canActivate(contextFor(req))).resolves.toBe(true)
+    })
+
+    it('stamps the region on header-authenticated requests too', async () => {
+      const { guard } = buildGuard({ allowHeaderFallback: true })
+      const req: RequestShape = { url: '/v1/plans', headers: { 'x-tenant-id': TENANT } }
+
+      await guard.canActivate(contextFor(req))
+      expect(req.tenantContext).toEqual({ tenantId: TENANT, region: REGION })
     })
   })
 
@@ -220,5 +284,48 @@ describe('InternalSecretGuard', () => {
   it('refuses when the platform has no secret configured at all', () => {
     delete process.env['INTERNAL_SECRET']
     expect(() => call({ 'x-internal-secret': 'anything' })).toThrow('not configured')
+  })
+})
+
+describe('resolveRegion', () => {
+  const originalRegion = process.env['CLUBSPARK_REGION']
+  const originalEnv = process.env['NODE_ENV']
+
+  afterEach(() => {
+    if (originalRegion === undefined) delete process.env['CLUBSPARK_REGION']
+    else process.env['CLUBSPARK_REGION'] = originalRegion
+    if (originalEnv === undefined) delete process.env['NODE_ENV']
+    else process.env['NODE_ENV'] = originalEnv
+  })
+
+  it('uses CLUBSPARK_REGION when set', () => {
+    process.env['CLUBSPARK_REGION'] = 'us-east-1'
+    process.env['NODE_ENV'] = 'production'
+    expect(resolveRegion()).toBe('us-east-1')
+  })
+
+  // No global default. A deployment that forgets to declare its region must not
+  // silently inherit one — the symptom would be data served from the wrong
+  // jurisdiction, which is a legal problem rather than an outage.
+  it('throws in production when unset', () => {
+    delete process.env['CLUBSPARK_REGION']
+    process.env['NODE_ENV'] = 'production'
+    expect(() => resolveRegion()).toThrow('CLUBSPARK_REGION is not set')
+  })
+
+  // Fail closed: an unset or misspelled NODE_ENV demands the variable rather
+  // than assuming one, same allowlist as the header fallback.
+  it('throws when NODE_ENV is unset', () => {
+    delete process.env['CLUBSPARK_REGION']
+    delete process.env['NODE_ENV']
+    expect(() => resolveRegion()).toThrow('CLUBSPARK_REGION is not set')
+  })
+
+  it('defaults in test and development so a local .env need not set it', () => {
+    delete process.env['CLUBSPARK_REGION']
+    for (const env of ['test', 'development']) {
+      process.env['NODE_ENV'] = env
+      expect(resolveRegion()).toBe('eu-west-2')
+    }
   })
 })

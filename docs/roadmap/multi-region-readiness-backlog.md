@@ -72,13 +72,17 @@ an API hop per availability cell is untenable. Depends on MR-2 for reliable upda
 2 sites: `coaching.lesson_sessions` in the availability conflict check. Same projection approach as
 MR-3.
 
-## MR-5 — Tenant → region as a first-class concept 🔴 BLOCKING
+## MR-5 — Tenant → region as a first-class concept ✅ DONE 2026-08-05
 
-No `home_region` exists anywhere. Add it to the tenant registry **now, with one region**, and resolve
-tenant context through it everywhere.
+`admin.organisations.home_region` is NOT NULL and every request carries `tenantContext.region`,
+resolved from `CLUBSPARK_REGION` in `@clubspark/auth`. A service that cannot determine its region
+refuses to start; a token claiming a different home region is refused with 403.
 
-**Why now:** cheapest item on this list today and one of the most expensive later — it touches every
-request path. With one region every tenant simply resolves to the same value.
+**Still open, and it belongs with this item:** the tenant registry is split across
+`admin.organisations` and `venue.organisations`. Routing must read one authoritative registry that
+sits *outside* every region — resolving "which region?" cannot itself require knowing the region.
+venue-service already upserts into admin, so the flow exists; it just is not declared or enforced.
+See [`../architecture/data-classification.md`](../architecture/data-classification.md).
 
 ## MR-6 — Cron leader election 🟠
 

@@ -109,6 +109,10 @@ Supabase over the network.
     the real target is Supabase.
   - `SUPABASE_JWT_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — auth.
   - `PORT` — see the port table above.
+  - `CLUBSPARK_REGION` — the region this instance serves (e.g. `eu-west-2`). Required in
+    production; defaults to `eu-west-2` under `NODE_ENV=test`/`development`. A service that
+    cannot determine its region **refuses to start**, because it cannot then tell whether it is
+    allowed to serve a given tenant.
   - `<OTHER>_SERVICE_URL` — service-to-service base URLs (e.g. `PEOPLE_SERVICE_URL`).
 - Because tests hit **remote Supabase** (not a local DB), connections are pooled through
   pgbouncer with a low `connection_limit`. This is why running services must be killed
@@ -150,6 +154,12 @@ deploys there.
   ⚠️ Prisma migrate **hangs** on Supabase's transaction pooler (6543) — it needs the session
   connection (5432), which is what `DIRECT_DATABASE_URL` / `directUrl` is for. Full detail:
   [`docs/engineering/database-migrations.md`](docs/engineering/database-migrations.md).
+- **Data residency is a hard boundary.** Every request carries `tenantContext.region`, and
+  `admin.organisations.home_region` records where a tenant's data must live. Before adding a table,
+  check [`docs/architecture/data-classification.md`](docs/architecture/data-classification.md):
+  regional by default, global only by explicit exception. Note that 27 tables inherit tenancy
+  through a foreign key and have no `tenant_id` of their own — anything enumerating "all of a
+  tenant's data" must traverse the parent or it will silently miss them.
 - **Auth comes from `@clubspark/auth` — never re-implement it.** A service wires it with
   `AuthModule.forRoot(supabaseAuth())` in `app.module.ts`, which registers the tenant guard
   globally, so **every route is authenticated unless it carries `@SkipTenant()`**. Use

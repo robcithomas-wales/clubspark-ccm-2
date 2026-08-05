@@ -41,7 +41,12 @@ model Organisation {
   name                  String
   slug                  String?                @unique
   sport                 String?
+  /// Descriptive only — an optional free-text filter with no enforcement.
+  /// NOT the data-residency field; see homeRegion.
   region                String?
+  /// Region whose silo holds this tenant's data. A request that reaches a
+  /// different region is refused with a 403 by the shared tenant guard.
+  homeRegion            String                 @default("eu-west-2") @map("home_region")
   plan                  String                 @default("trial")
   status                String                 @default("active")
   paymentConnected      Boolean                @default(false) @map("payment_connected")
@@ -53,6 +58,7 @@ model Organisation {
   impersonationSessions ImpersonationSession[]
 
   @@index([plan], map: "idx_organisations_plan")
+  @@index([homeRegion], map: "idx_organisations_home_region")
   @@index([region], map: "idx_organisations_region")
   @@index([status], map: "idx_organisations_status")
   @@map("organisations")

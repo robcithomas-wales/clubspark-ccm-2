@@ -1,8 +1,11 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Inject,
   Injectable,
+  Logger,
+  OnModuleInit,
   UnauthorizedException,
 } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
@@ -21,12 +24,39 @@ type AuthedRequest = FastifyRequest & { tenantContext?: TenantContext }
  * with `@SkipTenant()`.
  */
 @Injectable()
-export class TenantContextGuard implements CanActivate {
+export class TenantContextGuard implements CanActivate, OnModuleInit {
+  private readonly logger = new Logger(TenantContextGuard.name)
+  private resolvedRegion: string | null = null
+
   constructor(
     private readonly reflector: Reflector,
     private readonly verifier: TokenVerifier,
     @Inject(AUTH_OPTIONS) private readonly options: AuthOptions,
   ) {}
+
+  /**
+   * Resolve the region at startup, so a service that cannot determine which
+   * region it serves refuses to start.
+   *
+   * This runs late enough to see `.env` — `ConfigModule.forRoot()` has already
+   * executed by the time Nest calls lifecycle hooks — but early enough that the
+   * process never accepts traffic. Deferring to the first request is not good
+   * enough: the service would boot, report healthy on /health, and be given live
+   * traffic by a load balancer before anyone discovered it could not tell which
+   * tenants it is allowed to serve.
+   */
+  onModuleInit(): void {
+    this.logger.log(`Serving region '${this.region()}'`)
+  }
+
+  /** Resolved once — see `RegionSource`. */
+  private region(): string {
+    if (this.resolvedRegion === null) {
+      this.resolvedRegion =
+        typeof this.options.region === 'function' ? this.options.region() : this.options.region
+    }
+    return this.resolvedRegion
+  }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     if (
@@ -57,10 +87,27 @@ export class TenantContextGuard implements CanActivate {
         throw new UnauthorizedException('Token is missing tenantId claim')
       }
 
+      // Data residency is a legal boundary, so a request that has reached the
+      // wrong region is refused rather than served. 403, not 401: the caller is
+      // authenticated, they are just not authorised *here* — and retrying with a
+      // fresh token would not help, which a 401 would wrongly imply.
+      //
+      // Normally a no-op: Supabase does not emit a home-region claim, so
+      // `homeRegion` is absent and there is nothing to disagree with. It becomes
+      // live the moment the IdP is configured to include it.
+      const region = this.region()
+      if (claims.homeRegion && claims.homeRegion !== region) {
+        throw new ForbiddenException(
+          `Tenant's home region is '${claims.homeRegion}' but this is '${region}' — ` +
+            'the request has reached the wrong region and cannot be served here',
+        )
+      }
+
       request.tenantContext = {
         ...(claims.userId ? { userId: claims.userId } : {}),
         tenantId: claims.tenantId,
         ...(claims.organisationId ? { organisationId: claims.organisationId } : {}),
+        region,
       }
       return true
     }
@@ -87,6 +134,7 @@ export class TenantContextGuard implements CanActivate {
       ...(typeof userId === 'string' && userId ? { userId } : {}),
       tenantId,
       ...(typeof organisationId === 'string' && organisationId ? { organisationId } : {}),
+      region: this.region(),
     }
     return true
   }

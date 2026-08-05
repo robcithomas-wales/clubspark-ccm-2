@@ -112,8 +112,12 @@ not have run on the target platform at all.
    These block regionalization. The design question is unresolved: venue-service has **no event bus**
    and only one of the four tables has an `updated_at`, so neither event-driven nor watermark sync is
    available. Options and a recommendation are in the backlog under MR-3b.
-2. **No tenant→region concept exists.** No `home_region` anywhere. Cheapest thing on the list today,
-   most expensive later — it touches every request path.
+2. ~~No tenant→region concept exists.~~ **Added 2026-08-05.** `admin.organisations.home_region` is
+   NOT NULL; every request carries `tenantContext.region` from `CLUBSPARK_REGION`; a service that
+   cannot determine its region refuses to start. **Still open:** the tenant registry is split across
+   `admin.organisations` and `venue.organisations`, and routing needs one authoritative registry
+   outside every region — see
+   [`architecture/data-classification.md`](architecture/data-classification.md).
 3. **10 `@Cron` jobs across 6 services fire on every replica.** The platform cannot run more than one
    replica of anything without duplicate charges, emails and reminders. (The outbox relay is the
    exception — it uses `FOR UPDATE SKIP LOCKED` and is already safe.)
