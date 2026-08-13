@@ -16,26 +16,53 @@ is why some fairly invasive fixes below were safe to make.
 
 ```bash
 npm install                       # also installs the shared git hooks
-cp services/<name>/.env.example services/<name>/.env    # for each service; fill DATABASE_URL
+cp .env.example .env              # ONE file, at the repo root; fill in 3 values
+npm run setup:env                 # generates all 15 services/<name>/.env
+npm run check:env                 # verifies they are present and current
 npm run prisma:generate:all       # Prisma clients are git-ignored
 npm run build:services
 ./scripts/run-all.sh start        # or npm run start:services
 ```
 
-Everything a service needs is in its `.env.example`, including `INTERNAL_SECRET` — see the warning
-below. The only value you must supply yourself is `DATABASE_URL` (and `DIRECT_DATABASE_URL`).
+You configure the platform **once, at the root**. All 15 services share one database and one
+Supabase project, so those values live in the root `.env` and `npm run setup:env` generates each
+service's file from it (mode `0600`). Do not hand-edit a generated `.env` — it carries a
+`# GENERATED` header and `setup:env` will refuse to overwrite it without `--force`. A value one
+service genuinely needs to differ on goes in `services/<name>/.env.override`.
+
+The three required values are `DATABASE_URL`, `SUPABASE_URL` and `INTERNAL_SECRET`. Generate the
+last one with `openssl rand -hex 32`.
 
 ### ⚠️ Two things that will bite you
 
 **1. `INTERNAL_SECRET` must be identical across every service.** Services authenticate to each
 other's internal endpoints with it, and the guards are **fail-closed** — a missing or mismatched
 value means customer merge, people/venue lookups and all domain-event delivery silently stop
-working. The `.env.example` default is fine for local work.
+working. Generating from the root `.env` is what keeps them identical; there is deliberately no
+committed default, because a shared default credential on the internal surface is worse than a
+loud failure. Note the **internal portal is not yet covered by the generator** — set
+`INTERNAL_SECRET` in `internal-portal/.env.local` to the same value by hand.
 
-**2. Prisma migrations hang on Supabase's transaction pooler (port 6543).** They need the session
-connection (5432). That is what `DIRECT_DATABASE_URL` is for; every `schema.prisma` declares
-`directUrl`. If a migrate command appears to freeze, this is why. Do **not** reach for
-`prisma db push` — see below for what that cost us.
+**2. Never set `DIRECT_DATABASE_URL`, and never run `prisma migrate` from a service directory.**
+Migrations need a session connection (5432) — the transaction pooler (6543) silently hangs on DDL —
+*and* a `?schema=<service>` pin, because each service keeps its own `_prisma_migrations` inside its
+own schema. Miss the pin and Prisma looks in `public`, finds no history, and reports applied
+baselines as *pending*.
+
+Both are derived for you. Use the scripts, never raw Prisma:
+
+```bash
+npm run migrate:status    # read-only, all 15 services
+npm run migrate:all       # apply; also runs the shared bootstrap SQL and orders passes
+npm run check:drift       # proves migrations still match schema.prisma
+```
+
+`DIRECT_DATABASE_URL` is deliberately left unset, so an ad-hoc `npx prisma migrate deploy` fails
+fast with `P1012` rather than running while skipping the bootstrap and ordering. `npx prisma
+validate` and `prisma studio` fail for the same reason — that is expected, not a broken checkout.
+`prisma generate` is unaffected.
+
+Do **not** reach for `prisma db push` — see below for what that cost us.
 
 ## What changed recently, and why it matters
 

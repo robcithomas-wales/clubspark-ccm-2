@@ -7,7 +7,8 @@ Bootstrap this checkout (or fresh worktree) so services can run and tests can pa
 1. **Install** — run `npm install` at the repo root (npm workspaces installs everything).
 2. **Environment** — this platform uses **Supabase** (hosted Postgres + JWT auth); there is
    **no local database or docker-compose**. For each `services/<name>` that has a
-   `.env.example` but no `.env`, copy the example to `.env`. Then tell me which values I
+   root `.env` is missing, copy `.env.example` to `.env`, then run `npm run setup:env` to
+   generate all 15 service files. Then tell me which values I
    must fill in — do **not** invent secrets:
    - `DATABASE_URL` → the Supabase Postgres connection string
    - `SUPABASE_JWT_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
@@ -18,4 +19,5 @@ Bootstrap this checkout (or fresh worktree) so services can run and tests can pa
    to confirm the toolchain works.
 
 Report what's ready and exactly which env values I still need to provide. Never commit a
-real `.env` — only `.env.example` is tracked.
+real `.env` — only `.env.example` is tracked. Never hand-edit a generated
+`services/*/.env`; change the root `.env` and re-run `npm run setup:env`.

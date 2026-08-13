@@ -12,7 +12,7 @@ failure modes in order and report what you find — don't guess.
    Read `$1-service.log` there for the real stack trace / startup error.
 3. **Env** — the top local culprits we've actually hit:
    - missing/empty `DATABASE_URL` or other required vars in `services/$1-service/.env`
-     (copy from `.env.example` if `.env` is absent);
+     (if `.env` is absent or stale, run `npm run check:env`, then `npm run setup:env`);
    - `PORT` in `.env` disagreeing with the canonical port table (causes collisions / "wrong
      port" fetches);
    - Prisma client not generated → `npm run prisma:generate --workspace=services/$1-service`.

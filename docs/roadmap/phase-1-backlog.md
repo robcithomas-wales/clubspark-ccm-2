@@ -196,8 +196,26 @@ Three cross-schema FKs remain, all on empty legacy tables with no code reference
 (`crm.customers` ×2 and `membership.membership_participants`, all → the orphaned `identity` schema).
 Harmless; dropping the dead `identity`/`crm` schemas is a separate, deliberate cleanup.
 
-Note for future migrations: the platform shares a single `public._prisma_migrations` table across
-all 15 services, so per-service `prisma migrate deploy` is unreliable — apply SQL directly.
+Note for future migrations — **corrected 2026-08-12.** The earlier note here claimed the platform
+shared a single `public._prisma_migrations` table, and concluded that per-service
+`prisma migrate deploy` was unreliable so SQL should be applied directly. Both halves were wrong,
+and the advice was dangerous.
+
+Checked against the live database: there is **no** `public._prisma_migrations`. Each service owns
+its own, in its own schema (`venue._prisma_migrations`, `commerce._prisma_migrations`, and so on —
+14 in total; `template-service` has no migrations). The design in CLAUDE.md was right all along.
+
+`scripts/migrate-all.sh` was already correct: it reads `schemas =` out of each
+`schema.prisma` and pins `?schema=` per service on both URLs, so `migrate deploy` through that
+script has always been reliable. `check-migration-drift.sh` does the same. There was nothing to
+work around.
+
+What *was* missing is a read-only equivalent, so engineers reached for `npx prisma migrate
+status` inside a service directory — which failed, because `DIRECT_DATABASE_URL` was undefined
+(`P1012`). That is now `npm run migrate:status`, which derives the session URL and the schema pin
+the same way. All 14 report up to date.
+
+Do not apply SQL directly, and do not put `DIRECT_DATABASE_URL` in a `.env`: use the scripts.
 
 **Next up:** WO-2.1 (transactional outbox) or WO-5.1 (tracing) — both 🟢, no decisions, no infra.
 Wave B (the actual decouple) proceeds on the WO-1.0 recommendation: **projection** for the hot

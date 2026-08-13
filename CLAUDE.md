@@ -101,23 +101,47 @@ There is **no local database and no docker-compose.** The database is **Supabase
 PostgreSQL** and auth is **Supabase JWT**. Both local dev and the test suites connect to
 Supabase over the network.
 
-- Each service is configured by its own `services/<name>/.env` (git-ignored). Copy the
-  service's `.env.example` to `.env` and fill in real values. Key vars:
-  - `DATABASE_URL` — the Supabase Postgres connection string
-    (`postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres`).
-    Some `.env.example` files still show a `localhost:5432` placeholder — that is stale;
-    the real target is Supabase.
-  - `SUPABASE_JWT_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — auth.
-  - `PORT` — see the port table above.
-  - `CLUBSPARK_REGION` — the region this instance serves (e.g. `eu-west-2`). Required in
-    production; defaults to `eu-west-2` under `NODE_ENV=test`/`development`. A service that
-    cannot determine its region **refuses to start**, because it cannot then tell whether it is
-    allowed to serve a given tenant.
-  - `<OTHER>_SERVICE_URL` — service-to-service base URLs (e.g. `PEOPLE_SERVICE_URL`).
-- Because tests hit **remote Supabase** (not a local DB), connections are pooled through
-  pgbouncer with a low `connection_limit`. This is why running services must be killed
-  before a push — otherwise the shared connection pool is exhausted and tests fail.
-- Never commit a real `.env`. Only `.env.example` is tracked.
+**Configure once, at the repo root — never per service.**
+
+```bash
+cp .env.example .env      # fill in 3 required values
+npm run setup:env         # generates all 15 services/<name>/.env
+npm run check:env         # verifies they are present and current
+```
+
+All 15 services share one database and one Supabase project, so those values live in the root
+`.env` (git-ignored) and nowhere else. `npm run setup:env` generates each
+`services/<name>/.env` from it, writing them `0600`. **Do not hand-edit a generated file** — it
+carries a `# GENERATED` header, and setup:env refuses to overwrite a hand-edited one without
+`--force`. If one service truly needs a different value, put it in
+`services/<name>/.env.override`.
+
+This replaced 15 hand-maintained copies, which had silently drifted: `booking-service` declared
+`PORT=4017` when the canonical port is 4005, and only `template-service` carried the pgbouncer
+flags the pooler requires. Derived values are now derived:
+
+- **`PORT` and every `<PEER>_SERVICE_URL`** — from the port table in `scripts/run-all.sh`, so
+  they cannot disagree with what actually runs.
+- **pgbouncer flags** — `pgbouncer=true&connection_limit=…&pool_timeout=10` are applied in exactly
+  one place, each service's `PrismaService`, reading `DB_CONNECTION_LIMIT` (default 1). Both flags
+  are required: without `pgbouncer=true` Prisma issues prepared statements a transaction pooler
+  cannot support, and without a connection cap 15 services exhaust the shared pool (the reason
+  running services must be killed before a push). Keep `DATABASE_URL` free of a query string —
+  appending the flags in two places produces a doubled query string that Prisma currently tolerates
+  (last duplicate wins, so the other value is silently ignored) and a future version will reject.
+- **`DIRECT_DATABASE_URL` — do not set it.** Nothing at runtime reads it; only the Prisma CLI
+  uses `directUrl`. `migrate:all`, `check:drift` and `migrate:status` each derive it themselves
+  (session port 5432 plus the per-service `?schema=` pin). Leaving it unset means an ad-hoc
+  `npx prisma migrate deploy` inside a service directory fails fast rather than running while
+  skipping the shared bootstrap SQL and the cross-schema ordering passes.
+- **`SUPABASE_SERVICE_ROLE_KEY`** bypasses RLS, so it goes only to the services on the allowlist
+  in `scripts/setup-env.mjs` (currently comms and venue) — not to all 15.
+- **`CLUBSPARK_REGION`** — the region this instance serves. Required in production; defaults to
+  `eu-west-2` under `NODE_ENV=test`/`development`. A service that cannot determine its region
+  **refuses to start**, because it cannot then tell whether it may serve a given tenant.
+
+Never commit a real `.env`. Only `.env.example` files are tracked, and `*.bak` is ignored so a
+saved backup cannot leak credentials either.
 
 ## Deployment (current vs target)
 
@@ -148,8 +172,12 @@ deploys there.
 - **Schema changes go through migrations — never `prisma db push`** against a shared database.
   `db push` records nothing, and it is why six services once had tables that existed only in the
   live database and the platform could not rebuild its own schema. Each service owns one baseline
-  plus its later migrations, and its own `_prisma_migrations` table (the connection pins
-  `?schema=<service>`). `npm run migrate:all` builds a database from empty; `npm run check:drift`
+  plus its later migrations, and its own `_prisma_migrations` table — which Prisma only finds if
+  **`DIRECT_DATABASE_URL` pins `?schema=<service>`**. Omit it and Prisma looks in `public`, sees no
+  history, and reports applied baselines as *pending* — one `migrate deploy` away from trying to
+  recreate live tables. Note the schema name is not always the service name (`order-service` →
+  `commerce`, `competition-service` → `competitions`, `entitlement-service` → `entitlements`).
+  `npm run migrate:all` builds a database from empty; `npm run check:drift`
   proves migrations still match `schema.prisma`. CI runs both on a throwaway Postgres every PR.
   ⚠️ Prisma migrate **hangs** on Supabase's transaction pooler (6543) — it needs the session
   connection (5432), which is what `DIRECT_DATABASE_URL` / `directUrl` is for. Full detail:
