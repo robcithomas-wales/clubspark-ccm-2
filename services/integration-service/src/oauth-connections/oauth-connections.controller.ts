@@ -8,7 +8,7 @@ import { ConfigService } from '@nestjs/config'
 import type { AppConfig } from '../config/configuration.js'
 
 @ApiTags('OAuth Connections')
-@Controller('v1/connections')
+@Controller({ path: 'connections', version: '1' })
 export class OAuthConnectionsController {
   constructor(
     private readonly service: OAuthConnectionsService,

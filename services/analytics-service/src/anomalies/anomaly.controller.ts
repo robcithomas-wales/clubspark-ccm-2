@@ -1,13 +1,20 @@
 import {
-  Controller, Get, Post, Patch, Param, Query,
-  DefaultValuePipe, ParseIntPipe, HttpCode,
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Param,
+  Query,
+  DefaultValuePipe,
+  ParseIntPipe,
+  HttpCode,
 } from '@nestjs/common'
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger'
 import { AnomalyService } from './anomaly.service.js'
 import { TenantCtx, type TenantContext } from '../common/decorators/tenant-context.decorator.js'
 
 @ApiTags('Anomalies')
-@Controller('v1/anomalies')
+@Controller({ path: 'anomalies', version: '1' })
 export class AnomalyController {
   constructor(private readonly service: AnomalyService) {}
 

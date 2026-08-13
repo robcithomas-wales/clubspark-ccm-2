@@ -2,7 +2,7 @@ import 'reflect-metadata'
 import 'dotenv/config'
 import { NestFactory } from '@nestjs/core'
 import { type NestFastifyApplication, FastifyAdapter } from '@nestjs/platform-fastify'
-import { ValidationPipe, VersioningType } from '@nestjs/common'
+import { ValidationPipe, VersioningType, VERSION_NEUTRAL } from '@nestjs/common'
 import { AppModule } from '../../src/app.module.js'
 
 let app: NestFastifyApplication | null = null
@@ -10,11 +10,9 @@ let app: NestFastifyApplication | null = null
 export async function getApp(): Promise<NestFastifyApplication> {
   if (app) return app
 
-  app = await NestFactory.create<NestFastifyApplication>(
-    AppModule,
-    new FastifyAdapter(),
-    { logger: false },
-  )
+  app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), {
+    logger: false,
+  })
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -25,7 +23,11 @@ export async function getApp(): Promise<NestFastifyApplication> {
     }),
   )
 
-  app.enableVersioning({ type: VersioningType.URI })
+  app.enableVersioning({
+    type: VersioningType.URI,
+    // Mirror main.ts so tests exercise the same route shapes as production.
+    defaultVersion: [VERSION_NEUTRAL, '1'],
+  })
 
   await app.listen(0)
   return app

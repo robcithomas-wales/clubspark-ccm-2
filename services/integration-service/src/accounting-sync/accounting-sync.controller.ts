@@ -4,7 +4,7 @@ import { AccountingSyncService } from './accounting-sync.service.js'
 import { TenantCtx, type TenantContext } from '../common/decorators/tenant-context.decorator.js'
 
 @ApiTags('Accounting Sync')
-@Controller('v1/accounting/sync-log')
+@Controller({ path: 'accounting/sync-log', version: '1' })
 export class AccountingSyncController {
   constructor(private readonly service: AccountingSyncService) {}
 

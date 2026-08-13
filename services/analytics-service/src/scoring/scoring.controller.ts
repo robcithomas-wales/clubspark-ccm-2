@@ -1,6 +1,13 @@
 import {
-  Controller, Get, Post, Param, Query, Body,
-  DefaultValuePipe, ParseIntPipe, HttpCode,
+  Controller,
+  Get,
+  Post,
+  Param,
+  Query,
+  Body,
+  DefaultValuePipe,
+  ParseIntPipe,
+  HttpCode,
 } from '@nestjs/common'
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger'
 import { IsArray, IsString } from 'class-validator'
@@ -14,7 +21,7 @@ class BulkScoresDto {
 }
 
 @ApiTags('Scores')
-@Controller('v1/scores')
+@Controller({ path: 'scores', version: '1' })
 export class ScoringController {
   constructor(private readonly service: ScoringService) {}
 
@@ -29,7 +36,12 @@ export class ScoringController {
     @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
     @Query('minChurnRisk', new DefaultValuePipe(0), ParseIntPipe) minChurnRisk: number,
   ) {
-    return this.service.listScores(ctx.tenantId, page, limit, minChurnRisk > 0 ? minChurnRisk : undefined)
+    return this.service.listScores(
+      ctx.tenantId,
+      page,
+      limit,
+      minChurnRisk > 0 ? minChurnRisk : undefined,
+    )
   }
 
   @Get(':personId')
@@ -48,7 +60,9 @@ export class ScoringController {
 
   @Post('compute')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Trigger score computation for tenant (use sparingly; runs nightly automatically)' })
+  @ApiOperation({
+    summary: 'Trigger score computation for tenant (use sparingly; runs nightly automatically)',
+  })
   async compute(@TenantCtx() ctx: TenantContext) {
     await this.service.scoreTenant(ctx.tenantId)
     return { scheduled: true }
