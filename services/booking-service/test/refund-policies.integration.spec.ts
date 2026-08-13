@@ -29,7 +29,7 @@ describe.runIf(DB_AVAILABLE)('Refund Policies — integration', () => {
 
   describe('POST /refund-policies', () => {
     it('creates a refund policy and returns it', async () => {
-      const res = await request.post('/refund-policies').set(JSON_HEADERS).send(POLICY)
+      const res = await request.post('/v1/refund-policies').set(JSON_HEADERS).send(POLICY)
 
       expect(res.status).toBe(201)
       expect(res.body.data.id).toBeDefined()
@@ -41,7 +41,7 @@ describe.runIf(DB_AVAILABLE)('Refund Policies — integration', () => {
 
     it('returns 400 when hoursBeforeStart is missing', async () => {
       const res = await request
-        .post('/refund-policies')
+        .post('/v1/refund-policies')
         .set(JSON_HEADERS)
         .send({ name: 'Incomplete', refundPct: 50 })
 
@@ -50,7 +50,7 @@ describe.runIf(DB_AVAILABLE)('Refund Policies — integration', () => {
 
     it('returns 400 when refundPct exceeds 100', async () => {
       const res = await request
-        .post('/refund-policies')
+        .post('/v1/refund-policies')
         .set(JSON_HEADERS)
         .send({ name: 'Over 100', hoursBeforeStart: 24, refundPct: 110 })
 
@@ -58,56 +58,56 @@ describe.runIf(DB_AVAILABLE)('Refund Policies — integration', () => {
     })
 
     it('returns 401 without auth', async () => {
-      const res = await request.post('/refund-policies').send(POLICY)
+      const res = await request.post('/v1/refund-policies').send(POLICY)
       expect(res.status).toBe(401)
     })
   })
 
   describe('GET /refund-policies', () => {
     it('lists all refund policies for the tenant', async () => {
-      await request.post('/refund-policies').set(JSON_HEADERS).send(POLICY)
+      await request.post('/v1/refund-policies').set(JSON_HEADERS).send(POLICY)
 
-      const res = await request.get('/refund-policies').set(HEADERS)
+      const res = await request.get('/v1/refund-policies').set(HEADERS)
       expect(res.status).toBe(200)
       expect(Array.isArray(res.body.data)).toBe(true)
       expect(res.body.data.length).toBeGreaterThanOrEqual(1)
     })
 
     it('returns empty list when no policies exist', async () => {
-      const res = await request.get('/refund-policies').set(HEADERS)
+      const res = await request.get('/v1/refund-policies').set(HEADERS)
       expect(res.status).toBe(200)
       expect(res.body.data).toHaveLength(0)
     })
 
     it('returns 401 without auth', async () => {
-      const res = await request.get('/refund-policies')
+      const res = await request.get('/v1/refund-policies')
       expect(res.status).toBe(401)
     })
   })
 
   describe('GET /refund-policies/:id', () => {
     it('returns a policy by id', async () => {
-      const created = await request.post('/refund-policies').set(JSON_HEADERS).send(POLICY)
+      const created = await request.post('/v1/refund-policies').set(JSON_HEADERS).send(POLICY)
       const id = created.body.data.id
 
-      const res = await request.get(`/refund-policies/${id}`).set(HEADERS)
+      const res = await request.get(`/v1/refund-policies/${id}`).set(HEADERS)
       expect(res.status).toBe(200)
       expect(res.body.data.id).toBe(id)
     })
 
     it('returns 404 for a non-existent policy', async () => {
-      const res = await request.get(`/refund-policies/${TEST_NONEXISTENT_ID}`).set(HEADERS)
+      const res = await request.get(`/v1/refund-policies/${TEST_NONEXISTENT_ID}`).set(HEADERS)
       expect(res.status).toBe(404)
     })
   })
 
   describe('PATCH /refund-policies/:id', () => {
     it('updates the refund percentage', async () => {
-      const created = await request.post('/refund-policies').set(JSON_HEADERS).send(POLICY)
+      const created = await request.post('/v1/refund-policies').set(JSON_HEADERS).send(POLICY)
       const id = created.body.data.id
 
       const res = await request
-        .patch(`/refund-policies/${id}`)
+        .patch(`/v1/refund-policies/${id}`)
         .set(JSON_HEADERS)
         .send({ refundPct: 50 })
 
@@ -116,11 +116,11 @@ describe.runIf(DB_AVAILABLE)('Refund Policies — integration', () => {
     })
 
     it('deactivates a policy', async () => {
-      const created = await request.post('/refund-policies').set(JSON_HEADERS).send(POLICY)
+      const created = await request.post('/v1/refund-policies').set(JSON_HEADERS).send(POLICY)
       const id = created.body.data.id
 
       const res = await request
-        .patch(`/refund-policies/${id}`)
+        .patch(`/v1/refund-policies/${id}`)
         .set(JSON_HEADERS)
         .send({ isActive: false })
 
@@ -130,7 +130,7 @@ describe.runIf(DB_AVAILABLE)('Refund Policies — integration', () => {
 
     it('returns 404 for a non-existent policy', async () => {
       const res = await request
-        .patch(`/refund-policies/${TEST_NONEXISTENT_ID}`)
+        .patch(`/v1/refund-policies/${TEST_NONEXISTENT_ID}`)
         .set(JSON_HEADERS)
         .send({ refundPct: 50 })
 
@@ -140,18 +140,18 @@ describe.runIf(DB_AVAILABLE)('Refund Policies — integration', () => {
 
   describe('DELETE /refund-policies/:id', () => {
     it('deletes a policy and returns 204', async () => {
-      const created = await request.post('/refund-policies').set(JSON_HEADERS).send(POLICY)
+      const created = await request.post('/v1/refund-policies').set(JSON_HEADERS).send(POLICY)
       const id = created.body.data.id
 
-      const del = await request.delete(`/refund-policies/${id}`).set(HEADERS)
+      const del = await request.delete(`/v1/refund-policies/${id}`).set(HEADERS)
       expect(del.status).toBe(204)
 
-      const get = await request.get(`/refund-policies/${id}`).set(HEADERS)
+      const get = await request.get(`/v1/refund-policies/${id}`).set(HEADERS)
       expect(get.status).toBe(404)
     })
 
     it('returns 404 for a non-existent policy', async () => {
-      const res = await request.delete(`/refund-policies/${TEST_NONEXISTENT_ID}`).set(HEADERS)
+      const res = await request.delete(`/v1/refund-policies/${TEST_NONEXISTENT_ID}`).set(HEADERS)
       expect(res.status).toBe(404)
     })
   })

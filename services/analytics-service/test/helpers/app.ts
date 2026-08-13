@@ -2,8 +2,9 @@ import 'reflect-metadata'
 import 'dotenv/config'
 import { NestFactory } from '@nestjs/core'
 import { type NestFastifyApplication, FastifyAdapter } from '@nestjs/platform-fastify'
-import { ValidationPipe, VersioningType, VERSION_NEUTRAL } from '@nestjs/common'
+import { ValidationPipe } from '@nestjs/common'
 import { AppModule } from '../../src/app.module.js'
+import { configureRouting } from '../../src/bootstrap.js'
 
 let app: NestFastifyApplication | null = null
 
@@ -23,11 +24,9 @@ export async function getApp(): Promise<NestFastifyApplication> {
     }),
   )
 
-  app.enableVersioning({
-    type: VersioningType.URI,
-    // Mirror main.ts so tests exercise the same route shapes as production.
-    defaultVersion: [VERSION_NEUTRAL, '1'],
-  })
+  // Same routing config as src/main.ts — see src/bootstrap.ts.
+  configureRouting(app)
+
   await app.listen(0)
   return app
 }

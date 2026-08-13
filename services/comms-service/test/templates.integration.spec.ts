@@ -24,7 +24,7 @@ describe.runIf(DB_AVAILABLE)('Templates — integration', () => {
 
   describe('GET /templates', () => {
     it('lists system templates (seeded at startup)', async () => {
-      const res = await request.get('/templates').set(HEADERS)
+      const res = await request.get('/v1/templates').set(HEADERS)
 
       expect(res.status).toBe(200)
       expect(Array.isArray(res.body)).toBe(true)
@@ -32,13 +32,13 @@ describe.runIf(DB_AVAILABLE)('Templates — integration', () => {
     })
 
     it('includes the booking.confirmed system template', async () => {
-      const res = await request.get('/templates').set(HEADERS)
+      const res = await request.get('/v1/templates').set(HEADERS)
       const keys = res.body.map((t: any) => t.key)
       expect(keys).toContain(KNOWN_TEMPLATE_KEY)
     })
 
     it('returns 401 without auth', async () => {
-      const res = await request.get('/templates')
+      const res = await request.get('/v1/templates')
       expect(res.status).toBe(401)
     })
   })
@@ -46,7 +46,7 @@ describe.runIf(DB_AVAILABLE)('Templates — integration', () => {
   describe('PATCH /templates/:key', () => {
     it('adds a custom footer override for a template', async () => {
       const res = await request
-        .patch(`/templates/${KNOWN_TEMPLATE_KEY}`)
+        .patch(`/v1/templates/${KNOWN_TEMPLATE_KEY}`)
         .set(JSON_HEADERS)
         .send({ customFooter: 'Need help? Email support@example.com', replyTo: 'support@example.com' })
 
@@ -55,7 +55,7 @@ describe.runIf(DB_AVAILABLE)('Templates — integration', () => {
 
     it('returns 404 for a non-existent template key', async () => {
       const res = await request
-        .patch('/templates/no.such.template')
+        .patch('/v1/templates/no.such.template')
         .set(JSON_HEADERS)
         .send({ customFooter: 'Footer' })
 
@@ -64,7 +64,7 @@ describe.runIf(DB_AVAILABLE)('Templates — integration', () => {
 
     it('returns 401 without auth', async () => {
       const res = await request
-        .patch(`/templates/${KNOWN_TEMPLATE_KEY}`)
+        .patch(`/v1/templates/${KNOWN_TEMPLATE_KEY}`)
         .send({ customFooter: 'Footer' })
 
       expect(res.status).toBe(401)

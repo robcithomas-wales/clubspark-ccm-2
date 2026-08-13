@@ -1,11 +1,12 @@
 import 'reflect-metadata'
 import { NestFactory } from '@nestjs/core'
 import { type NestFastifyApplication, FastifyAdapter } from '@nestjs/platform-fastify'
-import { ValidationPipe, Logger, VersioningType, VERSION_NEUTRAL } from '@nestjs/common'
+import { ValidationPipe, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
 import { AppModule } from './app.module.js'
 import type { AppConfig } from './config/configuration.js'
+import { configureRouting } from './bootstrap.js'
 
 // TODO: raw body capture for webhook signature verification (Stripe, GoCardless)
 // Requires a Fastify preHandler hook approach — the addContentTypeParser route
@@ -34,15 +35,9 @@ async function bootstrap(): Promise<void> {
     }),
   )
 
-  // URI versioning. `defaultVersion` covers controllers that declare no version
-  // of their own: VERSION_NEUTRAL keeps their existing unprefixed route working
-  // (portals, mobile and inter-service clients call those today), and '1' also
-  // exposes them under /v1 so every service is reachable at /v1 consistently.
-  // Controllers that set `version` explicitly are unaffected.
-  app.enableVersioning({
-    type: VersioningType.URI,
-    defaultVersion: [VERSION_NEUTRAL, '1'],
-  })
+  // Routing (URI versioning) is shared with test/helpers/app.ts so the two
+  // cannot drift. See src/bootstrap.ts.
+  configureRouting(app)
 
   if (nodeEnv !== 'production') {
     const swaggerConfig = new DocumentBuilder()

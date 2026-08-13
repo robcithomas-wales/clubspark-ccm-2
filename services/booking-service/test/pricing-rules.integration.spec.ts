@@ -33,7 +33,7 @@ describe.runIf(DB_AVAILABLE)('Pricing Rules — integration', () => {
 
   describe('POST /pricing-rules', () => {
     it('creates a pricing rule and returns it', async () => {
-      const res = await request.post('/pricing-rules').set(JSON_HEADERS).send(RULE)
+      const res = await request.post('/v1/pricing-rules').set(JSON_HEADERS).send(RULE)
 
       expect(res.status).toBe(201)
       expect(res.body.data.id).toBeDefined()
@@ -44,7 +44,7 @@ describe.runIf(DB_AVAILABLE)('Pricing Rules — integration', () => {
 
     it('returns 400 when ratePerHour is missing', async () => {
       const res = await request
-        .post('/pricing-rules')
+        .post('/v1/pricing-rules')
         .set(JSON_HEADERS)
         .send({ name: 'Incomplete', scopeType: 'organisation', daysOfWeek: [] })
 
@@ -52,57 +52,57 @@ describe.runIf(DB_AVAILABLE)('Pricing Rules — integration', () => {
     })
 
     it('returns 401 without auth', async () => {
-      const res = await request.post('/pricing-rules').send(RULE)
+      const res = await request.post('/v1/pricing-rules').send(RULE)
       expect(res.status).toBe(401)
     })
   })
 
   describe('GET /pricing-rules', () => {
     it('lists all pricing rules for the tenant', async () => {
-      await request.post('/pricing-rules').set(JSON_HEADERS).send(RULE)
+      await request.post('/v1/pricing-rules').set(JSON_HEADERS).send(RULE)
 
-      const res = await request.get('/pricing-rules').set(HEADERS)
+      const res = await request.get('/v1/pricing-rules').set(HEADERS)
       expect(res.status).toBe(200)
       expect(Array.isArray(res.body.data)).toBe(true)
       expect(res.body.total).toBeGreaterThanOrEqual(1)
     })
 
     it('returns empty list when no rules exist', async () => {
-      const res = await request.get('/pricing-rules').set(HEADERS)
+      const res = await request.get('/v1/pricing-rules').set(HEADERS)
       expect(res.status).toBe(200)
       expect(res.body.data).toHaveLength(0)
     })
 
     it('returns 401 without auth', async () => {
-      const res = await request.get('/pricing-rules')
+      const res = await request.get('/v1/pricing-rules')
       expect(res.status).toBe(401)
     })
   })
 
   describe('GET /pricing-rules/:id', () => {
     it('returns a rule by id', async () => {
-      const created = await request.post('/pricing-rules').set(JSON_HEADERS).send(RULE)
+      const created = await request.post('/v1/pricing-rules').set(JSON_HEADERS).send(RULE)
       const id = created.body.data.id
 
-      const res = await request.get(`/pricing-rules/${id}`).set(HEADERS)
+      const res = await request.get(`/v1/pricing-rules/${id}`).set(HEADERS)
       expect(res.status).toBe(200)
       expect(res.body.data.id).toBe(id)
       expect(res.body.data.name).toBe(RULE.name)
     })
 
     it('returns 404 for a non-existent rule', async () => {
-      const res = await request.get(`/pricing-rules/${TEST_NONEXISTENT_ID}`).set(HEADERS)
+      const res = await request.get(`/v1/pricing-rules/${TEST_NONEXISTENT_ID}`).set(HEADERS)
       expect(res.status).toBe(404)
     })
   })
 
   describe('PATCH /pricing-rules/:id', () => {
     it('updates a rule name and rate', async () => {
-      const created = await request.post('/pricing-rules').set(JSON_HEADERS).send(RULE)
+      const created = await request.post('/v1/pricing-rules').set(JSON_HEADERS).send(RULE)
       const id = created.body.data.id
 
       const res = await request
-        .patch(`/pricing-rules/${id}`)
+        .patch(`/v1/pricing-rules/${id}`)
         .set(JSON_HEADERS)
         .send({ name: 'Off-peak', ratePerHour: 10.00 })
 
@@ -111,11 +111,11 @@ describe.runIf(DB_AVAILABLE)('Pricing Rules — integration', () => {
     })
 
     it('deactivates a rule', async () => {
-      const created = await request.post('/pricing-rules').set(JSON_HEADERS).send(RULE)
+      const created = await request.post('/v1/pricing-rules').set(JSON_HEADERS).send(RULE)
       const id = created.body.data.id
 
       const res = await request
-        .patch(`/pricing-rules/${id}`)
+        .patch(`/v1/pricing-rules/${id}`)
         .set(JSON_HEADERS)
         .send({ isActive: false })
 
@@ -125,7 +125,7 @@ describe.runIf(DB_AVAILABLE)('Pricing Rules — integration', () => {
 
     it('returns 404 for a non-existent rule', async () => {
       const res = await request
-        .patch(`/pricing-rules/${TEST_NONEXISTENT_ID}`)
+        .patch(`/v1/pricing-rules/${TEST_NONEXISTENT_ID}`)
         .set(JSON_HEADERS)
         .send({ name: 'Ghost' })
 
@@ -135,18 +135,18 @@ describe.runIf(DB_AVAILABLE)('Pricing Rules — integration', () => {
 
   describe('DELETE /pricing-rules/:id', () => {
     it('deletes a rule and returns 204', async () => {
-      const created = await request.post('/pricing-rules').set(JSON_HEADERS).send(RULE)
+      const created = await request.post('/v1/pricing-rules').set(JSON_HEADERS).send(RULE)
       const id = created.body.data.id
 
-      const del = await request.delete(`/pricing-rules/${id}`).set(HEADERS)
+      const del = await request.delete(`/v1/pricing-rules/${id}`).set(HEADERS)
       expect(del.status).toBe(204)
 
-      const get = await request.get(`/pricing-rules/${id}`).set(HEADERS)
+      const get = await request.get(`/v1/pricing-rules/${id}`).set(HEADERS)
       expect(get.status).toBe(404)
     })
 
     it('returns 404 for a non-existent rule', async () => {
-      const res = await request.delete(`/pricing-rules/${TEST_NONEXISTENT_ID}`).set(HEADERS)
+      const res = await request.delete(`/v1/pricing-rules/${TEST_NONEXISTENT_ID}`).set(HEADERS)
       expect(res.status).toBe(404)
     })
   })

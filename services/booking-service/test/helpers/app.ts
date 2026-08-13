@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core'
 import { type NestFastifyApplication, FastifyAdapter } from '@nestjs/platform-fastify'
 import { ValidationPipe } from '@nestjs/common'
 import { AppModule } from '../../src/app.module.js'
+import { configureRouting } from '../../src/bootstrap.js'
 
 let app: NestFastifyApplication | null = null
 
@@ -27,6 +28,9 @@ export async function getApp(): Promise<NestFastifyApplication> {
 
   // listen(0) binds to a random available port — required for Fastify's
   // HTTP server to be initialised so supertest can send a real request
+  // Same routing config as src/main.ts — see src/bootstrap.ts.
+  configureRouting(app)
+
   await app.listen(0)
 
   return app
