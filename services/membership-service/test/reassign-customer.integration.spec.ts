@@ -9,6 +9,10 @@ import {
   TEST_CUSTOMER_ID,
 } from './fixtures/index.js'
 
+// The guard fails closed with no environment bypass, so the suite supplies a
+// secret and sends it like any real service-to-service caller would.
+process.env['INTERNAL_SECRET'] ??= 'test-internal-secret'
+
 /**
  * The internal customer-reassignment hook.
  *
@@ -27,6 +31,7 @@ const OTHER_ORG = '20000000-0000-4000-8000-0000000000b1'
 const HEADERS = {
   'x-tenant-id': TEST_TENANT_ID,
   'x-organisation-id': TEST_ORG_ID,
+  'x-internal-secret': process.env['INTERNAL_SECRET'] as string,
 }
 
 // The harness builds the app without enableVersioning(), matching the other specs.
@@ -99,9 +104,23 @@ describe.runIf(DB_AVAILABLE)('Memberships — internal customer reassignment', (
   it('rejects a request with no tenant header', async () => {
     const res = await request
       .post(ENDPOINT)
+      // The internal secret is still required — it is what authenticates this
+      // route at all. Only the tenant header is omitted here.
+      .set({ 'x-internal-secret': process.env['INTERNAL_SECRET'] as string })
       .send({ fromCustomerId: TEST_CUSTOMER_ID, toCustomerId: NEW_CUSTOMER })
     // @SkipTenant() route — the handler rejects the missing header itself.
     expect(res.status).toBe(400)
+  })
+
+  it('rejects a request with no internal secret', async () => {
+    const res = await request
+      .post(ENDPOINT)
+      .set({ 'x-tenant-id': TEST_TENANT_ID })
+      .send({ fromCustomerId: TEST_CUSTOMER_ID, toCustomerId: NEW_CUSTOMER })
+    // InternalSecretGuard is the sole authenticator here and has no environment
+    // bypass, so an unauthenticated caller cannot reach the handler even under
+    // NODE_ENV=test.
+    expect(res.status).toBe(401)
   })
 
   it('rejects a body missing the ids', async () => {
