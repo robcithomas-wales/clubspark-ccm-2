@@ -111,10 +111,11 @@ npm run check:env         # verifies they are present and current
 
 All 15 services share one database and one Supabase project, so those values live in the root
 `.env` (git-ignored) and nowhere else. `npm run setup:env` generates each
-`services/<name>/.env` from it, writing them `0600`. **Do not hand-edit a generated file** — it
-carries a `# GENERATED` header, and setup:env refuses to overwrite a hand-edited one without
-`--force`. If one service truly needs a different value, put it in
-`services/<name>/.env.override`.
+`services/<name>/.env` **and all three portals' `.env.local`** from it, writing them `0600`.
+**Do not hand-edit a generated file** — it carries a `# GENERATED` header, and setup:env refuses to
+overwrite a hand-edited one without `--force`. If one service truly needs a different value, put it
+in `services/<name>/.env.override` (security-relevant keys are rejected there — see below).
+`mobile-app/.env.local` is the only env file not generated.
 
 This replaced 15 hand-maintained copies, which had silently drifted: `booking-service` declared
 `PORT=4017` when the canonical port is 4005, and only `template-service` carried the pgbouncer

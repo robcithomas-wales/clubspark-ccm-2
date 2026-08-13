@@ -90,6 +90,8 @@ const OPTIONAL_ROOT_KEYS = [
   'DATABASE_READ_URL',
   'ANTHROPIC_API_KEY',
   'DB_CONNECTION_LIMIT',
+  'SUPABASE_ANON_KEY',
+  'PUBLIC_BASE_DOMAIN',
   'NODE_ENV',
 ]
 
@@ -165,11 +167,11 @@ function loadRoot() {
 // re-serialising corrupts any password containing `#` or `?`, splicing query
 // params into the middle of the credential.
 function runtimeUrl(base) {
-  const lastAt = base.lastIndexOf("@")
-  const credentials = lastAt === -1 ? "" : base.slice(0, lastAt)
+  const lastAt = base.lastIndexOf('@')
+  const credentials = lastAt === -1 ? '' : base.slice(0, lastAt)
   if (/[?#]/.test(credentials)) {
     throw new Error(
-      "DATABASE_URL credentials contain a raw ? or # — percent-encode them (%3F / %23)",
+      'DATABASE_URL credentials contain a raw ? or # — percent-encode them (%3F / %23)',
     )
   }
   return base
@@ -205,6 +207,91 @@ const OVERRIDE_DENYLIST = new Set([
   'SUPABASE_SERVICE_ROLE_KEY',
   'DIRECT_DATABASE_URL',
 ])
+
+// ── Portals ──────────────────────────────────────────────────────────────────
+// The three Next.js apps are generated too. They were previously outside this
+// script, which is how internal-portal's INTERNAL_SECRET came to drift from the
+// services' — and admin-service's guard is fail-closed, so the symptom was every
+// internal admin call 401ing with no explanation.
+//
+// `peers` maps the env var name to a service in the port table; some use a
+// different name for the same service (FACILITY -> venue, CUSTOMER -> people).
+const PORTALS = {
+  'admin-portal': {
+    file: '.env.local',
+    publicSupabase: true,
+    anthropic: true,
+    peers: {
+      NEXT_PUBLIC_BOOKING_SERVICE_URL: 'booking',
+      NEXT_PUBLIC_FACILITY_SERVICE_URL: 'venue',
+      NEXT_PUBLIC_PEOPLE_SERVICE_URL: 'people',
+      NEXT_PUBLIC_MEMBERSHIP_SERVICE_URL: 'membership',
+      NEXT_PUBLIC_ADMIN_SERVICE_URL: 'admin',
+      NEXT_PUBLIC_COACHING_SERVICE_URL: 'coaching',
+      NEXT_PUBLIC_TEAM_SERVICE_URL: 'team',
+      NEXT_PUBLIC_PAYMENT_SERVICE_URL: 'payment',
+      NEXT_PUBLIC_INTEGRATION_SERVICE_URL: 'integration',
+      ENTITLEMENT_SERVICE_URL: 'entitlement',
+    },
+  },
+  'customer-portal': {
+    file: '.env.local',
+    publicSupabase: true,
+    anthropic: true,
+    baseDomain: true,
+    peers: {
+      NEXT_PUBLIC_VENUE_SERVICE_URL: 'venue',
+      NEXT_PUBLIC_BOOKING_SERVICE_URL: 'booking',
+      NEXT_PUBLIC_CUSTOMER_SERVICE_URL: 'people',
+      NEXT_PUBLIC_MEMBERSHIP_SERVICE_URL: 'membership',
+      NEXT_PUBLIC_COACHING_SERVICE_URL: 'coaching',
+      NEXT_PUBLIC_COMPETITION_SERVICE_URL: 'competition',
+      NEXT_PUBLIC_TEAM_SERVICE_URL: 'team',
+    },
+  },
+  'internal-portal': {
+    file: '.env.local',
+    publicSupabase: true,
+    // Staff-only portal: it needs the same INTERNAL_SECRET the services use, which
+    // is the whole reason it belongs in this script.
+    internalSecret: true,
+    peers: { ADMIN_SERVICE_URL: 'admin' },
+  },
+}
+
+function portalEnv(name, spec, root, portTable) {
+  const lines = []
+  lines.push(GENERATED_MARKER)
+  lines.push('# Edit the root .env and re-run `npm run setup:env`.')
+  lines.push('')
+  if (spec.publicSupabase) {
+    lines.push(`NEXT_PUBLIC_SUPABASE_URL=${root.SUPABASE_URL}`)
+    if (!root.SUPABASE_ANON_KEY) {
+      throw new Error(`${name} needs SUPABASE_ANON_KEY but the root .env does not define it`)
+    }
+    lines.push(`NEXT_PUBLIC_SUPABASE_ANON_KEY=${root.SUPABASE_ANON_KEY}`)
+  }
+  if (spec.internalSecret) {
+    lines.push('')
+    lines.push('# Must match the services byte-for-byte; the guard is fail-closed.')
+    lines.push(`INTERNAL_SECRET=${root.INTERNAL_SECRET}`)
+  }
+  if (spec.anthropic && root.ANTHROPIC_API_KEY) {
+    lines.push(`ANTHROPIC_API_KEY=${root.ANTHROPIC_API_KEY}`)
+  }
+  if (spec.baseDomain && root.PUBLIC_BASE_DOMAIN) {
+    lines.push(`NEXT_PUBLIC_BASE_DOMAIN=${root.PUBLIC_BASE_DOMAIN}`)
+  }
+  lines.push('')
+  lines.push('# Service URLs — derived from the port table in scripts/run-all.sh.')
+  for (const [key, peer] of Object.entries(spec.peers)) {
+    const port = portTable[peer]
+    if (!port) throw new Error(`${name}: no port for peer '${peer}'`)
+    lines.push(`${key}=http://127.0.0.1:${port}`)
+  }
+  lines.push('')
+  return lines.join('\n')
+}
 
 // Values a single service must differ on live in services/<name>/.env.override
 // (git-ignored). They are merged in here, at generation time, so nothing in the
@@ -255,7 +342,7 @@ function serviceEnv(name, port, root, portTable) {
   lines.push('# Database. Pooler flags (pgbouncer, connection_limit, pool_timeout) are')
   lines.push('# applied once, by PrismaService, from DB_CONNECTION_LIMIT below.')
   lines.push(`DATABASE_URL=${runtimeUrl(root.DATABASE_URL)}`)
-  lines.push(`DB_CONNECTION_LIMIT=${root.DB_CONNECTION_LIMIT || "1"}`)
+  lines.push(`DB_CONNECTION_LIMIT=${root.DB_CONNECTION_LIMIT || '1'}`)
   if (root.DATABASE_READ_URL) lines.push(`DATABASE_READ_URL=${root.DATABASE_READ_URL}`)
   lines.push('')
   lines.push('# Auth / platform')
@@ -296,7 +383,9 @@ function serviceEnv(name, port, root, portTable) {
 const portTable = readPortTable()
 const root = loadRoot()
 
-const EXTRA_KEY_NAMES = Object.values(SERVICE_EXTRA_KEYS).flat().map((e) => e.key)
+const EXTRA_KEY_NAMES = Object.values(SERVICE_EXTRA_KEYS)
+  .flat()
+  .map((e) => e.key)
 const unknown = Object.keys(root).filter(
   (k) => ![...REQUIRED_ROOT_KEYS, ...OPTIONAL_ROOT_KEYS, ...EXTRA_KEY_NAMES].includes(k),
 )
@@ -332,18 +421,25 @@ for (const [name, port] of Object.entries(portTable)) {
     // Mode is checked, not assumed: writeFileSync's `mode` only applies when it
     // creates the file, so a pre-existing 0644 stays 0644 on a rewrite.
     const loose = exists && (fs.statSync(file).mode & 0o077) !== 0
-    if (!exists) { rows.push([name, 'missing .env', 'FAIL']); problems++ }
-    else if (loose) { rows.push([name, 'world/group-readable — re-run setup:env', 'FAIL']); problems++ }
-    else if (!isGenerated) { rows.push([name, 'hand-edited (not generated)', 'WARN']) }
-    else if (current !== content) { rows.push([name, 'stale — re-run setup:env', 'FAIL']); problems++ }
-    else {
+    if (!exists) {
+      rows.push([name, 'missing .env', 'FAIL'])
+      problems++
+    } else if (loose) {
+      rows.push([name, 'world/group-readable — re-run setup:env', 'FAIL'])
+      problems++
+    } else if (!isGenerated) {
+      rows.push([name, 'hand-edited (not generated)', 'WARN'])
+    } else if (current !== content) {
+      rows.push([name, 'stale — re-run setup:env', 'FAIL'])
+      problems++
+    } else {
       // Flag production-required secrets that fall back to a committed dev
       // default inside the service — unset is silently insecure, not a failure.
       const weak = (SERVICE_EXTRA_KEYS[name] || [])
         .filter((e) => e.productionRequired && !root[e.key])
         .map((e) => e.key)
-      if (weak.length) rows.push([name, `using dev defaults for ${weak.join(", ")}`, "WARN"])
-      else rows.push([name, `port ${port}${note}`, "ok"])
+      if (weak.length) rows.push([name, `using dev defaults for ${weak.join(', ')}`, 'WARN'])
+      else rows.push([name, `port ${port}${note}`, 'ok'])
     }
     continue
   }
@@ -369,6 +465,60 @@ for (const [name, port] of Object.entries(portTable)) {
   rows.push([name, `port ${port}${note}`, exists ? 'rewritten' : 'created'])
 }
 
+// ── Portals (generation) ──────────────────────────────────────────────────
+for (const [name, spec] of Object.entries(PORTALS)) {
+  const dir = path.join(ROOT, name)
+  if (!fs.existsSync(dir)) {
+    rows.push([name, 'no directory', 'SKIP'])
+    continue
+  }
+  const file = path.join(dir, spec.file)
+  let content
+  try {
+    content = portalEnv(name, spec, root, portTable)
+  } catch (e) {
+    rows.push([name, e.message, 'FAIL'])
+    problems++
+    continue
+  }
+  const exists = fs.existsSync(file)
+  const current = exists ? fs.readFileSync(file, 'utf8') : ''
+  const isGenerated = current.startsWith(GENERATED_MARKER)
+  const loose = exists && (fs.statSync(file).mode & 0o077) !== 0
+
+  if (CHECK) {
+    if (!exists) {
+      rows.push([name, 'missing ' + spec.file, 'FAIL'])
+      problems++
+    } else if (loose) {
+      rows.push([name, 'world/group-readable — re-run setup:env', 'FAIL'])
+      problems++
+    } else if (!isGenerated) {
+      rows.push([name, 'hand-edited, not generated', 'WARN'])
+    } else if (current !== content) {
+      rows.push([name, 'stale — re-run setup:env', 'FAIL'])
+      problems++
+    } else {
+      rows.push([name, spec.file, 'ok'])
+    }
+    continue
+  }
+
+  if (exists && !isGenerated && !FORCE) {
+    rows.push([name, 'hand-edited — refusing to clobber, use --force', 'SKIP'])
+    problems++
+    continue
+  }
+  if (current === content && !loose) {
+    rows.push([name, spec.file, 'unchanged'])
+    continue
+  }
+  fs.writeFileSync(file, content)
+  fs.chmodSync(file, 0o600)
+  wrote++
+  rows.push([name, spec.file, exists ? 'rewritten' : 'created'])
+}
+
 const w = Math.max(...rows.map((r) => r[0].length))
 for (const [a, b, c] of rows) console.log(`  ${a.padEnd(w)}  ${c.padEnd(10)} ${b}`)
 
@@ -377,7 +527,9 @@ if (unknown.length) {
 }
 
 if (CHECK) {
-  console.log(`\n  ${problems === 0 ? 'env OK' : `${problems} problem(s)`} across ${rows.length} services`)
+  console.log(
+    `\n  ${problems === 0 ? 'env OK' : `${problems} problem(s)`} across ${rows.length} services`,
+  )
   process.exit(problems === 0 ? 0 : 1)
 }
 console.log(`\n  wrote ${wrote} of ${rows.length} service env files (mode 0600)`)
@@ -386,6 +538,8 @@ console.log('  DIRECT_DATABASE_URL is intentionally not set — use `npm run mig
 // consulted `problems`, so `npm run setup:env && npm run start:services` would
 // carry on after leaving a service with no .env, or a drifted hand-edited one.
 if (problems > 0) {
-  console.error(`\n  ${problems} service(s) not generated — see above. Nothing downstream should run.`)
+  console.error(
+    `\n  ${problems} service(s) not generated — see above. Nothing downstream should run.`,
+  )
   process.exit(1)
 }

@@ -38,10 +38,13 @@ last one with `openssl rand -hex 32`.
 **1. `INTERNAL_SECRET` must be identical across every service.** Services authenticate to each
 other's internal endpoints with it, and the guards are **fail-closed** — a missing or mismatched
 value means customer merge, people/venue lookups and all domain-event delivery silently stop
-working. Generating from the root `.env` is what keeps them identical; there is deliberately no
-committed default, because a shared default credential on the internal surface is worse than a
-loud failure. Note the **internal portal is not yet covered by the generator** — set
-`INTERNAL_SECRET` in `internal-portal/.env.local` to the same value by hand.
+working. Generating from the root `.env` is what keeps them identical — the 15 services **and** the
+internal portal all receive it from `npm run setup:env`, so they cannot drift. There is
+deliberately no committed default: a shared default credential on the internal admin surface
+(impersonation, feature flags, audit) is worse than a loud failure, so a missing value now throws
+with an explanation instead of silently 401ing.
+
+`mobile-app/.env.local` is the one env file the generator does not manage.
 
 **2. Never set `DIRECT_DATABASE_URL`, and never run `prisma migrate` from a service directory.**
 Migrations need a session connection (5432) — the transaction pooler (6543) silently hangs on DDL —
