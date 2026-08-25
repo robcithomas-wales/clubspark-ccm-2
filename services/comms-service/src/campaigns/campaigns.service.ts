@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { PrismaService } from '../prisma/prisma.service.js'
-import { NotificationsService } from '../notifications/notifications.service.js'
 import { SendRulesService } from '../send-rules/send-rules.service.js'
 import { TemplatesService } from '../templates/templates.service.js'
 import { EmailDeliveryService } from '../delivery/email-delivery.service.js'
@@ -14,8 +13,8 @@ export interface CreateCampaignDto {
   subject?: string
   body?: string
   replyTo?: string
-  audienceDefinition: string  // JSON
-  scheduledAt?: string        // ISO — Premium scheduling
+  audienceDefinition: string // JSON
+  scheduledAt?: string // ISO — Premium scheduling
 }
 
 /**
@@ -94,15 +93,19 @@ export class CampaignsService {
     return this.prisma.read.campaign.findFirst({ where: { id, tenantId } })
   }
 
-  async update(tenantId: string, id: string, dto: {
-    name?: string
-    subject?: string
-    body?: string
-    replyTo?: string
-    audienceDefinition?: string
-    scheduledAt?: string
-    status?: string
-  }) {
+  async update(
+    tenantId: string,
+    id: string,
+    dto: {
+      name?: string
+      subject?: string
+      body?: string
+      replyTo?: string
+      audienceDefinition?: string
+      scheduledAt?: string
+      status?: string
+    },
+  ) {
     const existing = await this.prisma.read.campaign.findFirst({ where: { id, tenantId } })
     if (!existing) throw new Error('Campaign not found')
 
@@ -114,10 +117,16 @@ export class CampaignsService {
         body: dto.body ?? existing.body ?? undefined,
         replyTo: dto.replyTo ?? existing.replyTo ?? undefined,
         audienceDefinition: dto.audienceDefinition ?? existing.audienceDefinition ?? undefined,
-        scheduledAt: dto.scheduledAt !== undefined
-          ? (dto.scheduledAt ? new Date(dto.scheduledAt) : null)
-          : existing.scheduledAt,
-        status: dto.status ?? existing.status,
+        scheduledAt:
+          dto.scheduledAt !== undefined
+            ? dto.scheduledAt
+              ? new Date(dto.scheduledAt)
+              : null
+            : existing.scheduledAt,
+        // `sent` is an action request, not a state the update endpoint may stamp
+        // before dispatch has claimed the campaign. Stamping it first caused
+        // dispatch() to return without sending anything.
+        status: dto.status === 'sent' ? existing.status : (dto.status ?? existing.status),
       },
     })
 
@@ -218,15 +227,19 @@ export class CampaignsService {
   }
 
   async dispatch(campaignId: string): Promise<void> {
-    const campaign = await this.prisma.read.campaign.findUniqueOrThrow({
-      where: { id: campaignId },
-    })
-
-    if (campaign.status === 'sent' || campaign.status === 'sending') return
-
-    await this.prisma.write.campaign.update({
-      where: { id: campaignId },
+    // Atomic state transition is the replica-safe claim. Two schedulers may
+    // discover the same due row, but only one can change scheduled/draft to
+    // sending; the other receives count=0 and performs no side effects.
+    const claimed = await this.prisma.write.campaign.updateMany({
+      where: { id: campaignId, status: { in: ['draft', 'scheduled'] } },
       data: { status: 'sending' },
+    })
+    if (claimed.count === 0) return
+
+    // Read through the writer after the claim so a future read replica cannot
+    // return the pre-claim status or lag a newly created campaign.
+    const campaign = await this.prisma.write.campaign.findUniqueOrThrow({
+      where: { id: campaignId },
     })
 
     // Resolve audience
@@ -241,11 +254,15 @@ export class CampaignsService {
     let suppressedCount = 0
 
     for (const recipient of recipients) {
-      const rules = await this.sendRules.evaluate(campaign.tenantId, campaign.channel as 'email' | 'sms', {
-        email: recipient.email,
-        firstName: recipient.firstName,
-        isTransactional: false,  // campaigns are always marketing
-      })
+      const rules = await this.sendRules.evaluate(
+        campaign.tenantId,
+        campaign.channel as 'email' | 'sms',
+        {
+          email: recipient.email,
+          firstName: recipient.firstName,
+          isTransactional: false, // campaigns are always marketing
+        },
+      )
 
       const log = await this.messageLog.create({
         tenantId: campaign.tenantId,
@@ -272,7 +289,9 @@ export class CampaignsService {
             firstName: recipient.firstName ?? '',
           })
           htmlBody = rendered.htmlBody
-        } catch { /* fall through to raw body */ }
+        } catch {
+          /* fall through to raw body */
+        }
       }
 
       await this.emailDelivery.send({
@@ -289,10 +308,18 @@ export class CampaignsService {
 
     await this.prisma.write.campaign.update({
       where: { id: campaignId },
-      data: { status: 'sent', sentAt: new Date(), sentCount, suppressedCount, recipientCount: recipients.length },
+      data: {
+        status: 'sent',
+        sentAt: new Date(),
+        sentCount,
+        suppressedCount,
+        recipientCount: recipients.length,
+      },
     })
 
-    this.logger.log(`Campaign ${campaignId} complete — sent: ${sentCount}, suppressed: ${suppressedCount}`)
+    this.logger.log(
+      `Campaign ${campaignId} complete — sent: ${sentCount}, suppressed: ${suppressedCount}`,
+    )
   }
 
   /**
@@ -353,7 +380,9 @@ export class CampaignsService {
         this.logger.warn(`Failed to fetch segment members for ${segmentId}: ${res.status}`)
         return []
       }
-      const json = await res.json() as { data?: { email?: string; phone?: string; firstName?: string; first_name?: string }[] }
+      const json = (await res.json()) as {
+        data?: { email?: string; phone?: string; firstName?: string; first_name?: string }[]
+      }
       return (json.data ?? []).map((m) => ({
         email: m.email,
         phone: m.phone,
@@ -376,7 +405,9 @@ export class CampaignsService {
         this.logger.warn(`Failed to fetch active members: ${res.status}`)
         return []
       }
-      const json = await res.json() as { data?: { email?: string; phone?: string; firstName?: string; first_name?: string }[] }
+      const json = (await res.json()) as {
+        data?: { email?: string; phone?: string; firstName?: string; first_name?: string }[]
+      }
       return (json.data ?? []).map((p) => ({
         email: p.email,
         phone: p.phone,

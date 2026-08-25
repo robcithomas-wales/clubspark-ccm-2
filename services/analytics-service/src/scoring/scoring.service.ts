@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common'
-import { Cron, CronExpression } from '@nestjs/schedule'
+import { Cron } from '@nestjs/schedule'
 import { ScoringRepository } from './scoring.repository.js'
 import {
   computeChurnRisk,
@@ -7,32 +7,45 @@ import {
   computeDefaultRisk,
   computeOptimalSendHour,
 } from './scoring.algorithms.js'
+import { JobLeaseService } from '../scheduled-jobs/job-lease.service.js'
 
 @Injectable()
 export class ScoringService {
   private readonly logger = new Logger(ScoringService.name)
 
-  constructor(private readonly repo: ScoringRepository) {}
+  constructor(
+    private readonly repo: ScoringRepository,
+    private readonly leases: JobLeaseService,
+  ) {}
 
   // ── Nightly batch scoring — runs at 01:30 AM daily ────────────────────────
 
   @Cron('30 1 * * *')
   async batchScoreAllTenants(): Promise<void> {
-    this.logger.log('Member scoring batch starting')
-    const tenantIds = await this.repo.getActiveTenantIds()
-    this.logger.log(`Scoring ${tenantIds.length} tenants`)
-
-    let total = 0
-    for (const tenantId of tenantIds) {
-      try {
-        const count = await this.scoreTenant(tenantId)
-        total += count
-      } catch (err) {
-        this.logger.error(`Scoring failed for tenant ${tenantId}: ${(err as Error).message}`)
-      }
+    const lease = await this.leases.tryAcquire('member-scoring', 6 * 60 * 60)
+    if (!lease) {
+      this.logger.log('Member scoring batch skipped; another replica owns the lease')
+      return
     }
+    try {
+      this.logger.log('Member scoring batch starting')
+      const tenantIds = await this.repo.getActiveTenantIds()
+      this.logger.log(`Scoring ${tenantIds.length} tenants`)
 
-    this.logger.log(`Member scoring complete — ${total} records updated`)
+      let total = 0
+      for (const tenantId of tenantIds) {
+        try {
+          const count = await this.scoreTenant(tenantId)
+          total += count
+        } catch (err) {
+          this.logger.error(`Scoring failed for tenant ${tenantId}: ${(err as Error).message}`)
+        }
+      }
+
+      this.logger.log(`Member scoring complete — ${total} records updated`)
+    } finally {
+      await this.leases.release(lease)
+    }
   }
 
   async scoreTenant(tenantId: string): Promise<number> {

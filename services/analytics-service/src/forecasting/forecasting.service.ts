@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common'
 import { Cron } from '@nestjs/schedule'
 import { ForecastingRepository } from './forecasting.repository.js'
 import { computeForecast, identifyDeadSlots } from './forecasting.algorithms.js'
+import { JobLeaseService } from '../scheduled-jobs/job-lease.service.js'
 
 const FORECAST_HORIZON_DAYS = 14
 
@@ -9,22 +10,34 @@ const FORECAST_HORIZON_DAYS = 14
 export class ForecastingService {
   private readonly logger = new Logger(ForecastingService.name)
 
-  constructor(private readonly repo: ForecastingRepository) {}
+  constructor(
+    private readonly repo: ForecastingRepository,
+    private readonly leases: JobLeaseService,
+  ) {}
 
   // ── Nightly forecast computation — 02:00 AM daily ─────────────────────────
 
   @Cron('0 2 * * *')
   async batchForecastAllTenants(): Promise<void> {
-    this.logger.log('Utilisation forecast batch starting')
-    const tenantIds = await this.repo.getActiveTenantIds()
-    for (const tenantId of tenantIds) {
-      try {
-        await this.computeForTenant(tenantId)
-      } catch (err) {
-        this.logger.error(`Forecast failed for tenant ${tenantId}: ${(err as Error).message}`)
-      }
+    const lease = await this.leases.tryAcquire('utilisation-forecasting', 6 * 60 * 60)
+    if (!lease) {
+      this.logger.log('Utilisation forecast batch skipped; another replica owns the lease')
+      return
     }
-    this.logger.log('Utilisation forecast batch complete')
+    try {
+      this.logger.log('Utilisation forecast batch starting')
+      const tenantIds = await this.repo.getActiveTenantIds()
+      for (const tenantId of tenantIds) {
+        try {
+          await this.computeForTenant(tenantId)
+        } catch (err) {
+          this.logger.error(`Forecast failed for tenant ${tenantId}: ${(err as Error).message}`)
+        }
+      }
+      this.logger.log('Utilisation forecast batch complete')
+    } finally {
+      await this.leases.release(lease)
+    }
   }
 
   async computeForTenant(tenantId: string): Promise<{ slotsComputed: number; deadSlots: number }> {
@@ -71,7 +84,7 @@ export class ForecastingService {
     return Array.from(byUnit.entries()).map(([unitId, unitSlots]) => ({
       unitId,
       deadSlotCount: unitSlots.length,
-      lowestOccupancy: Math.min(...unitSlots.map(s => s.predictedOccupancy)),
+      lowestOccupancy: Math.min(...unitSlots.map((s) => s.predictedOccupancy)),
       nextDeadSlot: unitSlots[0],
       slots: unitSlots.slice(0, 10),
     }))

@@ -310,3 +310,14 @@ model membership_plan_pricing {
 
   @@schema("membership")
 }
+
+model ScheduledJobLease {
+  jobName    String   @id @map("job_name")
+  ownerId    String   @map("owner_id")
+  leaseUntil DateTime @map("lease_until") @db.Timestamptz(6)
+  updatedAt  DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@index([leaseUntil], map: "scheduled_job_leases_expiry_idx")
+  @@map("scheduled_job_leases")
+  @@schema("membership")
+}

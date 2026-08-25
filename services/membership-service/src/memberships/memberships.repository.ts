@@ -634,11 +634,19 @@ export class MembershipsRepository {
     }))
   }
 
-  /** Stamp renewalReminderSentAt; guard with IS NULL to prevent double-sending on concurrent runs. */
-  async markRenewalReminderSent(id: string): Promise<void> {
-    await this.prisma.membership.updateMany({
-      where: { id, renewalReminderSentAt: null },
-      data: { renewalReminderSentAt: new Date() },
+  /** Atomically claim a renewal reminder and record its durable event. */
+  async queueRenewalReminder(
+    id: string,
+    withinTx: (tx: Prisma.TransactionClient) => Promise<void>,
+  ): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.membership.updateMany({
+        where: { id, renewalReminderSentAt: null },
+        data: { renewalReminderSentAt: new Date() },
+      })
+      if (claimed.count === 0) return false
+      await withinTx(tx)
+      return true
     })
   }
 

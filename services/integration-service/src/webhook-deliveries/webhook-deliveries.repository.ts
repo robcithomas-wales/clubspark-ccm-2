@@ -17,15 +17,52 @@ export class WebhookDeliveriesRepository {
     await this.prisma.write.webhookDelivery.createMany({ data: rows })
   }
 
-  async findPending(limit: number): Promise<
-    (WebhookDelivery & { subscription: { endpointUrl: string; secretHash: string } })[]
-  > {
-    return this.prisma.read.webhookDelivery.findMany({
-      where: { status: 'pending', nextRetryAt: { lte: new Date() } },
-      include: { subscription: { select: { endpointUrl: true, secretHash: true } } },
-      orderBy: { createdAt: 'asc' },
-      take: limit,
-    }) as Promise<(WebhookDelivery & { subscription: { endpointUrl: string; secretHash: string } })[]>
+  async claimPending(
+    limit: number,
+    leaseSeconds = 30,
+  ): Promise<(WebhookDelivery & { subscription: { endpointUrl: string; secretHash: string } })[]> {
+    return this.prisma.write.$transaction(
+      (tx) =>
+        tx.$queryRaw<
+          (WebhookDelivery & { subscription: { endpointUrl: string; secretHash: string } })[]
+        >`
+        WITH candidates AS (
+          SELECT delivery.id
+          FROM integration.webhook_deliveries delivery
+          WHERE delivery.status IN ('pending', 'failed')
+            AND delivery.next_retry_at <= now()
+          ORDER BY delivery.created_at
+          LIMIT ${limit}
+          FOR UPDATE SKIP LOCKED
+        ), claimed AS (
+          UPDATE integration.webhook_deliveries delivery
+          SET next_retry_at = now() + make_interval(secs => ${leaseSeconds}),
+              updated_at = now()
+          FROM candidates
+          WHERE delivery.id = candidates.id
+          RETURNING delivery.*
+        )
+        SELECT
+          claimed.id,
+          claimed.subscription_id AS "subscriptionId",
+          claimed.event_type AS "eventType",
+          claimed.payload,
+          claimed.status,
+          claimed.attempts,
+          claimed.next_retry_at AS "nextRetryAt",
+          claimed.response_code AS "responseCode",
+          claimed.response_body AS "responseBody",
+          claimed.created_at AS "createdAt",
+          claimed.updated_at AS "updatedAt",
+          json_build_object(
+            'endpointUrl', subscription.endpoint_url,
+            'secretHash', subscription.secret_hash
+          ) AS subscription
+        FROM claimed
+        JOIN integration.webhook_subscriptions subscription
+          ON subscription.id = claimed.subscription_id
+      `,
+    )
   }
 
   async findBySubscription(

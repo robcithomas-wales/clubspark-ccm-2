@@ -22,7 +22,9 @@ export class AccountingSyncRepository {
         },
       },
       create: { ...data, status: 'pending', attempts: 0 },
-      update: { status: 'pending', attempts: 0, errorMessage: null, nextRetryAt: null },
+      // A duplicate domain event must not reset a synced/dead/failed row and
+      // create a second provider invoice. Retries are owned by the sync worker.
+      update: {},
     })
   }
 
@@ -41,16 +43,33 @@ export class AccountingSyncRepository {
     })
   }
 
-  async findPendingForRetry(limit = 50) {
-    return this.prisma.write.accountingSyncLog.findMany({
-      where: {
-        status: { in: ['pending', 'failed'] },
-        nextRetryAt: { lte: new Date() },
-        attempts: { lt: 5 },
-      },
-      include: { connection: true },
-      orderBy: { createdAt: 'asc' },
-      take: limit,
+  async claimPendingForRetry(limit = 50, leaseSeconds = 300) {
+    return this.prisma.write.$transaction(async (tx) => {
+      const claimed = await tx.$queryRaw<{ id: string }[]>`
+        WITH candidates AS (
+          SELECT id
+          FROM integration.accounting_sync_log
+          WHERE status IN ('pending', 'failed')
+            AND COALESCE(next_retry_at, created_at) <= now()
+            AND attempts < 5
+          ORDER BY created_at
+          LIMIT ${limit}
+          FOR UPDATE SKIP LOCKED
+        )
+        UPDATE integration.accounting_sync_log sync_log
+        SET next_retry_at = now() + make_interval(secs => ${leaseSeconds}),
+            updated_at = now()
+        FROM candidates
+        WHERE sync_log.id = candidates.id
+        RETURNING sync_log.id::text
+      `
+      if (claimed.length === 0) return []
+
+      return tx.accountingSyncLog.findMany({
+        where: { id: { in: claimed.map(({ id }) => id) } },
+        include: { connection: true },
+        orderBy: { createdAt: 'asc' },
+      })
     })
   }
 

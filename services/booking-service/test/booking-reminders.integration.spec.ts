@@ -16,7 +16,6 @@ import {
 } from './fixtures/index.js'
 import { BookingsRepository } from '../src/bookings/bookings.repository.js'
 import { BookingReminderTask } from '../src/bookings/tasks/booking-reminder.task.js'
-import { EventBusService } from '../src/event-bus/event-bus.service.js'
 import { PeopleClient } from '../src/people/people.client.js'
 
 /**
@@ -83,12 +82,20 @@ async function insertBooking(opts: {
   return rows[0]!.id
 }
 
+async function reminderEvents(bookingId: string) {
+  const rows = await prisma.$queryRaw<{ payload: Record<string, unknown> }[]>`
+    SELECT payload FROM booking.event_outbox
+    WHERE tenant_id = ${TEST_TENANT_ID}::uuid
+      AND event_type = 'booking.reminder_due'
+  `
+  return rows.map((row) => row.payload).filter((event) => event.bookingId === bookingId)
+}
+
 const DB_AVAILABLE = await checkDbAvailable()
 
 describe.runIf(DB_AVAILABLE)('Booking reminders — cron regression', () => {
   let repo: BookingsRepository
   let task: BookingReminderTask
-  let eventBus: EventBusService
   let people: PeopleClient
 
   beforeAll(async () => {
@@ -97,7 +104,6 @@ describe.runIf(DB_AVAILABLE)('Booking reminders — cron regression', () => {
     const app = await getApp()
     repo = app.get(BookingsRepository)
     task = app.get(BookingReminderTask)
-    eventBus = app.get(EventBusService)
     people = app.get(PeopleClient)
   })
 
@@ -157,18 +163,13 @@ describe.runIf(DB_AVAILABLE)('Booking reminders — cron regression', () => {
     expect(dueIds).not.toContain(alreadySentId)
   })
 
-  it('the cron publishes booking.reminder_due and stamps reminder_sent_at exactly once', async () => {
+  it('the cron durably queues booking.reminder_due and stamps reminder_sent_at exactly once', async () => {
     const { startsAt, endsAt } = inReminderWindow()
     const id = await insertBooking({ startsAt, endsAt })
 
-    const publish = vi.spyOn(eventBus, 'publish').mockResolvedValue(undefined as never)
-
     await task.sendReminders()
 
-    const published = publish.mock.calls
-      .map(([e]) => e as { type: string; bookingId?: string })
-      .filter((e) => e.type === 'booking.reminder_due' && e.bookingId === id)
-    expect(published).toHaveLength(1)
+    expect(await reminderEvents(id)).toHaveLength(1)
 
     const [after] = await prisma.$queryRaw<{ reminderSentAt: Date | null }[]>`
       SELECT reminder_sent_at AS "reminderSentAt" FROM booking.bookings WHERE id = ${id}::uuid
@@ -176,11 +177,17 @@ describe.runIf(DB_AVAILABLE)('Booking reminders — cron regression', () => {
     expect(after!.reminderSentAt).not.toBeNull()
 
     // Second run must be a no-op — reminder_sent_at now guards it.
-    publish.mockClear()
     await task.sendReminders()
-    expect(
-      publish.mock.calls.filter(([e]) => (e as { bookingId?: string }).bookingId === id),
-    ).toHaveLength(0)
+    expect(await reminderEvents(id)).toHaveLength(1)
+  })
+
+  it('allows only one of two concurrent cron runners to queue a reminder', async () => {
+    const { startsAt, endsAt } = inReminderWindow()
+    const id = await insertBooking({ startsAt, endsAt })
+
+    await Promise.all([task.sendReminders(), task.sendReminders()])
+
+    expect(await reminderEvents(id)).toHaveLength(1)
   })
 
   /**
@@ -205,13 +212,9 @@ describe.runIf(DB_AVAILABLE)('Booking reminders — cron regression', () => {
         ],
       ]),
     )
-    const publish = vi.spyOn(eventBus, 'publish').mockResolvedValue(undefined as never)
-
     await task.sendReminders()
 
-    const event = publish.mock.calls
-      .map(([e]) => e as Record<string, unknown>)
-      .find((e) => e.bookingId === id)
+    const event = (await reminderEvents(id))[0]
     expect(event).toBeDefined()
     expect(event!.customerEmail).toBe('reminder@example.test')
     expect(event!.customerFirstName).toBe('Reminder')
@@ -223,13 +226,9 @@ describe.runIf(DB_AVAILABLE)('Booking reminders — cron regression', () => {
 
     // A reminder with no name is better than no reminder and an unhandled error.
     vi.spyOn(people, 'getDisplayFields').mockResolvedValue(new Map())
-    const publish = vi.spyOn(eventBus, 'publish').mockResolvedValue(undefined as never)
-
     await task.sendReminders()
 
-    const event = publish.mock.calls
-      .map(([e]) => e as Record<string, unknown>)
-      .find((e) => e.bookingId === id)
+    const event = (await reminderEvents(id))[0]
     expect(event).toBeDefined()
     expect(event!.customerEmail).toBeNull()
   })
