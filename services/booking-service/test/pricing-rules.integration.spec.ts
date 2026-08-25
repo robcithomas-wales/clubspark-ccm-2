@@ -14,7 +14,7 @@ const RULE = {
   daysOfWeek: [1, 2, 3, 4, 5],
   timeFrom: '17:00',
   timeTo: '22:00',
-  ratePerHour: 18.00,
+  ratePerHour: 18.0,
   currency: 'GBP',
 }
 
@@ -29,7 +29,11 @@ describe.runIf(DB_AVAILABLE)('Pricing Rules — integration', () => {
   })
 
   afterEach(cleanPricingRules)
-  afterAll(async () => { await cleanPricingRules(); await prisma.$disconnect(); await closeApp() })
+  afterAll(async () => {
+    await cleanPricingRules()
+    await prisma.$disconnect()
+    await closeApp()
+  })
 
   describe('POST /pricing-rules', () => {
     it('creates a pricing rule and returns it', async () => {
@@ -104,7 +108,7 @@ describe.runIf(DB_AVAILABLE)('Pricing Rules — integration', () => {
       const res = await request
         .patch(`/v1/pricing-rules/${id}`)
         .set(JSON_HEADERS)
-        .send({ name: 'Off-peak', ratePerHour: 10.00 })
+        .send({ name: 'Off-peak', ratePerHour: 10.0 })
 
       expect(res.status).toBe(200)
       expect(res.body.data.name).toBe('Off-peak')

@@ -25,7 +25,11 @@ describe.runIf(DB_AVAILABLE)('Refund Policies — integration', () => {
   })
 
   afterEach(cleanRefundPolicies)
-  afterAll(async () => { await cleanRefundPolicies(); await prisma.$disconnect(); await closeApp() })
+  afterAll(async () => {
+    await cleanRefundPolicies()
+    await prisma.$disconnect()
+    await closeApp()
+  })
 
   describe('POST /refund-policies', () => {
     it('creates a refund policy and returns it', async () => {

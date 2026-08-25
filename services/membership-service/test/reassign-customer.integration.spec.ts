@@ -1,13 +1,14 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest'
 import supertest from 'supertest'
 import { getApp, closeApp } from './helpers/app.js'
-import { prisma, seedFixtures, cleanMemberships, teardownFixtures, checkDbAvailable } from './helpers/db.js'
 import {
-  TEST_TENANT_ID,
-  TEST_ORG_ID,
-  TEST_PLAN_ID,
-  TEST_CUSTOMER_ID,
-} from './fixtures/index.js'
+  prisma,
+  seedFixtures,
+  cleanMemberships,
+  teardownFixtures,
+  checkDbAvailable,
+} from './helpers/db.js'
+import { TEST_TENANT_ID, TEST_ORG_ID, TEST_PLAN_ID, TEST_CUSTOMER_ID } from './fixtures/index.js'
 
 // The guard fails closed with no environment bypass, so the suite supplies a
 // secret and sends it like any real service-to-service caller would.
@@ -94,7 +95,8 @@ describe.runIf(DB_AVAILABLE)('Memberships — internal customer reassignment', (
     const a = await insertMembership(TEST_CUSTOMER_ID)
 
     const res = await request
-      .post(ENDPOINT).set(HEADERS)
+      .post(ENDPOINT)
+      .set(HEADERS)
       .send({ fromCustomerId: TEST_CUSTOMER_ID, toCustomerId: NEW_CUSTOMER })
 
     expect(res.status).toBe(200)
@@ -149,7 +151,8 @@ describe.runIf(DB_AVAILABLE)('Memberships — internal customer reassignment', (
     })
 
     const res = await request
-      .post(ENDPOINT).set(HEADERS)
+      .post(ENDPOINT)
+      .set(HEADERS)
       .send({ fromCustomerId: TEST_CUSTOMER_ID, toCustomerId: NEW_CUSTOMER })
 
     expect(res.body.data.updated).toBe(2)
@@ -161,7 +164,8 @@ describe.runIf(DB_AVAILABLE)('Memberships — internal customer reassignment', (
     const a = await insertMembership(TEST_CUSTOMER_ID)
 
     const res = await request
-      .post(ENDPOINT).set(HEADERS)
+      .post(ENDPOINT)
+      .set(HEADERS)
       .send({ fromCustomerId: TEST_CUSTOMER_ID, toCustomerId: NEW_CUSTOMER })
 
     expect(res.status).toBe(200)
@@ -172,9 +176,13 @@ describe.runIf(DB_AVAILABLE)('Memberships — internal customer reassignment', (
   it('is idempotent — a repeat call is a no-op, not an error', async () => {
     await insertMembership(TEST_CUSTOMER_ID)
 
-    const first = await request.post(ENDPOINT).set(HEADERS)
+    const first = await request
+      .post(ENDPOINT)
+      .set(HEADERS)
       .send({ fromCustomerId: TEST_CUSTOMER_ID, toCustomerId: NEW_CUSTOMER })
-    const second = await request.post(ENDPOINT).set(HEADERS)
+    const second = await request
+      .post(ENDPOINT)
+      .set(HEADERS)
       .send({ fromCustomerId: TEST_CUSTOMER_ID, toCustomerId: NEW_CUSTOMER })
 
     expect(first.body.data.updated).toBe(1)
@@ -185,20 +193,26 @@ describe.runIf(DB_AVAILABLE)('Memberships — internal customer reassignment', (
   it('is reversible — reassigning back restores the original id', async () => {
     const a = await insertMembership(TEST_CUSTOMER_ID)
 
-    await request.post(ENDPOINT).set(HEADERS)
+    await request
+      .post(ENDPOINT)
+      .set(HEADERS)
       .send({ fromCustomerId: TEST_CUSTOMER_ID, toCustomerId: NEW_CUSTOMER })
     // Exactly what the caller's compensation step does on failure.
-    await request.post(ENDPOINT).set(HEADERS)
+    await request
+      .post(ENDPOINT)
+      .set(HEADERS)
       .send({ fromCustomerId: NEW_CUSTOMER, toCustomerId: TEST_CUSTOMER_ID })
 
     expect(await customerOf(a)).toBe(TEST_CUSTOMER_ID)
   })
 
-  it('never touches another tenant\'s memberships', async () => {
+  it("never touches another tenant's memberships", async () => {
     const mine = await insertMembership(TEST_CUSTOMER_ID)
     const theirs = await insertMembership(TEST_CUSTOMER_ID, OTHER_TENANT)
 
-    const res = await request.post(ENDPOINT).set(HEADERS)
+    const res = await request
+      .post(ENDPOINT)
+      .set(HEADERS)
       .send({ fromCustomerId: TEST_CUSTOMER_ID, toCustomerId: NEW_CUSTOMER })
 
     expect(res.body.data.updated).toBe(1)

@@ -11,11 +11,9 @@ let app: NestFastifyApplication | null = null
 export async function getApp(): Promise<NestFastifyApplication> {
   if (app) return app
 
-  app = await NestFactory.create<NestFastifyApplication>(
-    AppModule,
-    new FastifyAdapter(),
-    { logger: ['error'] },
-  )
+  app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), {
+    logger: ['error'],
+  })
 
   app.useGlobalPipes(
     new ValidationPipe({

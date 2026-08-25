@@ -60,11 +60,14 @@ describe.runIf(DB_AVAILABLE)('Campaigns — integration', () => {
   })
 
   it('lists campaigns for the tenant', async () => {
-    await request.post('/v1/campaigns').set(JSON_HEADERS).send({
-      name: 'List test',
-      channel: 'email',
-      audienceDefinition: JSON.stringify({ type: 'manual', recipients: [] }),
-    })
+    await request
+      .post('/v1/campaigns')
+      .set(JSON_HEADERS)
+      .send({
+        name: 'List test',
+        channel: 'email',
+        audienceDefinition: JSON.stringify({ type: 'manual', recipients: [] }),
+      })
 
     const res = await request.get('/v1/campaigns').set(HEADERS)
 
@@ -74,12 +77,15 @@ describe.runIf(DB_AVAILABLE)('Campaigns — integration', () => {
   })
 
   it('gets a campaign by id', async () => {
-    const created = await request.post('/v1/campaigns').set(JSON_HEADERS).send({
-      name: 'Get by ID test',
-      channel: 'sms',
-      body: 'Hello SMS',
-      audienceDefinition: JSON.stringify({ type: 'manual', recipients: [] }),
-    })
+    const created = await request
+      .post('/v1/campaigns')
+      .set(JSON_HEADERS)
+      .send({
+        name: 'Get by ID test',
+        channel: 'sms',
+        body: 'Hello SMS',
+        audienceDefinition: JSON.stringify({ type: 'manual', recipients: [] }),
+      })
     const id = (created.body.id ?? created.body.data?.id) as string
 
     const res = await request.get(`/v1/campaigns/${id}`).set(HEADERS)
@@ -90,9 +96,7 @@ describe.runIf(DB_AVAILABLE)('Campaigns — integration', () => {
   })
 
   it('returns 404 for a non-existent campaign', async () => {
-    const res = await request
-      .get(`/v1/campaigns/${TEST_NONEXISTENT_ID}`)
-      .set(HEADERS)
+    const res = await request.get(`/v1/campaigns/${TEST_NONEXISTENT_ID}`).set(HEADERS)
 
     expect(res.status).toBe(404)
   })
@@ -100,13 +104,16 @@ describe.runIf(DB_AVAILABLE)('Campaigns — integration', () => {
   // ── Update (PATCH) ────────────────────────────────────────────────────────
 
   it('patches a campaign subject and body', async () => {
-    const created = await request.post('/v1/campaigns').set(JSON_HEADERS).send({
-      name: 'Patch test',
-      channel: 'email',
-      subject: 'Original subject',
-      body: '<p>Original</p>',
-      audienceDefinition: JSON.stringify({ type: 'manual', recipients: [] }),
-    })
+    const created = await request
+      .post('/v1/campaigns')
+      .set(JSON_HEADERS)
+      .send({
+        name: 'Patch test',
+        channel: 'email',
+        subject: 'Original subject',
+        body: '<p>Original</p>',
+        audienceDefinition: JSON.stringify({ type: 'manual', recipients: [] }),
+      })
     const id = (created.body.id ?? created.body.data?.id) as string
 
     const res = await request
@@ -119,11 +126,14 @@ describe.runIf(DB_AVAILABLE)('Campaigns — integration', () => {
   })
 
   it('patches a campaign name', async () => {
-    const created = await request.post('/v1/campaigns').set(JSON_HEADERS).send({
-      name: 'Old name',
-      channel: 'email',
-      audienceDefinition: JSON.stringify({ type: 'manual', recipients: [] }),
-    })
+    const created = await request
+      .post('/v1/campaigns')
+      .set(JSON_HEADERS)
+      .send({
+        name: 'Old name',
+        channel: 'email',
+        audienceDefinition: JSON.stringify({ type: 'manual', recipients: [] }),
+      })
     const id = (created.body.id ?? created.body.data?.id) as string
 
     const res = await request
@@ -156,9 +166,7 @@ describe.runIf(DB_AVAILABLE)('Campaigns — integration', () => {
     expect(typeof res.body.data.total).toBe('number')
     expect(typeof res.body.data.excluded).toBe('number')
     expect(typeof res.body.data.eligible).toBe('number')
-    expect(res.body.data.eligible).toBe(
-      Math.max(0, res.body.data.total - res.body.data.excluded),
-    )
+    expect(res.body.data.eligible).toBe(Math.max(0, res.body.data.total - res.body.data.excluded))
   })
 
   it('returns recipient preview for manual audience with manualCount', async () => {
@@ -184,12 +192,15 @@ describe.runIf(DB_AVAILABLE)('Campaigns — integration', () => {
   // ── Campaign stats ────────────────────────────────────────────────────────
 
   it('returns stats for a campaign — zeros when nothing dispatched', async () => {
-    const created = await request.post('/v1/campaigns').set(JSON_HEADERS).send({
-      name: 'Stats test',
-      channel: 'email',
-      subject: 'Stats subject',
-      audienceDefinition: JSON.stringify({ type: 'manual', recipients: [] }),
-    })
+    const created = await request
+      .post('/v1/campaigns')
+      .set(JSON_HEADERS)
+      .send({
+        name: 'Stats test',
+        channel: 'email',
+        subject: 'Stats subject',
+        audienceDefinition: JSON.stringify({ type: 'manual', recipients: [] }),
+      })
     const id = (created.body.id ?? created.body.data?.id) as string
 
     const res = await request.get(`/v1/campaigns/${id}/stats`).set(HEADERS)
@@ -204,12 +215,15 @@ describe.runIf(DB_AVAILABLE)('Campaigns — integration', () => {
   })
 
   it('stats include correct field set', async () => {
-    const created = await request.post('/v1/campaigns').set(JSON_HEADERS).send({
-      name: 'Field set test',
-      channel: 'email',
-      subject: 'Fields',
-      audienceDefinition: JSON.stringify({ type: 'manual', recipients: [] }),
-    })
+    const created = await request
+      .post('/v1/campaigns')
+      .set(JSON_HEADERS)
+      .send({
+        name: 'Field set test',
+        channel: 'email',
+        subject: 'Fields',
+        audienceDefinition: JSON.stringify({ type: 'manual', recipients: [] }),
+      })
     const id = (created.body.id ?? created.body.data?.id) as string
 
     const res = await request.get(`/v1/campaigns/${id}/stats`).set(HEADERS)
@@ -263,14 +277,11 @@ describe.runIf(DB_AVAILABLE)('Saved Audiences — integration', () => {
   // ── Create ────────────────────────────────────────────────────────────────
 
   it('creates a saved audience and returns 201', async () => {
-    const res = await request
-      .post('/v1/audiences')
-      .set(JSON_HEADERS)
-      .send({
-        name: 'Active juniors',
-        description: 'All active members under 18',
-        rulesJson: sampleRules,
-      })
+    const res = await request.post('/v1/audiences').set(JSON_HEADERS).send({
+      name: 'Active juniors',
+      description: 'All active members under 18',
+      rulesJson: sampleRules,
+    })
 
     expect(res.status).toBe(201)
     expect(res.body.data.id).toBeDefined()
@@ -307,14 +318,20 @@ describe.runIf(DB_AVAILABLE)('Saved Audiences — integration', () => {
   // ── List ─────────────────────────────────────────────────────────────────
 
   it('lists saved audiences for the tenant', async () => {
-    await request.post('/v1/audiences').set(JSON_HEADERS).send({
-      name: 'First audience',
-      rulesJson: { logic: 'or', rules: [] },
-    })
-    await request.post('/v1/audiences').set(JSON_HEADERS).send({
-      name: 'Second audience',
-      rulesJson: { logic: 'and', rules: [] },
-    })
+    await request
+      .post('/v1/audiences')
+      .set(JSON_HEADERS)
+      .send({
+        name: 'First audience',
+        rulesJson: { logic: 'or', rules: [] },
+      })
+    await request
+      .post('/v1/audiences')
+      .set(JSON_HEADERS)
+      .send({
+        name: 'Second audience',
+        rulesJson: { logic: 'and', rules: [] },
+      })
 
     const res = await request.get('/v1/audiences').set(HEADERS)
 
@@ -346,9 +363,7 @@ describe.runIf(DB_AVAILABLE)('Saved Audiences — integration', () => {
   })
 
   it('returns 404 for a non-existent audience', async () => {
-    const res = await request
-      .get(`/v1/audiences/${TEST_NONEXISTENT_ID}`)
-      .set(HEADERS)
+    const res = await request.get(`/v1/audiences/${TEST_NONEXISTENT_ID}`).set(HEADERS)
 
     expect(res.status).toBe(404)
   })
@@ -356,10 +371,13 @@ describe.runIf(DB_AVAILABLE)('Saved Audiences — integration', () => {
   // ── Update ────────────────────────────────────────────────────────────────
 
   it('patches the name of a saved audience', async () => {
-    const created = await request.post('/v1/audiences').set(JSON_HEADERS).send({
-      name: 'Old name',
-      rulesJson: { logic: 'and', rules: [] },
-    })
+    const created = await request
+      .post('/v1/audiences')
+      .set(JSON_HEADERS)
+      .send({
+        name: 'Old name',
+        rulesJson: { logic: 'and', rules: [] },
+      })
     const id = created.body.data.id
 
     const res = await request
@@ -372,10 +390,13 @@ describe.runIf(DB_AVAILABLE)('Saved Audiences — integration', () => {
   })
 
   it('patches the rules of a saved audience', async () => {
-    const created = await request.post('/v1/audiences').set(JSON_HEADERS).send({
-      name: 'Rules patch',
-      rulesJson: { logic: 'and', rules: [] },
-    })
+    const created = await request
+      .post('/v1/audiences')
+      .set(JSON_HEADERS)
+      .send({
+        name: 'Rules patch',
+        rulesJson: { logic: 'and', rules: [] },
+      })
     const id = created.body.data.id
 
     const updatedRules = {
@@ -406,10 +427,13 @@ describe.runIf(DB_AVAILABLE)('Saved Audiences — integration', () => {
   // ── Delete ────────────────────────────────────────────────────────────────
 
   it('deletes a saved audience and returns 204', async () => {
-    const created = await request.post('/v1/audiences').set(JSON_HEADERS).send({
-      name: 'To delete',
-      rulesJson: { logic: 'and', rules: [] },
-    })
+    const created = await request
+      .post('/v1/audiences')
+      .set(JSON_HEADERS)
+      .send({
+        name: 'To delete',
+        rulesJson: { logic: 'and', rules: [] },
+      })
     const id = created.body.data.id
 
     const del = await request.delete(`/v1/audiences/${id}`).set(HEADERS)
@@ -420,9 +444,7 @@ describe.runIf(DB_AVAILABLE)('Saved Audiences — integration', () => {
   })
 
   it('returns 404 when deleting a non-existent audience', async () => {
-    const res = await request
-      .delete(`/v1/audiences/${TEST_NONEXISTENT_ID}`)
-      .set(HEADERS)
+    const res = await request.delete(`/v1/audiences/${TEST_NONEXISTENT_ID}`).set(HEADERS)
 
     expect(res.status).toBe(404)
   })
@@ -464,7 +486,9 @@ describe.runIf(DB_AVAILABLE)('Suppression — integration', () => {
 
   it('lists suppression entries for the tenant', async () => {
     await request.post('/v1/suppression').set(JSON_HEADERS).send({
-      email: 'bounce@example.com', channel: 'email', reason: 'bounced',
+      email: 'bounce@example.com',
+      channel: 'email',
+      reason: 'bounced',
     })
 
     const res = await request.get('/v1/suppression').set(HEADERS)
@@ -478,7 +502,9 @@ describe.runIf(DB_AVAILABLE)('Suppression — integration', () => {
   it('removes an entry from the suppression list', async () => {
     const email = 'todelete@example.com'
     await request.post('/v1/suppression').set(JSON_HEADERS).send({
-      email, channel: 'email', reason: 'admin',
+      email,
+      channel: 'email',
+      reason: 'admin',
     })
 
     // controller uses DELETE /suppression?email=...&channel=...
@@ -492,7 +518,9 @@ describe.runIf(DB_AVAILABLE)('Suppression — integration', () => {
   it('suppression reduces eligible count in recipient preview', async () => {
     // Add a suppression entry so excluded > 0 when we have members
     await request.post('/v1/suppression').set(JSON_HEADERS).send({
-      email: 'suppressed@example.com', channel: 'email', reason: 'bounced',
+      email: 'suppressed@example.com',
+      channel: 'email',
+      reason: 'bounced',
     })
 
     const res = await request
@@ -501,8 +529,6 @@ describe.runIf(DB_AVAILABLE)('Suppression — integration', () => {
 
     expect(res.status).toBe(200)
     // eligible should be total minus excluded
-    expect(res.body.data.eligible).toBe(
-      Math.max(0, res.body.data.total - res.body.data.excluded),
-    )
+    expect(res.body.data.eligible).toBe(Math.max(0, res.body.data.total - res.body.data.excluded))
   })
 })

@@ -20,7 +20,10 @@ describe.runIf(DB_AVAILABLE)('Templates — integration', () => {
     request = supertest(app.getHttpServer() as any)
   })
 
-  afterAll(async () => { await prisma.$disconnect(); await closeApp() })
+  afterAll(async () => {
+    await prisma.$disconnect()
+    await closeApp()
+  })
 
   describe('GET /templates', () => {
     it('lists system templates (seeded at startup)', async () => {
@@ -48,7 +51,10 @@ describe.runIf(DB_AVAILABLE)('Templates — integration', () => {
       const res = await request
         .patch(`/v1/templates/${KNOWN_TEMPLATE_KEY}`)
         .set(JSON_HEADERS)
-        .send({ customFooter: 'Need help? Email support@example.com', replyTo: 'support@example.com' })
+        .send({
+          customFooter: 'Need help? Email support@example.com',
+          replyTo: 'support@example.com',
+        })
 
       expect(res.status).toBe(200)
     })

@@ -10,8 +10,16 @@ let app: NestFastifyApplication | null = null
 
 export async function getApp(): Promise<NestFastifyApplication> {
   if (app) return app
-  app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), { logger: false })
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, transformOptions: { enableImplicitConversion: true } }))
+  app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), {
+    logger: false,
+  })
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      transformOptions: { enableImplicitConversion: true },
+    }),
+  )
   // Same routing config as src/main.ts — see src/bootstrap.ts.
   configureRouting(app)
 
@@ -20,5 +28,8 @@ export async function getApp(): Promise<NestFastifyApplication> {
 }
 
 export async function closeApp(): Promise<void> {
-  if (app) { await app.close(); app = null }
+  if (app) {
+    await app.close()
+    app = null
+  }
 }
