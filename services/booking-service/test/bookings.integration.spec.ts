@@ -1,7 +1,16 @@
-import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest'
 import supertest from 'supertest'
 import { getApp, closeApp } from './helpers/app.js'
-import { prisma, seedFixtures, cleanBookings, cleanBookingRules, cleanPricingRules, teardownFixtures, checkDbAvailable } from './helpers/db.js'
+import {
+  prisma,
+  seedFixtures,
+  cleanBookings,
+  cleanBookingRules,
+  cleanPricingRules,
+  teardownFixtures,
+  checkDbAvailable,
+} from './helpers/db.js'
+import { VenueClient } from '../src/venue/venue.client.js'
 import {
   TEST_TENANT_ID,
   TEST_ORG_ID,
@@ -51,15 +60,18 @@ const DB_AVAILABLE = await checkDbAvailable()
 
 describe.runIf(DB_AVAILABLE)('Bookings — integration', () => {
   let request: ReturnType<typeof supertest>
+  let venueClient: VenueClient
 
   beforeAll(async () => {
     await seedFixtures()
     const app = await getApp()
+    venueClient = app.get(VenueClient)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     request = supertest(app.getHttpServer() as any)
   })
 
   afterEach(async () => {
+    vi.restoreAllMocks()
     await cleanBookings()
   })
 
@@ -72,10 +84,7 @@ describe.runIf(DB_AVAILABLE)('Bookings — integration', () => {
   // ── Create — happy path ──────────────────────────────────────────────────
 
   it('creates a booking and returns 201 with a booking reference', async () => {
-    const res = await request
-      .post('/bookings')
-      .set(JSON_HEADERS)
-      .send(bookingPayload())
+    const res = await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
 
     expect(res.status).toBe(201)
     expect(res.body.data.bookingReference).toMatch(/^BK-[0-9A-F]{10}$/)
@@ -84,16 +93,24 @@ describe.runIf(DB_AVAILABLE)('Bookings — integration', () => {
   })
 
   it('returns the booking when fetched by id', async () => {
-    const created = await request
-      .post('/bookings')
-      .set(JSON_HEADERS)
-      .send(bookingPayload())
+    const created = await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
 
     const id = created.body.data.id
     const res = await request.get(`/bookings/${id}`).set(HEADERS)
 
     expect(res.status).toBe(200)
     expect(res.body.data.id).toBe(id)
+  })
+
+  it('gets utilisation capacity from venue-service rather than reading its schema', async () => {
+    const capacity = vi.spyOn(venueClient, 'getActiveBookableUnitCount').mockResolvedValue(2)
+    await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
+
+    const res = await request.get('/bookings/stats').set(HEADERS)
+
+    expect(res.status).toBe(200)
+    expect(capacity).toHaveBeenCalledWith(TEST_TENANT_ID)
+    expect(res.body.data.utilisationRate30d).toBeGreaterThanOrEqual(0)
   })
 
   // ── Create — conflict ────────────────────────────────────────────────────
@@ -167,10 +184,7 @@ describe.runIf(DB_AVAILABLE)('Bookings — integration', () => {
   })
 
   it('returns 400 when required fields are missing', async () => {
-    const res = await request
-      .post('/bookings')
-      .set(HEADERS)
-      .send({ venueId: TEST_VENUE_ID })
+    const res = await request.post('/bookings').set(HEADERS).send({ venueId: TEST_VENUE_ID })
 
     expect(res.status).toBe(400)
   })
@@ -207,9 +221,7 @@ describe.runIf(DB_AVAILABLE)('Bookings — integration', () => {
   })
 
   it('returns 404 when cancelling a non-existent booking', async () => {
-    const res = await request
-      .post(`/bookings/${TEST_NONEXISTENT_ID}/cancel`)
-      .set(HEADERS)
+    const res = await request.post(`/bookings/${TEST_NONEXISTENT_ID}/cancel`).set(HEADERS)
 
     expect(res.status).toBe(404)
   })
@@ -218,9 +230,10 @@ describe.runIf(DB_AVAILABLE)('Bookings — integration', () => {
 
   it('lists bookings with pagination metadata', async () => {
     await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
-    await request.post('/bookings').set(JSON_HEADERS).send(
-      bookingPayload({ startsAt: SLOT_ADJACENT_START, endsAt: SLOT_ADJACENT_END }),
-    )
+    await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload({ startsAt: SLOT_ADJACENT_START, endsAt: SLOT_ADJACENT_END }))
 
     const res = await request.get('/bookings?page=1&limit=10').set(HEADERS)
 
@@ -241,9 +254,10 @@ describe.runIf(DB_AVAILABLE)('Bookings — integration', () => {
     const id = created.body.data.id
     await request.post(`/bookings/${id}/cancel`).set(HEADERS)
 
-    await request.post('/bookings').set(JSON_HEADERS).send(
-      bookingPayload({ startsAt: SLOT_ADJACENT_START, endsAt: SLOT_ADJACENT_END }),
-    )
+    await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload({ startsAt: SLOT_ADJACENT_START, endsAt: SLOT_ADJACENT_END }))
 
     const res = await request.get('/bookings?status=active').set(HEADERS)
     expect(res.status).toBe(200)
@@ -253,14 +267,13 @@ describe.runIf(DB_AVAILABLE)('Bookings — integration', () => {
 
   it('filters bookings by fromDate and toDate', async () => {
     await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
-    await request.post('/bookings').set(JSON_HEADERS).send(
-      bookingPayload({ startsAt: SLOT_NEXT_DAY_START, endsAt: SLOT_NEXT_DAY_END }),
-    )
+    await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload({ startsAt: SLOT_NEXT_DAY_START, endsAt: SLOT_NEXT_DAY_END }))
 
     // Only request bookings on 2099-06-01
-    const res = await request
-      .get('/bookings?fromDate=2099-06-01&toDate=2099-06-02')
-      .set(HEADERS)
+    const res = await request.get('/bookings?fromDate=2099-06-01&toDate=2099-06-02').set(HEADERS)
 
     expect(res.status).toBe(200)
     expect(res.body.data).toHaveLength(1)
@@ -360,10 +373,7 @@ describe.runIf(DB_AVAILABLE)('Bookings — integration', () => {
   })
 
   it('returns 409 when approving a non-pending booking', async () => {
-    const created = await request
-      .post('/bookings')
-      .set(JSON_HEADERS)
-      .send(bookingPayload())
+    const created = await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
     const id = created.body.data.id
 
     const res = await request
@@ -397,26 +407,17 @@ describe.runIf(DB_AVAILABLE)('Bookings — integration', () => {
       .send(bookingPayload({ status: 'pending' }))
     const id = created.body.data.id
 
-    const res = await request
-      .post(`/bookings/${id}/reject`)
-      .set(JSON_HEADERS)
-      .send({})
+    const res = await request.post(`/bookings/${id}/reject`).set(JSON_HEADERS).send({})
 
     expect(res.status).toBe(200)
     expect(res.body.data.status).toBe('cancelled')
   })
 
   it('returns 409 when rejecting a non-pending booking', async () => {
-    const created = await request
-      .post('/bookings')
-      .set(JSON_HEADERS)
-      .send(bookingPayload())
+    const created = await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
     const id = created.body.data.id
 
-    const res = await request
-      .post(`/bookings/${id}/reject`)
-      .set(JSON_HEADERS)
-      .send({})
+    const res = await request.post(`/bookings/${id}/reject`).set(JSON_HEADERS).send({})
 
     expect(res.status).toBe(409)
   })
@@ -428,19 +429,26 @@ describe.runIf(DB_AVAILABLE)('Bookings — integration', () => {
       .send(bookingPayload({ status: 'pending' }))
     const id = created.body.data.id
 
-    const res = await request
-      .post(`/bookings/${id}/approve`)
-      .set(JSON_HEADERS)
-      .send({})
+    const res = await request.post(`/bookings/${id}/approve`).set(JSON_HEADERS).send({})
 
     expect(res.status).toBe(400)
   })
 
   it('filters bookings by status=pending', async () => {
-    await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload({ status: 'pending' }))
-    await request.post('/bookings').set(JSON_HEADERS).send(
-      bookingPayload({ status: 'active', startsAt: SLOT_ADJACENT_START, endsAt: SLOT_ADJACENT_END }),
-    )
+    await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(bookingPayload({ status: 'pending' }))
+    await request
+      .post('/bookings')
+      .set(JSON_HEADERS)
+      .send(
+        bookingPayload({
+          status: 'active',
+          startsAt: SLOT_ADJACENT_START,
+          endsAt: SLOT_ADJACENT_END,
+        }),
+      )
 
     const res = await request.get('/bookings?status=pending').set(HEADERS)
     expect(res.status).toBe(200)
@@ -502,9 +510,7 @@ describe.runIf(DB_AVAILABLE)('Bookings — integration', () => {
     const created = await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
     const id = created.body.data.id
 
-    const res = await request
-      .get(`/bookings/${id}/payment-splits`)
-      .set(HEADERS)
+    const res = await request.get(`/bookings/${id}/payment-splits`).set(HEADERS)
 
     expect(res.status).toBe(200)
     expect(Array.isArray(res.body.data)).toBe(true)
@@ -518,11 +524,11 @@ describe.runIf(DB_AVAILABLE)('Bookings — integration', () => {
     const res = await request
       .post(`/bookings/${id}/payment-splits`)
       .set(JSON_HEADERS)
-      .send({ payerName: 'Alice Smith', amountDue: 25.00 })
+      .send({ payerName: 'Alice Smith', amountDue: 25.0 })
 
     expect(res.status).toBe(201)
     expect(res.body.data.payerName).toBe('Alice Smith')
-    expect(parseFloat(res.body.data.amountDue)).toBe(25.00)
+    expect(parseFloat(res.body.data.amountDue)).toBe(25.0)
     expect(res.body.data.paymentStatus).toBe('unpaid')
   })
 
@@ -530,10 +536,14 @@ describe.runIf(DB_AVAILABLE)('Bookings — integration', () => {
     const created = await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
     const id = created.body.data.id
 
-    await request.post(`/bookings/${id}/payment-splits`).set(JSON_HEADERS)
-      .send({ payerName: 'Alice', amountDue: 20.00 })
-    await request.post(`/bookings/${id}/payment-splits`).set(JSON_HEADERS)
-      .send({ payerName: 'Bob', amountDue: 30.00 })
+    await request
+      .post(`/bookings/${id}/payment-splits`)
+      .set(JSON_HEADERS)
+      .send({ payerName: 'Alice', amountDue: 20.0 })
+    await request
+      .post(`/bookings/${id}/payment-splits`)
+      .set(JSON_HEADERS)
+      .send({ payerName: 'Bob', amountDue: 30.0 })
 
     const res = await request.get(`/bookings/${id}/payment-splits`).set(HEADERS)
 
@@ -551,7 +561,7 @@ describe.runIf(DB_AVAILABLE)('Bookings — integration', () => {
     const res = await request
       .post(`/bookings/${id}/payment-splits`)
       .set(JSON_HEADERS)
-      .send({ payerName: 'Carol', amountDue: 50.00 })
+      .send({ payerName: 'Carol', amountDue: 50.0 })
 
     expect(res.status).toBe(201)
     expect(res.body.data.paymentStatus).toBe('unpaid')
@@ -564,12 +574,10 @@ describe.runIf(DB_AVAILABLE)('Bookings — integration', () => {
     const split = await request
       .post(`/bookings/${id}/payment-splits`)
       .set(JSON_HEADERS)
-      .send({ payerName: 'Dave', amountDue: 15.00 })
+      .send({ payerName: 'Dave', amountDue: 15.0 })
     const splitId = split.body.data.id
 
-    const del = await request
-      .delete(`/bookings/${id}/payment-splits/${splitId}`)
-      .set(HEADERS)
+    const del = await request.delete(`/bookings/${id}/payment-splits/${splitId}`).set(HEADERS)
 
     expect(del.status).toBe(204)
 
@@ -578,9 +586,7 @@ describe.runIf(DB_AVAILABLE)('Bookings — integration', () => {
   })
 
   it('returns 404 when listing splits for a non-existent booking', async () => {
-    const res = await request
-      .get(`/bookings/${TEST_NONEXISTENT_ID}/payment-splits`)
-      .set(HEADERS)
+    const res = await request.get(`/bookings/${TEST_NONEXISTENT_ID}/payment-splits`).set(HEADERS)
 
     expect(res.status).toBe(404)
   })
@@ -589,7 +595,7 @@ describe.runIf(DB_AVAILABLE)('Bookings — integration', () => {
     const res = await request
       .post(`/bookings/${TEST_NONEXISTENT_ID}/payment-splits`)
       .set(JSON_HEADERS)
-      .send({ payerName: 'Ghost', amountDue: 10.00 })
+      .send({ payerName: 'Ghost', amountDue: 10.0 })
 
     expect(res.status).toBe(404)
   })
@@ -795,10 +801,7 @@ describe.runIf(DB_AVAILABLE)('Pricing engine — wired into booking creation', (
     `
 
     // SLOT_START → SLOT_END = 10:00–11:00 = 1 hour → expected price = £20
-    const res = await request
-      .post('/bookings')
-      .set(JSON_HEADERS)
-      .send(bookingPayload())
+    const res = await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
 
     expect(res.status).toBe(201)
     expect(res.body.data.price).toBeDefined()
@@ -822,10 +825,7 @@ describe.runIf(DB_AVAILABLE)('Pricing engine — wired into booking creation', (
         (${TEST_TENANT_ID}::uuid, 'Venue Rate', 'venue', ${TEST_VENUE_ID}::uuid, '{}', 30, 'GBP', 0, true)
     `
 
-    const res = await request
-      .post('/bookings')
-      .set(JSON_HEADERS)
-      .send(bookingPayload())
+    const res = await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
 
     expect(res.status).toBe(201)
     expect(parseFloat(String(res.body.data.price))).toBe(30)
@@ -840,10 +840,7 @@ describe.runIf(DB_AVAILABLE)('Pricing engine — wired into booking creation', (
         (${TEST_TENANT_ID}::uuid, 'Court Rate', 'resource', ${TEST_RESOURCE_ID}::uuid, '{}', 40, 'GBP', 0, true)
     `
 
-    const res = await request
-      .post('/bookings')
-      .set(JSON_HEADERS)
-      .send(bookingPayload())
+    const res = await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
 
     expect(res.status).toBe(201)
     expect(parseFloat(String(res.body.data.price))).toBe(40)
@@ -851,10 +848,7 @@ describe.runIf(DB_AVAILABLE)('Pricing engine — wired into booking creation', (
 
   it('returns price=null when no pricing rule exists (manual price required)', async () => {
     // No rule inserted — price field should remain null unless caller passes it explicitly
-    const res = await request
-      .post('/bookings')
-      .set(JSON_HEADERS)
-      .send(bookingPayload())
+    const res = await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
 
     expect(res.status).toBe(201)
     expect(res.body.data.price).toBeNull()
@@ -947,10 +941,7 @@ describe.runIf(DB_AVAILABLE)('Coaching session conflict detection', () => {
   it('returns 409 when a coaching session occupies the same unit and slot', async () => {
     await seedCoachingSession(TEST_UNIT_ID, SLOT_START, SLOT_END)
 
-    const res = await request
-      .post('/bookings')
-      .set(JSON_HEADERS)
-      .send(bookingPayload())
+    const res = await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
 
     expect(res.status).toBe(409)
     expect(res.body.message).toMatch(/coaching session/i)
@@ -961,10 +952,7 @@ describe.runIf(DB_AVAILABLE)('Coaching session conflict detection', () => {
     const otherUnitId = TEST_NONEXISTENT_ID
     await seedCoachingSession(otherUnitId, SLOT_START, SLOT_END)
 
-    const res = await request
-      .post('/bookings')
-      .set(JSON_HEADERS)
-      .send(bookingPayload())
+    const res = await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
 
     expect(res.status).toBe(201)
   })
@@ -973,10 +961,7 @@ describe.runIf(DB_AVAILABLE)('Coaching session conflict detection', () => {
     // Coaching session is adjacent — starts when our booking ends
     await seedCoachingSession(TEST_UNIT_ID, SLOT_END, SLOT_ADJACENT_END)
 
-    const res = await request
-      .post('/bookings')
-      .set(JSON_HEADERS)
-      .send(bookingPayload())
+    const res = await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
 
     expect(res.status).toBe(201)
   })
@@ -984,10 +969,7 @@ describe.runIf(DB_AVAILABLE)('Coaching session conflict detection', () => {
   it('allows booking when the coaching session is cancelled', async () => {
     await seedCoachingSession(TEST_UNIT_ID, SLOT_START, SLOT_END, 'cancelled')
 
-    const res = await request
-      .post('/bookings')
-      .set(JSON_HEADERS)
-      .send(bookingPayload())
+    const res = await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
 
     expect(res.status).toBe(201)
   })
@@ -1015,10 +997,7 @@ describe.runIf(DB_AVAILABLE)('Coaching session conflict detection', () => {
          ${SLOT_START}::timestamptz, ${SLOT_END}::timestamptz, 'scheduled')
     `
 
-    const res = await request
-      .post('/bookings')
-      .set(JSON_HEADERS)
-      .send(bookingPayload())
+    const res = await request.post('/bookings').set(JSON_HEADERS).send(bookingPayload())
 
     expect(res.status).toBe(201)
   })

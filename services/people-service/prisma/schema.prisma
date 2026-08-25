@@ -237,3 +237,25 @@ model SegmentMembership {
   @@map("segment_memberships")
   @@schema("people")
 }
+
+model EventInbox {
+  producer    String
+  eventId     String    @map("event_id")
+  tenantId    String?   @map("tenant_id") @db.Uuid
+  eventType   String    @map("event_type")
+  payloadHash String    @map("payload_hash")
+  status      String    @default("processing")
+  ownerId     String    @map("owner_id")
+  attempts    Int       @default(1)
+  leaseUntil  DateTime  @map("lease_until") @db.Timestamptz(6)
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
+  lastError   String?   @map("last_error")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@id([producer, eventId])
+  @@index([status, leaseUntil], map: "event_inbox_status_lease_idx")
+  @@index([tenantId, createdAt], map: "event_inbox_tenant_created_idx")
+  @@map("event_inbox")
+  @@schema("people")
+}

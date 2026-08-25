@@ -1,6 +1,11 @@
 # Azure AKS Reference Architecture
 
-This alternative hosts the synchronous ClubSpark services and selected workers on a private, multi-zone Azure Kubernetes Service cluster. Azure Functions remain available for lightweight integration and orchestration workloads.
+> **Status:** Target alternative — not deployed
+
+This alternative hosts the synchronous ClubSpark services and selected workers on a private,
+multi-zone Azure Kubernetes Service cluster. Azure Functions remain available for lightweight
+integration and orchestration workloads. For the repository and pilot shape that exists today, see
+[`current-reference-architecture.md`](current-reference-architecture.md).
 
 ```mermaid
 flowchart TB

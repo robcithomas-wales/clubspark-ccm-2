@@ -1,27 +1,42 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { Cron } from '@nestjs/schedule'
 import { AnomalyRepository } from './anomaly.repository.js'
+import { JobLeaseService } from '../scheduled-jobs/job-lease.service.js'
 
 @Injectable()
 export class AnomalyService {
   private readonly logger = new Logger(AnomalyService.name)
 
-  constructor(private readonly repo: AnomalyRepository) {}
+  constructor(
+    private readonly repo: AnomalyRepository,
+    private readonly leases: JobLeaseService,
+  ) {}
 
   // ── Nightly anomaly detection — 03:00 AM daily ────────────────────────────
 
   @Cron('0 3 * * *')
   async batchDetectAllTenants(): Promise<void> {
-    this.logger.log('Anomaly detection batch starting')
-    const tenantIds = await this.repo.getActiveTenantIds()
-    for (const tenantId of tenantIds) {
-      try {
-        await this.runDetection(tenantId)
-      } catch (err) {
-        this.logger.error(`Anomaly detection failed for tenant ${tenantId}: ${(err as Error).message}`)
-      }
+    const lease = await this.leases.tryAcquire('anomaly-detection', 6 * 60 * 60)
+    if (!lease) {
+      this.logger.log('Anomaly detection batch skipped; another replica owns the lease')
+      return
     }
-    this.logger.log('Anomaly detection batch complete')
+    try {
+      this.logger.log('Anomaly detection batch starting')
+      const tenantIds = await this.repo.getActiveTenantIds()
+      for (const tenantId of tenantIds) {
+        try {
+          await this.runDetection(tenantId)
+        } catch (err) {
+          this.logger.error(
+            `Anomaly detection failed for tenant ${tenantId}: ${(err as Error).message}`,
+          )
+        }
+      }
+      this.logger.log('Anomaly detection batch complete')
+    } finally {
+      await this.leases.release(lease)
+    }
   }
 
   async runDetection(tenantId: string): Promise<{ flagged: number }> {
@@ -35,7 +50,9 @@ export class AnomalyService {
     const allFlags = [...dormant, ...payments, ...hoarding, ...durations]
     const inserted = await this.repo.upsertFlags(tenantId, allFlags)
 
-    this.logger.log(`Tenant ${tenantId}: ${allFlags.length} anomalies detected, ${inserted} new flags`)
+    this.logger.log(
+      `Tenant ${tenantId}: ${allFlags.length} anomalies detected, ${inserted} new flags`,
+    )
     return { flagged: inserted }
   }
 

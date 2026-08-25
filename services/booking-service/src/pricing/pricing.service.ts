@@ -3,6 +3,7 @@ import { PricingRepository, type PricingRuleRow } from './pricing.repository.js'
 import { MembershipClient } from '../membership/membership.client.js'
 import type { CreatePricingRuleDto } from './dto/create-pricing-rule.dto.js'
 import type { TenantContext } from '../common/decorators/tenant-context.decorator.js'
+import { VenueProjectionReadsService } from '../projections/venue-projection-reads.service.js'
 
 export interface PriceBreakdown {
   /**
@@ -40,6 +41,7 @@ export class PricingService {
   constructor(
     private readonly repo: PricingRepository,
     private readonly membershipClient: MembershipClient,
+    private readonly venueProjectionReads: VenueProjectionReadsService,
   ) {}
 
   // ─── Pricing rule CRUD ─────────────────────────────────────────────────────
@@ -79,10 +81,7 @@ export class PricingService {
    *
    * Returns null if no pricing rule is configured (price must be set manually).
    */
-  async resolvePrice(
-    tenantId: string,
-    input: ResolvePriceInput,
-  ): Promise<PriceBreakdown | null> {
+  async resolvePrice(tenantId: string, input: ResolvePriceInput): Promise<PriceBreakdown | null> {
     const candidates = await this.repo.findApplicable(
       tenantId,
       input.venueId,
@@ -101,7 +100,11 @@ export class PricingService {
     // Lighting surcharge
     let lightingSurcharge = 0
     if (rule.lightingSurchargePerHour != null && rule.lightingSurchargePerHour > 0) {
-      const hasLighting = await this.repo.getResourceLighting(input.resourceId)
+      const hasLighting = await this.venueProjectionReads.getResourceLighting(
+        tenantId,
+        input.resourceId,
+        () => this.repo.getResourceLighting(tenantId, input.resourceId),
+      )
       if (hasLighting) {
         lightingSurcharge = parseFloat((rule.lightingSurchargePerHour * durationHours).toFixed(2))
       }
@@ -116,7 +119,10 @@ export class PricingService {
         // Rule overrides membership-service value
         memberDiscountPct = rule.memberDiscountPct
       } else {
-        const fromService = await this.membershipClient.resolveMemberDiscount(tenantId, input.customerId)
+        const fromService = await this.membershipClient.resolveMemberDiscount(
+          tenantId,
+          input.customerId,
+        )
         memberDiscountPct = fromService ?? 0
       }
     }
@@ -150,8 +156,8 @@ export class PricingService {
    * We pick the first one whose day-of-week and time window match.
    */
   private selectRule(candidates: PricingRuleRow[], startsAt: Date): PricingRuleRow | null {
-    const dayOfWeek = startsAt.getDay()          // 0=Sun … 6=Sat
-    const timeStr   = this.toHHMM(startsAt)      // "HH:MM"
+    const dayOfWeek = startsAt.getDay() // 0=Sun … 6=Sat
+    const timeStr = this.toHHMM(startsAt) // "HH:MM"
 
     for (const rule of candidates) {
       // Day-of-week filter (empty = all days)
@@ -159,7 +165,7 @@ export class PricingService {
 
       // Time window filter (null = all hours)
       if (rule.timeFrom && timeStr < rule.timeFrom) continue
-      if (rule.timeTo   && timeStr >= rule.timeTo)  continue
+      if (rule.timeTo && timeStr >= rule.timeTo) continue
 
       return rule
     }

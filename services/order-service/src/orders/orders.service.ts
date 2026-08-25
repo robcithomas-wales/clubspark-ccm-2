@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common'
 import { OrdersRepository } from './orders.repository.js'
-import { EventBusService } from '../event-bus/event-bus.service.js'
+import { OutboxRepository } from '../outbox/outbox.repository.js'
 import type { CreateOrderDto } from './dto/create-order.dto.js'
 import type { OrderStatus } from '../generated/prisma/index.js'
 
@@ -10,24 +10,22 @@ const VALID_STATUSES: OrderStatus[] = ['pending', 'confirmed', 'cancelled', 'ref
 export class OrdersService {
   constructor(
     private readonly repo: OrdersRepository,
-    private readonly events: EventBusService,
+    private readonly outbox: OutboxRepository,
   ) {}
 
   async create(tenantId: string, organisationId: string | undefined, dto: CreateOrderDto) {
-    const order = await this.repo.create(tenantId, organisationId, dto)
-
-    await this.events.publish({
-      type: 'order.created',
-      tenantId,
-      orderId: order.id,
-      subjectType: order.subjectType ?? undefined,
-      subjectId: order.subjectId ?? undefined,
-      totalAmount: order.totalAmount,
-      currency: order.currency,
-      occurredAt: new Date().toISOString(),
+    return this.repo.create(tenantId, organisationId, dto, async (tx, order) => {
+      await this.outbox.enqueue(tx, {
+        type: 'order.created',
+        tenantId,
+        orderId: order.id,
+        subjectType: order.subjectType ?? undefined,
+        subjectId: order.subjectId ?? undefined,
+        totalAmount: order.totalAmount,
+        currency: order.currency,
+        occurredAt: new Date().toISOString(),
+      })
     })
-
-    return order
   }
 
   async findById(tenantId: string, id: string) {
@@ -58,17 +56,20 @@ export class OrdersService {
 
     const order = await this.repo.findById(tenantId, id)
     if (!order) throw new NotFoundException(`Order ${id} not found`)
-
-    const updated = await this.repo.updateStatus(tenantId, id, status as OrderStatus)
+    if (order.status === status) return order
 
     const eventType =
-      status === 'confirmed' ? 'order.confirmed'
-      : status === 'cancelled' ? 'order.cancelled'
-      : status === 'refunded' ? 'order.refunded'
-      : null
+      status === 'confirmed'
+        ? 'order.confirmed'
+        : status === 'cancelled'
+          ? 'order.cancelled'
+          : status === 'refunded'
+            ? 'order.refunded'
+            : null
 
-    if (eventType) {
-      await this.events.publish({
+    return this.repo.updateStatus(tenantId, id, status as OrderStatus, async (tx, updated) => {
+      if (!eventType) return
+      await this.outbox.enqueue(tx, {
         type: eventType,
         tenantId,
         orderId: updated.id,
@@ -76,8 +77,6 @@ export class OrdersService {
         subjectId: updated.subjectId ?? undefined,
         occurredAt: new Date().toISOString(),
       })
-    }
-
-    return updated
+    })
   }
 }

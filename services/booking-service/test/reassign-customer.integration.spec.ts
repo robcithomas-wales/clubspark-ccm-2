@@ -18,6 +18,10 @@ import {
   TEST_UNIT_ID,
 } from './fixtures/index.js'
 
+// The guard fails closed with no environment bypass, so the suite supplies a
+// secret and sends it like any real service-to-service caller would.
+process.env['INTERNAL_SECRET'] ??= 'test-internal-secret'
+
 /**
  * The internal customer-reassignment hook.
  *
@@ -36,11 +40,13 @@ const OTHER_TENANT = '10000000-0000-4000-8000-0000000000b0'
 const HEADERS = {
   'x-tenant-id': TEST_TENANT_ID,
   'x-organisation-id': TEST_ORG_ID,
+  'x-internal-secret': process.env['INTERNAL_SECRET'] as string,
 }
 
-// The test harness builds the app without enableVersioning(), so routes are
-// unprefixed here — matching every other spec in this suite. In production the
-// URI versioning in main.ts serves this at /v1/bookings/internal/reassign-customer.
+// The bookings controller declares no version, so src/bootstrap.ts serves it at
+// BOTH /bookings/... and /v1/bookings/... — in the harness and in production
+// alike, since both call configureRouting(). The bare path is asserted here; the
+// /v1 mirror is covered by route-shape.integration.spec.ts.
 const ENDPOINT = '/bookings/internal/reassign-customer'
 
 /**
@@ -102,10 +108,24 @@ describe.runIf(DB_AVAILABLE)('Bookings — internal customer reassignment', () =
   it('rejects a request with no tenant header', async () => {
     const res = await request
       .post(ENDPOINT)
+      // The internal secret is still required — it is what authenticates this
+      // route at all. Only the tenant header is omitted here.
+      .set({ 'x-internal-secret': process.env['INTERNAL_SECRET'] as string })
       .send({ fromCustomerId: OLD_CUSTOMER, toCustomerId: NEW_CUSTOMER })
     // The route is @SkipTenant(), so the tenant guard no longer 401s it — the
     // handler rejects the missing header itself.
     expect(res.status).toBe(400)
+  })
+
+  it('rejects a request with no internal secret', async () => {
+    const res = await request
+      .post(ENDPOINT)
+      .set({ 'x-tenant-id': TEST_TENANT_ID })
+      .send({ fromCustomerId: OLD_CUSTOMER, toCustomerId: NEW_CUSTOMER })
+    // InternalSecretGuard is the sole authenticator here, and it no longer has an
+    // environment bypass — so an unauthenticated caller cannot reach the handler
+    // even under NODE_ENV=test.
+    expect(res.status).toBe(401)
   })
 
   /**
@@ -154,6 +174,22 @@ describe.runIf(DB_AVAILABLE)('Bookings — internal customer reassignment', () =
         expect(() => guard.canActivate(ctx({ 'x-internal-secret': 'wrong' }))).toThrow(
           /Invalid or missing/i,
         )
+      })
+    })
+
+    it('does NOT bypass under NODE_ENV=test — an env var must not remove auth', () => {
+      // This guard is the SOLE authenticator on routes that take the tenant from a
+      // caller-supplied header. It previously returned true outright when
+      // NODE_ENV===test, which made one ambient variable enough to allow
+      // unauthenticated cross-tenant writes. Keep it closed.
+      withEnv({ NODE_ENV: 'test', INTERNAL_SECRET: 'right' }, () => {
+        expect(() => guard.canActivate(ctx({}))).toThrow(/Invalid or missing/i)
+        expect(() => guard.canActivate(ctx({ 'x-internal-secret': 'wrong' }))).toThrow(
+          /Invalid or missing/i,
+        )
+      })
+      withEnv({ NODE_ENV: 'test', INTERNAL_SECRET: undefined }, () => {
+        expect(() => guard.canActivate(ctx({}))).toThrow(/not configured/i)
       })
     })
 

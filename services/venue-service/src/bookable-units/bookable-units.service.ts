@@ -22,20 +22,24 @@ export class BookableUnitsService {
     return this.repo.create(tenantId, dto)
   }
 
-  update(tenantId: string, id: string, data: {
-    name?: string
-    unitType?: string
-    sortOrder?: number
-    capacity?: number | null
-    isActive?: boolean
-    isOptionalExtra?: boolean
-    parentUnitId?: string | null
-  }) {
+  update(
+    tenantId: string,
+    id: string,
+    data: {
+      name?: string
+      unitType?: string
+      sortOrder?: number
+      capacity?: number | null
+      isActive?: boolean
+      isOptionalExtra?: boolean
+      parentUnitId?: string | null
+    },
+  ) {
     return this.repo.update(tenantId, id, data)
   }
 
-  async getConflicts(unitId: string) {
-    const conflictingUnitIds = await this.repo.findConflictingUnitIds(unitId)
+  async getConflicts(tenantId: string, unitId: string) {
+    const conflictingUnitIds = await this.repo.findConflictingUnitIds(tenantId, unitId)
     return { unitId, conflictingUnitIds }
   }
 }

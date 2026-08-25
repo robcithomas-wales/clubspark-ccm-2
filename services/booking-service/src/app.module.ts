@@ -18,6 +18,7 @@ import { SessionsModule } from './sessions/sessions.module.js'
 import { EventBusModule } from './event-bus/event-bus.module.js'
 import { RefundPoliciesModule } from './refund-policies/refund-policies.module.js'
 import { OrderModule } from './order-client/order.module.js'
+import { ProjectionsModule } from './projections/projections.module.js'
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { OrderModule } from './order-client/order.module.js'
     PricingModule,
     SessionsModule,
     RefundPoliciesModule,
+    ProjectionsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

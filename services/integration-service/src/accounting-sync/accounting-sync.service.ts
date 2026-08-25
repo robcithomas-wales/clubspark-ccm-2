@@ -57,6 +57,8 @@ export class AccountingSyncService {
       sourceType: 'payment',
     })
 
+    if (log.status !== 'pending') return
+
     await this.syncLogEntry(log.id, token, settings, {
       contactName: event.memberName,
       contactEmail: event.memberEmail,
@@ -85,6 +87,8 @@ export class AccountingSyncService {
       sourceType: 'refund',
     })
 
+    if (log.status !== 'pending') return
+
     await this.syncRefund(log.id, token, settings, {
       contactName: event.memberName,
       contactEmail: event.memberEmail,
@@ -96,7 +100,15 @@ export class AccountingSyncService {
     })
   }
 
-  async onMembershipActivated(event: { membershipId: string; tenantId: string; memberName: string; memberEmail: string; amountPence: number; currency: string; planName: string }): Promise<void> {
+  async onMembershipActivated(event: {
+    membershipId: string
+    tenantId: string
+    memberName: string
+    memberEmail: string
+    amountPence: number
+    currency: string
+    planName: string
+  }): Promise<void> {
     const settings = await this.settingsRepo.findByTenant(event.tenantId)
     if (!settings) return
 
@@ -110,6 +122,8 @@ export class AccountingSyncService {
       sourceId: event.membershipId,
       sourceType: 'membership',
     })
+
+    if (log.status !== 'pending') return
 
     await this.syncLogEntry(log.id, token, settings, {
       contactName: event.memberName,
@@ -126,7 +140,13 @@ export class AccountingSyncService {
   private async syncLogEntry(
     logId: string,
     token: { accessToken: string; realmId: string | null; connectionId: string },
-    settings: { provider: string; invoiceMode: string; revenueAccountCode: string; taxRateId: string | null; currencyCode: string },
+    settings: {
+      provider: string
+      invoiceMode: string
+      revenueAccountCode: string
+      taxRateId: string | null
+      currencyCode: string
+    },
     input: {
       contactName: string
       contactEmail: string
@@ -163,7 +183,15 @@ export class AccountingSyncService {
     logId: string,
     token: { accessToken: string; realmId: string | null },
     settings: { provider: string },
-    input: { contactName: string; contactEmail: string; description: string; unitAmount: number; currencyCode: string; accountCode: string; taxType?: string },
+    input: {
+      contactName: string
+      contactEmail: string
+      description: string
+      unitAmount: number
+      currencyCode: string
+      accountCode: string
+      taxType?: string
+    },
     currentAttempts = 0,
   ): Promise<void> {
     try {
@@ -189,7 +217,9 @@ export class AccountingSyncService {
   @Cron(CronExpression.EVERY_DAY_AT_2AM)
   async batchReconcile(): Promise<void> {
     this.logger.log('Accounting batch reconciliation starting')
-    const rows = await this.repo.findPendingForRetry(100)
+    // Five-minute leases plus SKIP LOCKED make this safe with multiple service
+    // replicas. A crashed worker becomes eligible again after the lease expires.
+    const rows = await this.repo.claimPendingForRetry(100, 300)
     this.logger.log(`Processing ${rows.length} pending/failed sync entries`)
 
     for (const row of rows) {

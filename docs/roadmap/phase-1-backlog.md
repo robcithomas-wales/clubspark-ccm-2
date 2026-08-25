@@ -1,6 +1,6 @@
 # Phase 1 — Executable Backlog
 
-> **Status:** Ready to execute
+> **Status:** In execution · **Updated:** 2026-08-25
 > **Parent:** [`pilot-to-production.md`](pilot-to-production.md) · **ADR:** [`../architecture/scalability-and-multi-region.md`](../architecture/scalability-and-multi-region.md)
 
 Phase 1 broken into discrete, reviewable **work orders (WO)**. Each is self-contained: scope,
@@ -47,20 +47,29 @@ in one physical DB. Until these are gone, no per-service or per-region database 
   5 tests fail with the bug present and pass without it, so it genuinely guards the regression.
 - **Deps:** none.
 
-### WO-1.1 — Venue read-model projection for availability/pricing hot paths 🟡 (L)
+### WO-1.1 — Venue/Coaching read-model projections 🟠 (code complete, activation pending)
 - **Scope:** replace hot-path `venue.*` JOINs with a booking-owned projection (resources,
   bookable_units, unit_conflicts) kept current from venue events.
-- **Decision needed:** projection (eventually-consistent copy) vs synchronous venue API calls for
-  availability. Recommendation: **projection** for availability (latency + resilience); API calls
-  for rare admin reads. Confirm before building.
+- **Decision:** booking-owned projection for hot paths; synchronous Venue APIs remain appropriate
+  for rare administrative/reference reads.
 - **Approach:** define the projection schema in `booking`'s own schema; populate via venue domain
-  events (depends on WO-2.x for reliable delivery, or a one-off backfill + polling until then);
-  swap `availability.repository.ts` / `pricing.repository.ts` reads to the projection.
+  events through Venue's transactional outbox; bootstrap from a tenant-scoped repeatable-read
+  snapshot; switch reads through `BOOKING_VENUE_PROJECTION_MODE` (`legacy`, `shadow`,
+  `projection`).
+- **Implemented 2026-08-24:** additive schemas/migrations, guarded snapshot and refresh APIs,
+  idempotent/out-of-order consumer, Venue resource/unit/conflict outbox producers, retry/dead-letter
+  relay, tenant-scoped fallback SQL and flag-controlled shadow/cutover reads. Default remains
+  `legacy`; migrations have not been deployed or backfilled.
+- **Implemented 2026-08-24 (Coaching):** tenant-scoped repeatable-read occupancy snapshot,
+  transactional Coaching outbox, versioned session upsert/delete events, idempotent Booking
+  consumer and `BOOKING_COACHING_PROJECTION_MODE` rollout switch.
+- **Next:** deploy to a non-production environment, backfill/reconcile and run both projections in
+  shadow mode before removing foreign-schema fallbacks.
 - **Acceptance:** availability & pricing queries touch only `booking.*`; grep shows no `venue.*` in
   booking SQL for these paths; availability integration tests green.
 - **Deps:** WO-1.0. Reliable projection updates strengthen once WO-2.1 lands.
 
-### WO-1.2 — People/auth reads via API + kill the cross-service *write* 🟡 (L)
+### WO-1.2 — People/auth reads via API + kill the cross-service *write* ✅ DONE IN CODE
 - **Resized S→M→L by WO-1.0:** this is no longer only about booking's reads.
 
 **Scope (b) — the cross-service write ✅ DONE (2026-07-29).** The harder half, done first because
@@ -99,14 +108,15 @@ it is the one item with no "amend the invariant" escape hatch.
     dead `TENANT_HEADER` constant removed, guard-enforcement tests added (the enforcement branch had
     zero coverage), and one saga test that passed for the wrong reason corrected.
 
-**Scope (a) — reads (outstanding).** Replace `people.persons` / `auth.users` JOINs in
-`bookings.repository.ts` (B1, B2, B6) and `booking-series.repository.ts` (S1) with a batch API
-hydrate against people-service, or a minimal person read-model (display fields only).
-- **Acceptance:** no `people.*` / `auth.*` in booking SQL; booking + series suites green.
+**Scope (a) — reads ✅ DONE.** `people.persons` / `auth.users` JOINs were removed from Booking list,
+detail, reporting, reminders and series reads. Tenant-scoped People batch hydration now supplies the
+display fields; Venue display hydration uses the same API pattern.
+- **Acceptance evidence:** source inspection finds no `people.*` / `auth.*` runtime SQL in Booking;
+  focused Booking suites and service builds passed during implementation.
 - **Review gates:** `@architecture-reviewer` **and** `@security-reviewer`.
 - **Deps:** WO-1.0.
 
-### WO-1.3 — Coaching read + restore the invariant 🟢 (S–M)
+### WO-1.3 — Coaching cutover + restore the invariant 🟠 (activation pending)
 - **Scope:** the `coaching.lesson_sessions` read in `availability.repository.ts:96` is the one
   *documented* exception — confirm it should be an API call/projection too, apply, then update
   `architecture-principles.md` #1/#3 so the docs match reality (the "doc honesty" fix from Phase 0
@@ -117,7 +127,7 @@ hydrate against people-service, or a minimal person read-model (display fields o
 
 ## §2 — Reliable eventing (transactional outbox + Service Bus)
 
-### WO-2.1 — Transactional outbox in publishers 🟢 (L)
+### WO-2.1 — Transactional outbox in publishers 🟠 (critical flows covered; inventory open)
 - **Scope:** replace `void eventBus.publish(...)` + swallowed errors with an **outbox**: write the
   event row in the **same DB transaction** as the state change, in booking/payment/membership
   (call sites: `bookings.service.ts:175,287`, `webhooks.service.ts:108,125,141`,
@@ -152,7 +162,7 @@ hydrate against people-service, or a minimal person read-model (display fields o
 
 ## §4 — Fix horizontal-scaling correctness
 
-### WO-4.1 — Stop `@Cron` jobs multi-firing 🟢 (M)
+### WO-4.1 — Stop `@Cron` jobs multi-firing 🟠 (mechanisms implemented; proof/metrics open)
 - **Scope:** analytics (scoring/anomaly/forecast), booking (expiry/reminder), membership (expiry),
   integration (webhook worker) crons fire on every replica. Add leader election / a distributed
   lock (Redis-based once WO-3.2 exists) or externalize to a single scheduler.
@@ -174,10 +184,10 @@ hydrate against people-service, or a minimal person read-model (display fields o
 
 ## Suggested execution waves
 
-1. **Wave A (parallelisable):** ~~WO-1.0~~ ✅, ~~WO-1.0a~~ ✅, **WO-5.1**, **WO-2.1** — tracing and
-   outbox remain. No infra deps, no decisions.
-2. **Wave B:** WO-1.1 → WO-1.2 → WO-1.3 (the decouple, in order); WO-3.1 alongside.
-3. **Wave C (needs Azure):** WO-2.2, WO-3.2, WO-4.1.
+1. **Current:** activate WO-1.1/WO-1.3 in an environment and remove the five compatibility reads;
+   finish WO-2.1 inventory/evidence and WO-4.1 concurrency tests/metrics.
+2. **Independent:** WO-5.1 observability and WO-3.1 read-replica wiring.
+3. **Needs Azure:** WO-2.2 and WO-3.2.
 
 Each WO is one focused change → `/review` → commit, with a checkpoint back to you at every 🟡
 decision and before every 🔴 infra step.
@@ -196,9 +206,27 @@ Three cross-schema FKs remain, all on empty legacy tables with no code reference
 (`crm.customers` ×2 and `membership.membership_participants`, all → the orphaned `identity` schema).
 Harmless; dropping the dead `identity`/`crm` schemas is a separate, deliberate cleanup.
 
-Note for future migrations: the platform shares a single `public._prisma_migrations` table across
-all 15 services, so per-service `prisma migrate deploy` is unreliable — apply SQL directly.
+Note for future migrations — **corrected 2026-08-12.** The earlier note here claimed the platform
+shared a single `public._prisma_migrations` table, and concluded that per-service
+`prisma migrate deploy` was unreliable so SQL should be applied directly. Both halves were wrong,
+and the advice was dangerous.
 
-**Next up:** WO-2.1 (transactional outbox) or WO-5.1 (tracing) — both 🟢, no decisions, no infra.
-Wave B (the actual decouple) proceeds on the WO-1.0 recommendation: **projection** for the hot
-paths (B3, B4, A1, A2, P1), API hydrate for the occasional ones (B5, B6, S1).
+Checked against the live database: there is **no** `public._prisma_migrations`. Each service owns
+its own, in its own schema (`venue._prisma_migrations`, `commerce._prisma_migrations`, and so on —
+14 in total; `template-service` has no migrations). The design in CLAUDE.md was right all along.
+
+`scripts/migrate-all.sh` was already correct: it reads `schemas =` out of each
+`schema.prisma` and pins `?schema=` per service on both URLs, so `migrate deploy` through that
+script has always been reliable. `check-migration-drift.sh` does the same. There was nothing to
+work around.
+
+What *was* missing is a read-only equivalent, so engineers reached for `npx prisma migrate
+status` inside a service directory — which failed, because `DIRECT_DATABASE_URL` was undefined
+(`P1012`). That is now `npm run migrate:status`, which derives the session URL and the schema pin
+the same way. All 14 report up to date.
+
+Do not apply SQL directly, and do not put `DIRECT_DATABASE_URL` in a `.env`: use the scripts.
+
+**Next up:** apply the additive projection/outbox/lease migrations in a non-production environment,
+backfill and reconcile both projections, then exercise `legacy` → `shadow` → `projection`. WO-5.1
+(tracing) remains the next independent architecture task; no activation has occurred yet.

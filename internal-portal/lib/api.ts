@@ -1,16 +1,18 @@
-import { createClient } from "@/lib/supabase/server"
+import { createClient } from '@/lib/supabase/server'
+import { requireInternalSecret } from './internal-secret'
 
-const ADMIN_SERVICE = process.env.ADMIN_SERVICE_URL || "http://127.0.0.1:4006"
-const INTERNAL_SECRET = process.env.INTERNAL_SECRET || "dev-internal-secret"
+const ADMIN_SERVICE = process.env.ADMIN_SERVICE_URL || 'http://127.0.0.1:4006'
 
 async function internalHeaders(): Promise<Record<string, string>> {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
   return {
-    "Content-Type": "application/json",
-    "x-internal-secret": INTERNAL_SECRET,
-    ...(user?.id ? { "x-staff-id": user.id } : {}),
-    ...(user?.email ? { "x-staff-email": user.email } : {}),
+    'Content-Type': 'application/json',
+    'x-internal-secret': requireInternalSecret(),
+    ...(user?.id ? { 'x-staff-id': user.id } : {}),
+    ...(user?.email ? { 'x-staff-email': user.email } : {}),
   }
 }
 
@@ -85,22 +87,24 @@ export async function getOrganisations(
   filters: { search?: string; status?: string; plan?: string; region?: string } = {},
 ) {
   const qs = new URLSearchParams({ page: String(page), limit: String(limit) })
-  if (filters.search) qs.set("search", filters.search)
-  if (filters.status) qs.set("status", filters.status)
-  if (filters.plan) qs.set("plan", filters.plan)
-  if (filters.region) qs.set("region", filters.region)
+  if (filters.search) qs.set('search', filters.search)
+  if (filters.status) qs.set('status', filters.status)
+  if (filters.plan) qs.set('plan', filters.plan)
+  if (filters.region) qs.set('region', filters.region)
   const res = await fetch(`${ADMIN_SERVICE}/v1/internal/organisations?${qs}`, {
-    headers: await internalHeaders(), cache: "no-store",
+    headers: await internalHeaders(),
+    cache: 'no-store',
   })
-  if (!res.ok) throw new Error("Failed to load organisations")
+  if (!res.ok) throw new Error('Failed to load organisations')
   return res.json() as Promise<{ data: Organisation[]; pagination: PaginationMeta }>
 }
 
 export async function getOrganisation(tenantId: string) {
   const res = await fetch(`${ADMIN_SERVICE}/v1/internal/organisations/${tenantId}`, {
-    headers: await internalHeaders(), cache: "no-store",
+    headers: await internalHeaders(),
+    cache: 'no-store',
   })
-  if (!res.ok) throw new Error("Failed to load organisation")
+  if (!res.ok) throw new Error('Failed to load organisation')
   const json = await res.json()
   return json.data as Organisation
 }
@@ -109,26 +113,25 @@ export async function getOrganisation(tenantId: string) {
 
 export async function getFlags(tenantId: string) {
   const res = await fetch(`${ADMIN_SERVICE}/v1/internal/organisations/${tenantId}/flags`, {
-    headers: await internalHeaders(), cache: "no-store",
+    headers: await internalHeaders(),
+    cache: 'no-store',
   })
-  if (!res.ok) throw new Error("Failed to load flags")
+  if (!res.ok) throw new Error('Failed to load flags')
   const json = await res.json()
   return json.data as FeatureFlag[]
 }
 
 // ── Audit log ─────────────────────────────────────────────────────────────────
 
-export async function getAuditLogs(
-  page = 1,
-  filters: { tenantId?: string; action?: string } = {},
-) {
-  const qs = new URLSearchParams({ page: String(page), limit: "100" })
-  if (filters.tenantId) qs.set("tenantId", filters.tenantId)
-  if (filters.action) qs.set("action", filters.action)
+export async function getAuditLogs(page = 1, filters: { tenantId?: string; action?: string } = {}) {
+  const qs = new URLSearchParams({ page: String(page), limit: '100' })
+  if (filters.tenantId) qs.set('tenantId', filters.tenantId)
+  if (filters.action) qs.set('action', filters.action)
   const res = await fetch(`${ADMIN_SERVICE}/v1/internal/audit?${qs}`, {
-    headers: await internalHeaders(), cache: "no-store",
+    headers: await internalHeaders(),
+    cache: 'no-store',
   })
-  if (!res.ok) throw new Error("Failed to load audit log")
+  if (!res.ok) throw new Error('Failed to load audit log')
   return res.json() as Promise<{ data: AuditLog[]; pagination: PaginationMeta }>
 }
 
@@ -145,9 +148,10 @@ export type PlatformStats = {
 
 export async function getStats() {
   const res = await fetch(`${ADMIN_SERVICE}/v1/internal/stats`, {
-    headers: await internalHeaders(), cache: "no-store",
+    headers: await internalHeaders(),
+    cache: 'no-store',
   })
-  if (!res.ok) throw new Error("Failed to load stats")
+  if (!res.ok) throw new Error('Failed to load stats')
   const json = await res.json()
   return json.data as PlatformStats
 }
@@ -155,11 +159,12 @@ export async function getStats() {
 // ── Impersonation ─────────────────────────────────────────────────────────────
 
 export async function getImpersonationSessions(page = 1, tenantId?: string) {
-  const qs = new URLSearchParams({ page: String(page), limit: "50" })
-  if (tenantId) qs.set("tenantId", tenantId)
+  const qs = new URLSearchParams({ page: String(page), limit: '50' })
+  if (tenantId) qs.set('tenantId', tenantId)
   const res = await fetch(`${ADMIN_SERVICE}/v1/internal/impersonation?${qs}`, {
-    headers: await internalHeaders(), cache: "no-store",
+    headers: await internalHeaders(),
+    cache: 'no-store',
   })
-  if (!res.ok) throw new Error("Failed to load sessions")
+  if (!res.ok) throw new Error('Failed to load sessions')
   return res.json() as Promise<{ data: ImpersonationSession[]; pagination: PaginationMeta }>
 }

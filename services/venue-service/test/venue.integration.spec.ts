@@ -22,6 +22,11 @@ const JSON_HEADERS = {
   'content-type': 'application/json',
 }
 
+const INTERNAL_HEADERS = {
+  'x-tenant-id': TEST_TENANT_ID,
+  'x-internal-secret': process.env['INTERNAL_SECRET'] ?? 'test-internal-secret',
+}
+
 // ─── Suite ──────────────────────────────────────────────────────────────────
 
 const DB_AVAILABLE = await checkDbAvailable()
@@ -43,6 +48,44 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
     await closeApp()
   })
 
+  describe('Internal venue reference contract', () => {
+    it('returns the active bookable-unit count for the requested tenant', async () => {
+      const expected = await prisma.bookableUnit.count({
+        where: { tenantId: TEST_TENANT_ID, isActive: true },
+      })
+      const res = await request
+        .get('/venue-reference/internal/active-bookable-unit-count')
+        .set(INTERNAL_HEADERS)
+
+      expect(res.status).toBe(200)
+      expect(Number.isInteger(res.body.data.count)).toBe(true)
+      expect(res.body.data.count).toBe(expected)
+    })
+
+    it('requires an explicit tenant header', async () => {
+      const res = await request
+        .get('/venue-reference/internal/active-bookable-unit-count')
+        .set({ 'x-internal-secret': INTERNAL_HEADERS['x-internal-secret'] })
+
+      expect(res.status).toBe(400)
+    })
+
+    it('returns a tenant-scoped Booking projection snapshot', async () => {
+      const res = await request
+        .get('/venue-reference/internal/booking-projection-snapshot')
+        .set(INTERNAL_HEADERS)
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.generatedAt).toBeDefined()
+      expect(Array.isArray(res.body.data.resources)).toBe(true)
+      expect(Array.isArray(res.body.data.bookableUnits)).toBe(true)
+      expect(Array.isArray(res.body.data.unitConflicts)).toBe(true)
+      expect(
+        res.body.data.resources.some((row: { id: string }) => row.id === TEST_RESOURCE_ID),
+      ).toBe(true)
+    })
+  })
+
   // ══════════════════════════════════════════════════════════════════════════
   // Resources
   // ══════════════════════════════════════════════════════════════════════════
@@ -57,27 +100,21 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
     })
 
     it('filters resources by venueId', async () => {
-      const res = await request
-        .get(`/resources?venueId=${TEST_VENUE_ID}`)
-        .set(HEADERS)
+      const res = await request.get(`/resources?venueId=${TEST_VENUE_ID}`).set(HEADERS)
 
       expect(res.status).toBe(200)
       expect(res.body.data.every((r: any) => r.venueId === TEST_VENUE_ID)).toBe(true)
     })
 
     it('filters resources by isActive', async () => {
-      const res = await request
-        .get('/resources?isActive=true')
-        .set(HEADERS)
+      const res = await request.get('/resources?isActive=true').set(HEADERS)
 
       expect(res.status).toBe(200)
       expect(res.body.data.every((r: any) => r.isActive === true)).toBe(true)
     })
 
     it('gets a resource by id', async () => {
-      const res = await request
-        .get(`/resources/${TEST_RESOURCE_ID}`)
-        .set(HEADERS)
+      const res = await request.get(`/resources/${TEST_RESOURCE_ID}`).set(HEADERS)
 
       expect(res.status).toBe(200)
       expect(res.body.data.id).toBe(TEST_RESOURCE_ID)
@@ -85,9 +122,7 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
     })
 
     it('returns 404 for a non-existent resource', async () => {
-      const res = await request
-        .get(`/resources/${TEST_NONEXISTENT_ID}`)
-        .set(HEADERS)
+      const res = await request.get(`/resources/${TEST_NONEXISTENT_ID}`).set(HEADERS)
 
       expect(res.status).toBe(404)
     })
@@ -178,16 +213,13 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
     let groupId: string
 
     it('creates a resource group and returns 201', async () => {
-      const res = await request
-        .post('/resource-groups')
-        .set(JSON_HEADERS)
-        .send({
-          venueId: TEST_VENUE_ID,
-          name: 'Tennis Courts',
-          sport: 'tennis',
-          colour: '#0055ff',
-          sortOrder: 1,
-        })
+      const res = await request.post('/resource-groups').set(JSON_HEADERS).send({
+        venueId: TEST_VENUE_ID,
+        name: 'Tennis Courts',
+        sport: 'tennis',
+        colour: '#0055ff',
+        sortOrder: 1,
+      })
 
       expect(res.status).toBe(201)
       expect(res.body.data.id).toBeDefined()
@@ -205,18 +237,14 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
     })
 
     it('filters groups by venueId', async () => {
-      const res = await request
-        .get(`/resource-groups?venueId=${TEST_VENUE_ID}`)
-        .set(HEADERS)
+      const res = await request.get(`/resource-groups?venueId=${TEST_VENUE_ID}`).set(HEADERS)
 
       expect(res.status).toBe(200)
       expect(res.body.data.every((g: any) => g.venueId === TEST_VENUE_ID)).toBe(true)
     })
 
     it('gets a group by id including its resources', async () => {
-      const res = await request
-        .get(`/resource-groups/${groupId}`)
-        .set(HEADERS)
+      const res = await request.get(`/resource-groups/${groupId}`).set(HEADERS)
 
       expect(res.status).toBe(200)
       expect(res.body.data.id).toBe(groupId)
@@ -224,9 +252,7 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
     })
 
     it('returns 404 for a non-existent group', async () => {
-      const res = await request
-        .get(`/resource-groups/${TEST_NONEXISTENT_ID}`)
-        .set(HEADERS)
+      const res = await request.get(`/resource-groups/${TEST_NONEXISTENT_ID}`).set(HEADERS)
 
       expect(res.status).toBe(404)
     })
@@ -253,9 +279,7 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
     })
 
     it('filters resources by groupId', async () => {
-      const res = await request
-        .get(`/resources?groupId=${groupId}`)
-        .set(HEADERS)
+      const res = await request.get(`/resources?groupId=${groupId}`).set(HEADERS)
 
       expect(res.status).toBe(200)
       expect(res.body.data.length).toBeGreaterThanOrEqual(1)
@@ -278,17 +302,13 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
         .set(JSON_HEADERS)
         .send({ groupId: null })
 
-      const res = await request
-        .delete(`/resource-groups/${groupId}`)
-        .set(HEADERS)
+      const res = await request.delete(`/resource-groups/${groupId}`).set(HEADERS)
 
       expect(res.status).toBe(204)
     })
 
     it('returns 404 when deleting a non-existent group', async () => {
-      const res = await request
-        .delete(`/resource-groups/${TEST_NONEXISTENT_ID}`)
-        .set(HEADERS)
+      const res = await request.delete(`/resource-groups/${TEST_NONEXISTENT_ID}`).set(HEADERS)
 
       expect(res.status).toBe(404)
     })
@@ -302,18 +322,15 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
     let configId: string
 
     it('creates a venue-level catch-all config', async () => {
-      const res = await request
-        .post('/availability-configs')
-        .set(JSON_HEADERS)
-        .send({
-          scopeType: 'venue',
-          scopeId: TEST_VENUE_ID,
-          opensAt: '08:00',
-          closesAt: '22:00',
-          slotDurationMinutes: 60,
-          bookingIntervalMinutes: 60,
-          newDayReleaseTime: '08:00',
-        })
+      const res = await request.post('/availability-configs').set(JSON_HEADERS).send({
+        scopeType: 'venue',
+        scopeId: TEST_VENUE_ID,
+        opensAt: '08:00',
+        closesAt: '22:00',
+        slotDurationMinutes: 60,
+        bookingIntervalMinutes: 60,
+        newDayReleaseTime: '08:00',
+      })
 
       expect(res.status).toBe(201)
       expect(res.body.data.id).toBeDefined()
@@ -323,16 +340,13 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
     })
 
     it('creates a resource-level day-specific config (Monday)', async () => {
-      const res = await request
-        .post('/availability-configs')
-        .set(JSON_HEADERS)
-        .send({
-          scopeType: 'resource',
-          scopeId: TEST_RESOURCE_ID,
-          dayOfWeek: 1,
-          opensAt: '09:00',
-          closesAt: '20:00',
-        })
+      const res = await request.post('/availability-configs').set(JSON_HEADERS).send({
+        scopeType: 'resource',
+        scopeId: TEST_RESOURCE_ID,
+        dayOfWeek: 1,
+        opensAt: '09:00',
+        closesAt: '20:00',
+      })
 
       expect(res.status).toBe(201)
       expect(res.body.data.dayOfWeek).toBe(1)
@@ -350,18 +364,14 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
     })
 
     it('gets a config by id', async () => {
-      const res = await request
-        .get(`/availability-configs/${configId}`)
-        .set(HEADERS)
+      const res = await request.get(`/availability-configs/${configId}`).set(HEADERS)
 
       expect(res.status).toBe(200)
       expect(res.body.data.id).toBe(configId)
     })
 
     it('returns 404 for a non-existent config', async () => {
-      const res = await request
-        .get(`/availability-configs/${TEST_NONEXISTENT_ID}`)
-        .set(HEADERS)
+      const res = await request.get(`/availability-configs/${TEST_NONEXISTENT_ID}`).set(HEADERS)
 
       expect(res.status).toBe(404)
     })
@@ -414,9 +424,7 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
     })
 
     it('deletes a config and returns 204', async () => {
-      const res = await request
-        .delete(`/availability-configs/${configId}`)
-        .set(HEADERS)
+      const res = await request.delete(`/availability-configs/${configId}`).set(HEADERS)
 
       expect(res.status).toBe(204)
     })
@@ -431,15 +439,12 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
     let linkedConfigId: string
 
     it('creates a seasonal schedule to link configs against', async () => {
-      const res = await request
-        .post('/seasonal-schedules')
-        .set(JSON_HEADERS)
-        .send({
-          venueId: TEST_VENUE_ID,
-          name: 'Summer 2099',
-          startDate: '2099-06-01',
-          endDate: '2099-08-31',
-        })
+      const res = await request.post('/seasonal-schedules').set(JSON_HEADERS).send({
+        venueId: TEST_VENUE_ID,
+        name: 'Summer 2099',
+        startDate: '2099-06-01',
+        endDate: '2099-08-31',
+      })
 
       expect(res.status).toBe(201)
       expect(res.body.data.id).toBeDefined()
@@ -447,17 +452,14 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
     })
 
     it('creates an availability config linked to a seasonal schedule', async () => {
-      const res = await request
-        .post('/availability-configs')
-        .set(JSON_HEADERS)
-        .send({
-          scopeType: 'venue',
-          scopeId: TEST_VENUE_ID,
-          opensAt: '07:00',
-          closesAt: '21:00',
-          slotDurationMinutes: 60,
-          seasonalScheduleId: scheduleId,
-        })
+      const res = await request.post('/availability-configs').set(JSON_HEADERS).send({
+        scopeType: 'venue',
+        scopeId: TEST_VENUE_ID,
+        opensAt: '07:00',
+        closesAt: '21:00',
+        slotDurationMinutes: 60,
+        seasonalScheduleId: scheduleId,
+      })
 
       expect(res.status).toBe(201)
       expect(res.body.data.seasonalScheduleId).toBe(scheduleId)
@@ -471,9 +473,7 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
         .set(JSON_HEADERS)
         .send({ scopeType: 'venue', scopeId: TEST_VENUE_ID, opensAt: '08:00' })
 
-      const res = await request
-        .get(`/availability-configs?scheduleId=${scheduleId}`)
-        .set(HEADERS)
+      const res = await request.get(`/availability-configs?scheduleId=${scheduleId}`).set(HEADERS)
 
       expect(res.status).toBe(200)
       expect(res.body.data.length).toBeGreaterThanOrEqual(1)
@@ -481,20 +481,18 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
     })
 
     it('filters with scheduleId=none — returns only unlinked configs', async () => {
-      const res = await request
-        .get('/availability-configs?scheduleId=none')
-        .set(HEADERS)
+      const res = await request.get('/availability-configs?scheduleId=none').set(HEADERS)
 
       expect(res.status).toBe(200)
       expect(
-        res.body.data.every((c: any) => c.seasonalScheduleId === null || c.seasonalScheduleId === undefined),
+        res.body.data.every(
+          (c: any) => c.seasonalScheduleId === null || c.seasonalScheduleId === undefined,
+        ),
       ).toBe(true)
     })
 
     it('gets the linked config by id and includes seasonalScheduleId', async () => {
-      const res = await request
-        .get(`/availability-configs/${linkedConfigId}`)
-        .set(HEADERS)
+      const res = await request.get(`/availability-configs/${linkedConfigId}`).set(HEADERS)
 
       expect(res.status).toBe(200)
       expect(res.body.data.seasonalScheduleId).toBe(scheduleId)
@@ -554,9 +552,7 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
 
   describe('Venue Settings', () => {
     it('returns default empty settings when none have been saved', async () => {
-      const res = await request
-        .get(`/venues/${TEST_VENUE_ID}/settings`)
-        .set(HEADERS)
+      const res = await request.get(`/venues/${TEST_VENUE_ID}/settings`).set(HEADERS)
 
       expect(res.status).toBe(200)
       // Either a settings record with the venueId, or {venueId} fallback
@@ -564,16 +560,13 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
     })
 
     it('upserts venue settings and returns the saved record', async () => {
-      const res = await request
-        .put(`/venues/${TEST_VENUE_ID}/settings`)
-        .set(JSON_HEADERS)
-        .send({
-          openBookings: true,
-          addOnsEnabled: true,
-          pendingApprovals: true,
-          splitPayments: false,
-          publicBookingView: 'availability',
-        })
+      const res = await request.put(`/venues/${TEST_VENUE_ID}/settings`).set(JSON_HEADERS).send({
+        openBookings: true,
+        addOnsEnabled: true,
+        pendingApprovals: true,
+        splitPayments: false,
+        publicBookingView: 'availability',
+      })
 
       expect(res.status).toBe(200)
       expect(res.body.data.venueId).toBe(TEST_VENUE_ID)
@@ -588,9 +581,7 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
         .set(JSON_HEADERS)
         .send({ openBookings: false, addOnsEnabled: false })
 
-      const res = await request
-        .get(`/venues/${TEST_VENUE_ID}/settings`)
-        .set(HEADERS)
+      const res = await request.get(`/venues/${TEST_VENUE_ID}/settings`).set(HEADERS)
 
       expect(res.status).toBe(200)
       expect(res.body.data.openBookings).toBe(false)
@@ -621,17 +612,14 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
     let unitId: string
 
     it('creates a bookable unit and returns 201', async () => {
-      const res = await request
-        .post('/bookable-units')
-        .set(JSON_HEADERS)
-        .send({
-          venueId: TEST_VENUE_ID,
-          resourceId: TEST_RESOURCE_ID,
-          name: 'Full Court',
-          unitType: 'full',
-          capacity: 4,
-          sortOrder: 1,
-        })
+      const res = await request.post('/bookable-units').set(JSON_HEADERS).send({
+        venueId: TEST_VENUE_ID,
+        resourceId: TEST_RESOURCE_ID,
+        name: 'Full Court',
+        unitType: 'full',
+        capacity: 4,
+        sortOrder: 1,
+      })
 
       expect(res.status).toBe(201)
       expect(res.body.data.id).toBeDefined()
@@ -642,16 +630,13 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
     })
 
     it('creates an optional-extra unit', async () => {
-      const res = await request
-        .post('/bookable-units')
-        .set(JSON_HEADERS)
-        .send({
-          venueId: TEST_VENUE_ID,
-          resourceId: TEST_RESOURCE_ID,
-          name: 'Half Court A',
-          unitType: 'half',
-          isOptionalExtra: true,
-        })
+      const res = await request.post('/bookable-units').set(JSON_HEADERS).send({
+        venueId: TEST_VENUE_ID,
+        resourceId: TEST_RESOURCE_ID,
+        name: 'Half Court A',
+        unitType: 'half',
+        isOptionalExtra: true,
+      })
 
       expect(res.status).toBe(201)
       expect(res.body.data.isOptionalExtra).toBe(true)
@@ -666,9 +651,7 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
     })
 
     it('lists units for a specific venue', async () => {
-      const res = await request
-        .get(`/venues/${TEST_VENUE_ID}/units`)
-        .set(HEADERS)
+      const res = await request.get(`/venues/${TEST_VENUE_ID}/units`).set(HEADERS)
 
       expect(res.status).toBe(200)
       expect(res.body.data.every((u: any) => u.venueId === TEST_VENUE_ID)).toBe(true)
@@ -715,29 +698,23 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
 
     it('auto-creates a conflict row when parentUnitId is set on create', async () => {
       // Create parent unit
-      const parent = await request
-        .post('/bookable-units')
-        .set(JSON_HEADERS)
-        .send({
-          venueId: TEST_VENUE_ID,
-          resourceId: TEST_RESOURCE_ID,
-          name: 'Parent Court',
-          unitType: 'full',
-        })
+      const parent = await request.post('/bookable-units').set(JSON_HEADERS).send({
+        venueId: TEST_VENUE_ID,
+        resourceId: TEST_RESOURCE_ID,
+        name: 'Parent Court',
+        unitType: 'full',
+      })
       expect(parent.status).toBe(201)
       const parentId = parent.body.data.id
 
       // Create child unit linked to parent
-      const child = await request
-        .post('/bookable-units')
-        .set(JSON_HEADERS)
-        .send({
-          venueId: TEST_VENUE_ID,
-          resourceId: TEST_RESOURCE_ID,
-          name: 'Child Half Court',
-          unitType: 'half',
-          parentUnitId: parentId,
-        })
+      const child = await request.post('/bookable-units').set(JSON_HEADERS).send({
+        venueId: TEST_VENUE_ID,
+        resourceId: TEST_RESOURCE_ID,
+        name: 'Child Half Court',
+        unitType: 'half',
+        parentUnitId: parentId,
+      })
       expect(child.status).toBe(201)
       const childId = child.body.data.id
 
@@ -752,16 +729,21 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
 
     it('clears conflict row when parentUnitId is removed via PATCH', async () => {
       // Create parent + child
-      const parent = await request
-        .post('/bookable-units')
-        .set(JSON_HEADERS)
-        .send({ venueId: TEST_VENUE_ID, resourceId: TEST_RESOURCE_ID, name: 'Temp Parent', unitType: 'full' })
+      const parent = await request.post('/bookable-units').set(JSON_HEADERS).send({
+        venueId: TEST_VENUE_ID,
+        resourceId: TEST_RESOURCE_ID,
+        name: 'Temp Parent',
+        unitType: 'full',
+      })
       const parentId = parent.body.data.id
 
-      const child = await request
-        .post('/bookable-units')
-        .set(JSON_HEADERS)
-        .send({ venueId: TEST_VENUE_ID, resourceId: TEST_RESOURCE_ID, name: 'Temp Child', unitType: 'half', parentUnitId: parentId })
+      const child = await request.post('/bookable-units').set(JSON_HEADERS).send({
+        venueId: TEST_VENUE_ID,
+        resourceId: TEST_RESOURCE_ID,
+        name: 'Temp Child',
+        unitType: 'half',
+        parentUnitId: parentId,
+      })
       const childId = child.body.data.id
 
       // Remove parent link
@@ -795,15 +777,12 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
     })
 
     it('creates a venue and returns 201', async () => {
-      const res = await request
-        .post('/venues')
-        .set(JSON_HEADERS)
-        .send({
-          name: 'New Test Venue',
-          city: 'Cardiff',
-          country: 'GB',
-          timezone: 'Europe/London',
-        })
+      const res = await request.post('/venues').set(JSON_HEADERS).send({
+        name: 'New Test Venue',
+        city: 'Cardiff',
+        country: 'GB',
+        timezone: 'Europe/London',
+      })
 
       expect(res.status).toBe(201)
       expect(res.body.data.id).toBeDefined()
@@ -814,20 +793,14 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
     })
 
     it('creates a venue with only a name', async () => {
-      const res = await request
-        .post('/venues')
-        .set(JSON_HEADERS)
-        .send({ name: 'Minimal Venue' })
+      const res = await request.post('/venues').set(JSON_HEADERS).send({ name: 'Minimal Venue' })
 
       expect(res.status).toBe(201)
       expect(res.body.data.name).toBe('Minimal Venue')
     })
 
     it('returns 400 when name is missing', async () => {
-      const res = await request
-        .post('/venues')
-        .set(JSON_HEADERS)
-        .send({ city: 'Cardiff' })
+      const res = await request.post('/venues').set(JSON_HEADERS).send({ city: 'Cardiff' })
 
       expect(res.status).toBe(400)
     })
@@ -841,17 +814,14 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
     let addOnId: string
 
     it('creates an add-on and returns 201', async () => {
-      const res = await request
-        .post('/add-ons')
-        .set(JSON_HEADERS)
-        .send({
-          name: 'Ball hire',
-          code: 'BALL-HIRE',
-          category: 'equipment',
-          pricingType: 'fixed',
-          price: 3.5,
-          currency: 'GBP',
-        })
+      const res = await request.post('/add-ons').set(JSON_HEADERS).send({
+        name: 'Ball hire',
+        code: 'BALL-HIRE',
+        category: 'equipment',
+        pricingType: 'fixed',
+        price: 3.5,
+        currency: 'GBP',
+      })
 
       expect(res.status).toBe(201)
       expect(res.body.data.id).toBeDefined()
@@ -863,16 +833,13 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
     it('creates an add-on without tenantId in body (regression — UUID v4 rejection)', async () => {
       // tenantId must come from the header, NOT the body.
       // This was a bug where @IsUUID() on a tenantId body field rejected demo tenant IDs.
-      const res = await request
-        .post('/add-ons')
-        .set(JSON_HEADERS)
-        .send({
-          name: 'Towel hire',
-          code: 'TOWEL-HIRE',
-          category: 'service',
-          pricingType: 'fixed',
-          price: 1.0,
-        })
+      const res = await request.post('/add-ons').set(JSON_HEADERS).send({
+        name: 'Towel hire',
+        code: 'TOWEL-HIRE',
+        category: 'service',
+        pricingType: 'fixed',
+        price: 1.0,
+      })
 
       expect(res.status).toBe(201)
       expect(res.body.data.tenantId).toBe(TEST_TENANT_ID)
@@ -926,15 +893,12 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
     let blackoutId: string
 
     it('creates a venue-level blackout and returns 201', async () => {
-      const res = await request
-        .post('/blackout-dates')
-        .set(JSON_HEADERS)
-        .send({
-          venueId: TEST_VENUE_ID,
-          name: 'Christmas closure',
-          startDate: '2099-12-24',
-          endDate: '2099-12-26',
-        })
+      const res = await request.post('/blackout-dates').set(JSON_HEADERS).send({
+        venueId: TEST_VENUE_ID,
+        name: 'Christmas closure',
+        startDate: '2099-12-24',
+        endDate: '2099-12-26',
+      })
 
       expect(res.status).toBe(201)
       expect(res.body.data.id).toBeDefined()
@@ -943,16 +907,13 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
     })
 
     it('creates a resource-level blackout', async () => {
-      const res = await request
-        .post('/blackout-dates')
-        .set(JSON_HEADERS)
-        .send({
-          venueId: TEST_VENUE_ID,
-          resourceId: TEST_RESOURCE_ID,
-          name: 'Court maintenance',
-          startDate: '2099-11-01',
-          endDate: '2099-11-02',
-        })
+      const res = await request.post('/blackout-dates').set(JSON_HEADERS).send({
+        venueId: TEST_VENUE_ID,
+        resourceId: TEST_RESOURCE_ID,
+        name: 'Court maintenance',
+        startDate: '2099-11-01',
+        endDate: '2099-11-02',
+      })
 
       expect(res.status).toBe(201)
       expect(res.body.data.resourceId).toBe(TEST_RESOURCE_ID)
@@ -974,9 +935,7 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
     })
 
     it('returns 404 for a non-existent blackout', async () => {
-      const res = await request
-        .get(`/blackout-dates/${TEST_NONEXISTENT_ID}`)
-        .set(HEADERS)
+      const res = await request.get(`/blackout-dates/${TEST_NONEXISTENT_ID}`).set(HEADERS)
 
       expect(res.status).toBe(404)
     })
@@ -993,17 +952,13 @@ describe.runIf(DB_AVAILABLE)('Venue service — integration', () => {
     })
 
     it('deletes a blackout and returns 204', async () => {
-      const res = await request
-        .delete(`/blackout-dates/${blackoutId}`)
-        .set(HEADERS)
+      const res = await request.delete(`/blackout-dates/${blackoutId}`).set(HEADERS)
 
       expect(res.status).toBe(204)
     })
 
     it('returns 404 when deleting a non-existent blackout', async () => {
-      const res = await request
-        .delete(`/blackout-dates/${TEST_NONEXISTENT_ID}`)
-        .set(HEADERS)
+      const res = await request.delete(`/blackout-dates/${TEST_NONEXISTENT_ID}`).set(HEADERS)
 
       expect(res.status).toBe(404)
     })

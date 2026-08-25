@@ -1,6 +1,10 @@
 # Azure Reference Architecture
 
+> **Status:** Target option — not deployed
+
 This diagram describes the recommended hybrid serverless deployment for the ClubSpark platform.
+For the repository and pilot shape that exists today, see
+[`current-reference-architecture.md`](current-reference-architecture.md).
 
 ```mermaid
 flowchart TB

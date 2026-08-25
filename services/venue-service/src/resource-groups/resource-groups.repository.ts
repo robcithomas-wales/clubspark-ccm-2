@@ -1,11 +1,16 @@
 import { Injectable } from '@nestjs/common'
+import { randomUUID } from 'node:crypto'
 import { PrismaService } from '../prisma/prisma.service'
+import { OutboxRepository } from '../outbox/outbox.repository.js'
 import { CreateResourceGroupDto } from './dto/create-resource-group.dto'
 import { UpdateResourceGroupDto } from './dto/update-resource-group.dto'
 
 @Injectable()
 export class ResourceGroupsRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly outbox: OutboxRepository,
+  ) {}
 
   async findAll(tenantId: string, venueId?: string) {
     return this.prisma.read.resourceGroup.findMany({
@@ -76,6 +81,36 @@ export class ResourceGroupsRepository {
       where: { id, tenantId },
     })
     if (!existing) return null
-    return this.prisma.write.resourceGroup.delete({ where: { id } })
+
+    // `resources.group_id` is ON DELETE SET NULL, so deleting a group changes
+    // every member resource's projected groupId — in the database, not through
+    // Prisma, so `updated_at` is not bumped either. Without an event here the
+    // Booking projection keeps pointing at a group that no longer exists, and no
+    // later resync notices: group is B4, the input to pricing and access rules.
+    return this.prisma.write.$transaction(async (tx) => {
+      const affected = await tx.resource.findMany({
+        where: { tenantId, groupId: id },
+        select: { id: true, venueId: true, hasLighting: true, isActive: true },
+      })
+      const deleted = await tx.resourceGroup.delete({ where: { id } })
+      const now = new Date().toISOString()
+      for (const resource of affected) {
+        await this.outbox.enqueue(tx, {
+          eventId: randomUUID(),
+          type: 'venue.resource.upserted.v1',
+          tenantId,
+          occurredAt: now,
+          sourceUpdatedAt: now,
+          data: {
+            id: resource.id,
+            venueId: resource.venueId,
+            groupId: null,
+            hasLighting: resource.hasLighting,
+            isActive: resource.isActive,
+          },
+        })
+      }
+      return deleted
+    })
   }
 }

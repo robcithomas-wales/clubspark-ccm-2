@@ -5,7 +5,7 @@ import { UpsertAccountingSettingsDto } from './dto/upsert-accounting-settings.dt
 import { TenantCtx, type TenantContext } from '../common/decorators/tenant-context.decorator.js'
 
 @ApiTags('Accounting Settings')
-@Controller('v1/accounting/settings')
+@Controller({ path: 'accounting/settings', version: '1' })
 export class AccountingSettingsController {
   constructor(private readonly service: AccountingSettingsService) {}
 

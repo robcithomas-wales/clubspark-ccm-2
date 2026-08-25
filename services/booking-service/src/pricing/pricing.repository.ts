@@ -113,11 +113,11 @@ export class PricingRepository {
   }
 
   /** Read hasLighting from the venue schema resource row */
-  async getResourceLighting(resourceId: string): Promise<boolean> {
+  async getResourceLighting(tenantId: string, resourceId: string): Promise<boolean> {
     const rows = await this.prisma.read.$queryRaw<{ hasLighting: boolean | null }[]>`
       SELECT has_lighting AS "hasLighting"
       FROM venue.resources
-      WHERE id = ${resourceId}::uuid
+      WHERE tenant_id = ${tenantId}::uuid AND id = ${resourceId}::uuid
     `
     return rows[0]?.hasLighting === true
   }
@@ -163,25 +163,34 @@ export class PricingRepository {
     return rows[0]
   }
 
-  async update(tenantId: string, id: string, dto: Partial<CreatePricingRuleDto>): Promise<PricingRuleRow | null> {
+  async update(
+    tenantId: string,
+    id: string,
+    dto: Partial<CreatePricingRuleDto>,
+  ): Promise<PricingRuleRow | null> {
     const sets: Prisma.Sql[] = []
 
-    if (dto.name !== undefined)        sets.push(Prisma.sql`name = ${dto.name}`)
-    if (dto.label !== undefined)       sets.push(Prisma.sql`label = ${dto.label ?? null}`)
-    if (dto.description !== undefined) sets.push(Prisma.sql`description = ${dto.description ?? null}`)
-    if (dto.scopeType !== undefined)   sets.push(Prisma.sql`scope_type = ${dto.scopeType}`)
-    if (dto.scopeId !== undefined)     sets.push(dto.scopeId ? Prisma.sql`scope_id = ${dto.scopeId}::uuid` : Prisma.sql`scope_id = NULL`)
-    if (dto.daysOfWeek !== undefined)  sets.push(Prisma.sql`days_of_week = ${dto.daysOfWeek}::integer[]`)
-    if (dto.timeFrom !== undefined)    sets.push(Prisma.sql`time_from = ${dto.timeFrom ?? null}`)
-    if (dto.timeTo !== undefined)      sets.push(Prisma.sql`time_to = ${dto.timeTo ?? null}`)
+    if (dto.name !== undefined) sets.push(Prisma.sql`name = ${dto.name}`)
+    if (dto.label !== undefined) sets.push(Prisma.sql`label = ${dto.label ?? null}`)
+    if (dto.description !== undefined)
+      sets.push(Prisma.sql`description = ${dto.description ?? null}`)
+    if (dto.scopeType !== undefined) sets.push(Prisma.sql`scope_type = ${dto.scopeType}`)
+    if (dto.scopeId !== undefined)
+      sets.push(
+        dto.scopeId ? Prisma.sql`scope_id = ${dto.scopeId}::uuid` : Prisma.sql`scope_id = NULL`,
+      )
+    if (dto.daysOfWeek !== undefined)
+      sets.push(Prisma.sql`days_of_week = ${dto.daysOfWeek}::integer[]`)
+    if (dto.timeFrom !== undefined) sets.push(Prisma.sql`time_from = ${dto.timeFrom ?? null}`)
+    if (dto.timeTo !== undefined) sets.push(Prisma.sql`time_to = ${dto.timeTo ?? null}`)
     if (dto.ratePerHour !== undefined) sets.push(Prisma.sql`rate_per_hour = ${dto.ratePerHour}`)
-    if (dto.currency !== undefined)    sets.push(Prisma.sql`currency = ${dto.currency}`)
+    if (dto.currency !== undefined) sets.push(Prisma.sql`currency = ${dto.currency}`)
     if (dto.lightingSurchargePerHour !== undefined)
       sets.push(Prisma.sql`lighting_surcharge_per_hour = ${dto.lightingSurchargePerHour ?? null}`)
     if (dto.memberDiscountPct !== undefined)
       sets.push(Prisma.sql`member_discount_pct = ${dto.memberDiscountPct ?? null}`)
-    if (dto.priority !== undefined)    sets.push(Prisma.sql`priority = ${dto.priority}`)
-    if (dto.isActive !== undefined)    sets.push(Prisma.sql`is_active = ${dto.isActive}`)
+    if (dto.priority !== undefined) sets.push(Prisma.sql`priority = ${dto.priority}`)
+    if (dto.isActive !== undefined) sets.push(Prisma.sql`is_active = ${dto.isActive}`)
 
     if (sets.length === 0) return this.findById(tenantId, id)
 

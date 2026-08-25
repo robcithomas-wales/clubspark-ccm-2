@@ -7,7 +7,7 @@ import type { TenantContext } from '@clubspark/auth'
 type RequestWithCtx = { tenantContext?: TenantContext }
 
 @ApiTags('overrides')
-@Controller('v1/overrides')
+@Controller({ path: 'overrides', version: '1' })
 export class OverridesController {
   constructor(private readonly service: OverridesService) {}
 

@@ -17,6 +17,8 @@ import { OrderClient } from '../order-client/order.client.js'
 import { PeopleClient } from '../people/people.client.js'
 import { OutboxRepository } from '../outbox/outbox.repository.js'
 import { VenueClient } from '../venue/venue.client.js'
+import { VenueProjectionReadsService } from '../projections/venue-projection-reads.service.js'
+import { CoachingProjectionReadsService } from '../projections/coaching-projection-reads.service.js'
 import type { CreateBookingDto } from './dto/create-booking.dto.js'
 import type { CreateBookingAddOnDto } from './dto/create-booking-add-on.dto.js'
 import type { UpdatePaymentStatusDto } from './dto/update-payment-status.dto.js'
@@ -40,6 +42,8 @@ export class BookingsService {
     private readonly people: PeopleClient,
     private readonly outbox: OutboxRepository,
     private readonly venue: VenueClient,
+    private readonly venueProjectionReads: VenueProjectionReadsService,
+    private readonly coachingProjectionReads: CoachingProjectionReadsService,
   ) {}
 
   async list(
@@ -65,7 +69,11 @@ export class BookingsService {
 
   async create(ctx: TenantContext, dto: CreateBookingDto) {
     // Validate the bookable unit exists and belongs to the correct venue/resource
-    const unit = await this.repo.findBookableUnit(ctx.tenantId, dto.bookableUnitId)
+    const unit = await this.venueProjectionReads.findBookableUnit(
+      ctx.tenantId,
+      dto.bookableUnitId,
+      () => this.repo.findBookableUnit(ctx.tenantId, dto.bookableUnitId),
+    )
 
     if (!unit) throw new NotFoundException('Bookable unit not found')
     if (!unit.isActive) throw new ConflictException('Bookable unit is inactive')
@@ -76,7 +84,11 @@ export class BookingsService {
 
     // Enforce booking rules — admin bookings bypass (CPO decision)
     if (dto.bookingSource !== 'admin') {
-      const resourceGroupId = await this.repo.findResourceGroupId(dto.resourceId)
+      const resourceGroupId = await this.venueProjectionReads.findResourceGroupId(
+        ctx.tenantId,
+        dto.resourceId,
+        () => this.repo.findResourceGroupId(ctx.tenantId, dto.resourceId),
+      )
       const decision = await this.rulesService.enforceRules(
         ctx.tenantId,
         dto.resourceId,
@@ -90,17 +102,28 @@ export class BookingsService {
     }
 
     // Batch-load all conflicting unit IDs in a single query (fixes the N+1)
-    const conflictMap = await this.availabilityRepo.getConflictMapForUnits([dto.bookableUnitId])
+    const conflictMap = await this.venueProjectionReads.getConflictMap(
+      ctx.tenantId,
+      [dto.bookableUnitId],
+      () => this.availabilityRepo.getConflictMapForUnits(ctx.tenantId, [dto.bookableUnitId]),
+    )
     const unitIds = conflictMap.get(dto.bookableUnitId) ?? [dto.bookableUnitId]
 
     // Gap 1 fix: coaching sessions with a bookable_unit_id block the same slot.
     // This cross-schema check makes coaching sessions visible to the booking
     // availability guard without requiring inter-service HTTP calls.
-    const coachingConflicts = await this.availabilityRepo.getCoachingSessionConflicts(
+    const coachingConflicts = await this.coachingProjectionReads.getConflicts(
       ctx.tenantId,
       unitIds,
       dto.startsAt,
       dto.endsAt,
+      () =>
+        this.availabilityRepo.getCoachingSessionConflicts(
+          ctx.tenantId,
+          unitIds,
+          dto.startsAt,
+          dto.endsAt,
+        ),
     )
     if (coachingConflicts.length > 0) {
       throw new ConflictException('Time slot is occupied by an existing coaching session')
@@ -252,7 +275,8 @@ export class BookingsService {
   }
 
   async getStats(ctx: TenantContext) {
-    return this.repo.getStats(ctx.tenantId)
+    const activeUnits = await this.venue.getActiveBookableUnitCount(ctx.tenantId)
+    return this.repo.getStats(ctx.tenantId, activeUnits)
   }
 
   async getDailyStats(ctx: TenantContext, days: number) {

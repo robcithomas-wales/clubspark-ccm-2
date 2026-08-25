@@ -11,7 +11,7 @@ export default [
       '**/dist/**',
       '**/.next/**',
       '**/coverage/**',
-      '**/*.js',         // during migration — JS files in old services are not linted yet
+      '**/*.js', // during migration — JS files in old services are not linted yet
       '**/prisma/migrations/**',
       // Generated Prisma clients — build output, git-ignored, and ~254MB of .ts across
       // 14 services (one index.d.ts is 1.1MB). Type-aware linting them exhausted the
@@ -62,6 +62,32 @@ export default [
       ...eslintConfigPrettier.rules,
     },
   },
+  // Standalone .mjs tooling scripts (scripts/*.mjs, this config).
+  //
+  // These belong to no tsconfig, so type-aware parsing cannot run on them — and
+  // without an entry here they matched no `files` block at all, meaning
+  // scripts/setup-env.mjs was linted by nothing while it generated every
+  // service's credentials. Formatting and the non-type-aware rules now apply.
+  {
+    files: ['**/*.mjs'],
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: { ecmaVersion: 2022, sourceType: 'module', project: false },
+    },
+    plugins: { '@typescript-eslint': tseslint, prettier },
+    rules: {
+      'prettier/prettier': 'error',
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      'prefer-const': 'error',
+      'no-var': 'error',
+      // Tooling scripts report progress to the operator; console is their UI.
+      'no-console': 'off',
+      '@typescript-eslint/no-floating-promises': 'off',
+      '@typescript-eslint/await-thenable': 'off',
+      '@typescript-eslint/no-misused-promises': 'off',
+    },
+  },
+
   // Test files: linted WITHOUT type-aware rules.
   //
   // Each service's tsconfig includes only src/**, so test/** belongs to no

@@ -2,35 +2,71 @@
 
 > **Document purpose:** Records all architectural decisions, the target platform design, and the phased implementation plan. Used as the reference for all development work.
 >
-> **Last updated:** July 2026
-> **Status:** Active — Phase 0 complete. 15 microservices live across all domains. Teams, Coaching, Competitions, Rankings, Team Sport Website Pages, Comms, Integration Layer (API keys, webhooks, Xero/QuickBooks), AI Analytics (member scoring, anomaly detection, utilisation forecasting, player matching), Products & Pricing, and ClubSpark Internal Staff Portal (org registry, feature flags, impersonation, audit trail) all live. 817 automated tests (733 integration + 84 e2e). Gaps 1, 2, 4, 8 resolved; Gap 3 (Supavisor) pending config change.
+> **Last updated:** 25 August 2026
+> **Status:** Active — Phase 0 product surface is implemented across 15 services. Architecture
+> hardening is locally implemented for projections, critical outboxes/inboxes and scheduled-job
+> concurrency, but the new migrations have not been applied and no environment cutover has occurred.
+> Exact suite counts are intentionally tracked by CI rather than frozen in this document.
+
+The maintained diagram of the repository as currently implemented is
+[`current-reference-architecture.md`](current-reference-architecture.md). It distinguishes the
+running pilot shape from locally completed hardening that still requires migrations and rollout.
+
+## Product alignment decisions — 24 August 2026
+
+The CPO reviewed the comparison between the CCM 2.0 product documents and the pilot build. The
+authoritative response and action log is
+[`../decisions/2026-08-24-cpo-product-architecture-decisions.md`](../decisions/2026-08-24-cpo-product-architecture-decisions.md).
+The most important implications are:
+
+1. **Product terminology keeps `tenant = NGB`.** The pilot currently uses `tenant_id` as the
+   organisation isolation key and enforces one `venue.organisations` row per tenant. This is now a
+   known target-versus-implementation conflict, not an agreed rename. An ADR must define how an
+   organisation can associate with multiple NGB tenants without weakening data isolation.
+2. **A platform-level person is required.** People must be linkable across organisations and,
+   ideally, across tenants. The current organisation-scoped `people.persons` row is therefore the
+   organisation contact/profile, not the final platform identity record. Residency remains a hard
+   constraint on any cross-region identity design.
+3. **Commerce is authoritative for payment information.** Operational domains may own the reason
+   for a charge, eligibility and fulfilment, but Commerce owns monetary records and history. The
+   membership and competition order bypasses are target gaps.
+4. **Domain-owned enrolment is not yet confirmed.** The current split avoids a universal booking
+   record, but product requires a stress test against duplicated enrolment behaviour and change
+   cost before this becomes an invariant.
+5. **Website builder is a foundation capability.** Social/ticketed events are a separate feature;
+   coach-led multi-session activity belongs in Coaching and tournaments in Recreational
+   Competitions. Discovery starts with embeddable widgets and later expands to aggregation/search.
+
+Current hierarchy and membership shapes are documented for product validation in
+[`../reference/pilot-hierarchy-and-membership.md`](../reference/pilot-hierarchy-and-membership.md).
 
 ---
 
-## Known Gaps & Live Risks
+## Known Gaps & Implementation Risks
 
 > Identified April 2026. Ordered by severity.
 
-| # | Risk | Severity | Status |
-|---|---|---|---|
-| 1 | **Coaching sessions not conflict-checked against venue bookings** — `coaching.lesson_sessions` are invisible to the booking availability check. A coaching session in Court 1 at 10am does not block a regular booking for Court 1 at 10am. | 🔴 High | ✅ **Resolved** — `bookable_unit_id` added to `coaching.lesson_sessions`; `AvailabilityRepository.getCoachingSessionConflicts()` queries coaching sessions cross-schema; `BookingsService.create()` calls it before insert. 5 integration tests. |
-| 2 | **Pricing not evaluated at booking creation** — `booking.pricing_rules` CRUD API is live but not wired into the booking creation flow. Bookings are created with `null` `base_price`/`total_price`. | 🔴 High | ✅ **Resolved** — `PricingService.resolvePrice()` is called in `BookingsService.create()`; resolved total overwrites any caller-supplied price. 5 integration tests verify org/venue/resource-scoped rules and null fallback. |
-| 3 | **No connection pooling through Supavisor** — services connect directly to Postgres. Supabase session mode caps at ~60 concurrent connections across the whole project. Under real load this is a ceiling. | 🔴 High | ⚠️ **Pending** — Change each service's `DATABASE_URL` env var to the Supabase transaction-mode pooler endpoint (port 6543). No code change required. Must be done before public launch. |
-| 4 | **Booking access rules not evaluated** — `booking.booking_rules` CRUD exists but is not applied at booking time. Advance booking windows, max bookings per period, and time restrictions are not enforced for any live bookings. | 🟠 Medium | ✅ **Resolved** — `BookingRulesService.enforceRules()` is called in `BookingsService.create()` for all non-admin bookings. 17 integration tests covering CRUD + canBook/maxSlot/minSlot/advanceDays/org-scoped/admin-bypass. |
-| 5 | **No Redis / caching layer** — every availability check, pricing rule lookup, and membership entitlement check hits Postgres cold. | 🟠 Medium | Phase 0.5 TODO |
-| 6 | **No tenant isolation at DB level (RLS)** — tenant isolation is application-enforced only. A bug in tenant context extraction could leak cross-tenant data. | 🟠 Medium | Phase 0.5 TODO |
-| 7 | **Partial containerisation** — production `Dockerfile`s exist for 7 of the 15 services (Azure deployment prep). Local dev still runs bare Node processes via `./scripts/run-all.sh`, and there is no `docker-compose` (not needed — the DB is remote Supabase). | 🟡 Low | ⚠️ Partial — remaining 8 services need Dockerfiles before Azure |
-| 8 | **No API gateway** — no centralised rate limiting, versioning, or auth enforcement. Fine for pilot; needed before NGB integrations. | 🟡 Low | ✅ **Resolved** — `integration-service` provides API key issuance (scoped credentials for NGB consumers), webhook delivery (push notifications), and full Xero/QuickBooks OAuth 2.0 accounting integration (real-time invoice/credit note sync + nightly batch reconciliation). Centralised rate limiting remains a production TODO. |
-| 9 | **Shared-database coupling blocks regionalization** — services namespace inside one physical Postgres, and core paths cross those boundaries: booking-service JOINs `venue.*`/`people.*`/`auth.*`/`coaching.*`, and people-service used to *write* `booking.*`/`membership.*`. Data residency (EU/US/AU) is impossible while a single query or transaction spans schemas. | 🔴 High | ⚠️ **Partial** — the cross-service **write** is removed (see *Internal service-to-service endpoints* below) and the cross-schema FK `membership.memberships → people.persons` is dropped. Booking's cross-schema **reads** remain: WO-1.1 / WO-1.2(a) in [`../roadmap/phase-1-backlog.md`](../roadmap/phase-1-backlog.md). Full site list: [`cross-schema-coupling-inventory.md`](cross-schema-coupling-inventory.md). |
-| 10 | **Live schema drifts from the migration files** — four cross-schema foreign keys and two orphaned schemas (`identity`, `crm`) exist in the database but appear in no migration. Any schema audit that reads only `prisma/migrations/` will be wrong. | 🟠 Medium | ⚠️ **Open** — the one blocking FK is dropped; the rest are on empty legacy tables. A full live-vs-migrations reconciliation is not yet done. |
+| #   | Risk                                                                                                                                                                                                                                                                                                                                                                      | Severity  | Status                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Coaching sessions not conflict-checked against venue bookings** — `coaching.lesson_sessions` are invisible to the booking availability check. A coaching session in Court 1 at 10am does not block a regular booking for Court 1 at 10am.                                                                                                                               | 🔴 High   | ✅ **Behaviour resolved; decoupling pending activation** — Booking checks coaching occupancy. A Booking-owned occupancy projection and source outbox are implemented behind `BOOKING_COACHING_PROJECTION_MODE`; the default remains the tenant-scoped legacy query until migration/backfill/shadow/cutover. |
+| 2   | **Pricing not evaluated at booking creation** — `booking.pricing_rules` CRUD API is live but not wired into the booking creation flow. Bookings are created with `null` `base_price`/`total_price`.                                                                                                                                                                       | 🔴 High   | ✅ **Resolved** — `PricingService.resolvePrice()` is called in `BookingsService.create()`; resolved total overwrites any caller-supplied price. 5 integration tests verify org/venue/resource-scoped rules and null fallback.                                                                                                                                                                                          |
+| 3   | **No connection pooling through Supavisor** — services connect directly to Postgres. Supabase session mode caps at ~60 concurrent connections across the whole project. Under real load this is a ceiling.                                                                                                                                                                | 🔴 High   | ⚠️ **Pending** — Change each service's `DATABASE_URL` env var to the Supabase transaction-mode pooler endpoint (port 6543). No code change required. Must be done before public launch.                                                                                                                                                                                                                                |
+| 4   | **Booking access rules not evaluated** — `booking.booking_rules` CRUD exists but is not applied at booking time. Advance booking windows, max bookings per period, and time restrictions are not enforced for any live bookings.                                                                                                                                          | 🟠 Medium | ✅ **Resolved** — `BookingRulesService.enforceRules()` is called in `BookingsService.create()` for all non-admin bookings. 17 integration tests covering CRUD + canBook/maxSlot/minSlot/advanceDays/org-scoped/admin-bypass.                                                                                                                                                                                           |
+| 5   | **No Redis / caching layer** — every availability check, pricing rule lookup, and membership entitlement check hits Postgres cold.                                                                                                                                                                                                                                        | 🟠 Medium | Phase 0.5 TODO                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 6   | **No tenant isolation at DB level (RLS)** — tenant isolation is application-enforced only. A bug in tenant context extraction could leak cross-tenant data.                                                                                                                                                                                                               | 🟠 Medium | Phase 0.5 TODO                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 7   | **Partial containerisation** — production `Dockerfile`s exist for 6 of the 15 services (Azure deployment prep). Local dev still runs bare Node processes via `./scripts/run-all.sh`, and there is no `docker-compose`. | 🟡 Low | ⚠️ Partial — remaining 9 services need Dockerfiles before Azure. |
+| 8   | **No API gateway** — no centralised rate limiting, versioning, or auth enforcement. Fine for pilot; needed before NGB integrations.                                                                                                                                                                                                                                       | 🟡 Low    | ✅ **Resolved** — `integration-service` provides API key issuance (scoped credentials for NGB consumers), webhook delivery (push notifications), and full Xero/QuickBooks OAuth 2.0 accounting integration (real-time invoice/credit note sync + nightly batch reconciliation). Centralised rate limiting remains a production TODO.                                                                                   |
+| 9   | **Shared-database coupling blocks regionalization** — services still namespace inside one physical Postgres and Booking retains compatibility reads across service schemas. | 🔴 High | ⚠️ **Activation gap** — cross-service writes and People/Auth SQL reads are gone. Booking-owned Venue/Coaching projections are implemented, but five legacy SQL fallbacks remain default-enabled until migration, backfill, reconciliation, shadow comparison and cutover. See [`cross-schema-coupling-inventory.md`](cross-schema-coupling-inventory.md). |
+| 10  | **Unowned legacy database objects remain** — the empty `identity`, `crm` and `customer` schemas and retired shared migration table are outside service migrations. Service schemas themselves have zero known drift.                                                                                                                                                      | 🟡 Low    | ⚠️ **Open cleanup** — `KNOWN_DRIFT` is empty and all service schemas are gated. Confirm the legacy schemas are still empty, assign ownership to a shared cleanup migration and drop them separately.                                                                                                                                                                                                                   |
 
 ---
 
 ## Internal service-to-service endpoints
 
-Some state changes must fan out to the services that own the affected rows. Where the event bus is
-not available (people-service has no event bus, and the transactional outbox is WO-2.1), services
-call each other over HTTP using a **fail-closed internal endpoint** pattern:
+Some command/saga operations still call the service that owns the affected rows over HTTP using a
+**fail-closed internal endpoint** pattern. Durable domain-event flows use transactional outboxes and
+idempotent consumer inboxes where implemented; the transport remains HTTP fan-out until Service Bus
+work is introduced.
 
 - Path shape `POST /<resource>/internal/<action>` on the **owning** service, so each service remains
   the sole writer of its own schema (invariant #1).
@@ -80,6 +116,7 @@ ClubSpark is a **multi-sport SaaS platform** targeting team sports facilities. I
 ### Why we are rebuilding
 
 The existing platform runs on ASP.NET + SQL Server. Core issues:
+
 - Performance problems under load (EF Core N+1 queries, lock contention on concurrent bookings, no caching layer)
 - Architectural coupling between modules that should be independent
 - Booking rules tied to membership plans — prevents applying rules to roles, teams, non-members
@@ -100,29 +137,32 @@ The existing platform runs on ASP.NET + SQL Server. Core issues:
 
 ## 2. Current State
 
-### Services (as of July 2026)
+### Services and clients (repository state, 25 August 2026)
 
-| Service | Port | Stack | Status |
-|---|---|---|---|
-| template-service | 4000 | NestJS / TypeScript / Fastify | ✅ Live — two-template system (Bold / Club) |
-| venue-service | 4003 | NestJS / TypeScript / Fastify | ✅ Live — venues, orgs, sponsors, affiliations |
-| people-service | 4004 | NestJS / TypeScript / Fastify | ✅ Live — persons, households, roles, tags, lifecycle, segments |
-| booking-service | 4005 | NestJS / TypeScript / Fastify | ✅ Live — bookings, series, rules, approvals, stats, sessions, pricing rules, refund policies, booking participants |
-| admin-service | 4006 | NestJS / TypeScript / Fastify | ✅ Live — admin users, RBAC |
-| coaching-service | 4007 | NestJS / TypeScript / Fastify | ✅ Live — coaches, lesson types, lesson sessions |
-| team-service | 4008 | NestJS / TypeScript / Fastify | ✅ Live — teams, rosters (roles + photos), fixtures, availability, charges, public API |
-| competition-service | 4009 | NestJS / TypeScript / Fastify | ✅ Live — competitions, divisions, entries, draws, matches, results, standings, rankings, submissions, work cards, discipline |
-| membership-service | 4010 | NestJS / TypeScript / Fastify | ✅ Live — schemes, plans, memberships, entitlements, renewals |
-| payment-service | 4011 | NestJS / TypeScript / Fastify | ✅ Live — gateway-agnostic (Stripe live, GoCardless ready) |
-| comms-service | 4012 | NestJS / TypeScript / Fastify | ✅ Live — campaigns, message log, system templates with tenant overrides |
-| integration-service | 4016 | NestJS / TypeScript / Fastify | ✅ Live — API key issuance (scoped, hashed), webhook subscriptions, delivery worker with 5-attempt retry, inbound event fan-out, Xero/QuickBooks OAuth 2.0, real-time accounting sync (payment.succeeded → invoice, refund → credit note, membership.activated → invoice), nightly batch reconciliation |
-| analytics-service | 4014 | NestJS / TypeScript / Fastify | ✅ Live — nightly member scoring: churn risk, LTV, payment default, optimal send hour; rule-based anomaly detection (4 rules, `@Cron` 03:00); utilisation forecasting with dead-slot identification (`@Cron` 02:00); player matching by ELO proximity; cross-schema raw SQL; ELO draw seeding in competition-service |
-| entitlement-service | 4013 | NestJS / TypeScript / Fastify | ✅ Live — subscription plans, entitlements, add-ons, per-org overrides |
-| order-service | 4015 | NestJS / TypeScript / Fastify | ✅ Live — products and orders (commerce / checkout) |
-| admin-portal | 3005 | Next.js / React | ✅ Live |
-| customer-portal | 3006 | Next.js / React | ✅ Live — multi-tenant via `/[slug]`, teams pages |
-| internal-portal | 3010 | Next.js / React | ✅ Live — ClubSpark staff portal: org registry, feature flags, impersonation, audit trail |
-| mobile-app | — | Expo / React Native | ✅ Live |
+“Implemented” means present and buildable in this repository. It does not mean deployed: the
+project currently has no application environments, and the latest migrations have not been applied.
+
+| Service             | Port | Stack                         | Status                                                                                                                                                                                                                                                                                                               |
+| ------------------- | ---- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| template-service    | 4000 | NestJS / TypeScript / Fastify | ✅ Implemented — two-template system (Bold / Club) |
+| venue-service       | 4003 | NestJS / TypeScript / Fastify | ✅ Implemented — venues, orgs, sponsors, affiliations |
+| people-service      | 4004 | NestJS / TypeScript / Fastify | ✅ Implemented — persons, households, roles, tags, lifecycle, segments |
+| booking-service     | 4005 | NestJS / TypeScript / Fastify | ✅ Implemented — bookings, series, rules, approvals, stats, sessions, pricing, projections |
+| admin-service       | 4006 | NestJS / TypeScript / Fastify | ✅ Implemented — admin users, RBAC, registry and flags |
+| coaching-service    | 4007 | NestJS / TypeScript / Fastify | ✅ Implemented — coaches, lesson types, lesson sessions |
+| team-service        | 4008 | NestJS / TypeScript / Fastify | ✅ Implemented — teams, rosters, fixtures, availability, charges, public API |
+| competition-service | 4009 | NestJS / TypeScript / Fastify | ✅ Implemented — competitions, entries, draws, matches, standings and rankings |
+| membership-service  | 4010 | NestJS / TypeScript / Fastify | ✅ Implemented — schemes, plans, memberships, entitlements and renewals |
+| payment-service     | 4011 | NestJS / TypeScript / Fastify | ✅ Implemented — gateway abstraction with Stripe integration; GoCardless-ready |
+| comms-service       | 4012 | NestJS / TypeScript / Fastify | ✅ Implemented — campaigns, message log and tenant template overrides |
+| integration-service | 4016 | NestJS / TypeScript / Fastify | ✅ Implemented — API keys, partner webhooks, Xero/QuickBooks and accounting sync |
+| analytics-service   | 4014 | NestJS / TypeScript / Fastify | ✅ Implemented — scoring, anomalies, forecasting and player matching |
+| entitlement-service | 4013 | NestJS / TypeScript / Fastify | ✅ Implemented — plans, entitlements, add-ons and organisation overrides |
+| order-service       | 4015 | NestJS / TypeScript / Fastify | ✅ Implemented — products, orders, line items and outbox |
+| admin-portal        | 3005 | Next.js / React               | ✅ Implemented |
+| customer-portal     | 3006 | Next.js / React               | ✅ Implemented — multi-tenant via `/[slug]`, teams pages |
+| internal-portal     | 3010 | Next.js / React               | ✅ Implemented — staff registry, flags, impersonation and audit trail |
+| mobile-app          | —    | Expo / React Native           | ✅ Implemented |
 
 ### Phase 0 issues (all resolved)
 
@@ -133,7 +173,8 @@ The existing platform runs on ASP.NET + SQL Server. Core issues:
 - [x] Race condition fixed — atomic INSERT with SERIALIZABLE transaction + btree_gist exclusion constraint
 - [x] Booking reference fixed — `BK-${randomBytes(5).hex().toUpperCase()}`
 - [x] Indexes defined on all critical tables
-- [x] Connection pooling fixed — single PrismaClient per service with `connection_limit=2` (Supabase session mode)
+- [x] Connection budget bounded — single PrismaClient per service; `DB_CONNECTION_LIMIT` is
+      configurable and defaults to `1` for the shared Supabase transaction pooler
 - [x] coaching-service built — coaches, lesson types, sessions (port 4007)
 - [x] team-service built — teams, rosters, fixtures, availability, squad selection, charge runs (port 4008)
 - [x] payment-service built — gateway-agnostic Stripe integration with webhook handling
@@ -148,7 +189,8 @@ The existing platform runs on ASP.NET + SQL Server. Core issues:
 - [x] Admin portal extended — three competition report pages (overview, entries, results), revenue report enhanced with competition entry fee revenue stream, fee collection report enhanced, Save PDF button on all reports
 - [x] Customer portal extended — competition list, detail, and entry flow
 - [x] Mobile app extended — Competitions tab with live competition list
-- [x] 563 integration tests passing across 10 services (34 spec files); 84 Playwright e2e tests passing (647 total)
+- [x] Integration and Playwright coverage established; current counts are reported by CI rather
+      than maintained as architecture facts
 - [x] integration-service built — API key issuance (scoped, HMAC-hashed, `cs_` prefix plaintext shown once), webhook subscriptions (per-tenant HMAC signing secret), delivery worker (30s cron, 5-attempt exponential retry: 30s→2m→10m→1h→4h), inbound event fan-out endpoint; 31 integration tests (3 spec files)
 - [x] booking-service: group sessions with capacity management, join/cancel/complete lifecycle, per-session participants
 - [x] booking-service: pricing rules engine — scoped rules (org/venue/resource), rate per hour, time windows, days of week, lighting surcharge, member discount, priority
@@ -274,6 +316,7 @@ integration.accounting_sync_log — audit trail of all accounting sync attempts:
 **Decision:** Migrate all services to **NestJS** with the **Fastify adapter**.
 
 **Rationale:**
+
 - Development team has strong .NET experience — NestJS maps directly to ASP.NET Core patterns (controllers, services, DI, guards, interceptors, pipes)
 - Enforces consistent architecture across all services (currently inconsistent)
 - TypeScript-first — eliminates the current JS/TS inconsistency
@@ -284,23 +327,24 @@ integration.accounting_sync_log — audit trail of all accounting sync attempts:
 
 **ASP.NET Core → NestJS mapping:**
 
-| ASP.NET Core | NestJS |
-|---|---|
-| Controller | `@Controller()` |
-| `[HttpGet]`, `[HttpPost]` | `@Get()`, `@Post()` |
-| Constructor injection | Constructor injection |
-| `IService` in DI | `@Injectable()` Service |
-| Action filter | Interceptor |
-| Middleware / Auth policy | Guard |
+| ASP.NET Core                        | NestJS                                  |
+| ----------------------------------- | --------------------------------------- |
+| Controller                          | `@Controller()`                         |
+| `[HttpGet]`, `[HttpPost]`           | `@Get()`, `@Post()`                     |
+| Constructor injection               | Constructor injection                   |
+| `IService` in DI                    | `@Injectable()` Service                 |
+| Action filter                       | Interceptor                             |
+| Middleware / Auth policy            | Guard                                   |
 | Data annotations / FluentValidation | `class-validator` + `class-transformer` |
-| Swashbuckle / OpenAPI | `@nestjs/swagger` |
-| `IConfiguration` | `@nestjs/config` |
+| Swashbuckle / OpenAPI               | `@nestjs/swagger`                       |
+| `IConfiguration`                    | `@nestjs/config`                        |
 
 ### Database — PostgreSQL (Supabase → Azure)
 
 **Decision:** PostgreSQL via Supabase for pilot; migrate to Azure Database for PostgreSQL Flexible Server for production.
 
 **Rationale over SQL Server:**
+
 - No per-core licensing costs — significant at SaaS scale
 - Superior JSONB support (used for pricing rule configs, access rule configs)
 - Excellent partitioning (required for bookings table at scale)
@@ -312,6 +356,7 @@ integration.accounting_sync_log — audit trail of all accounting sync attempts:
 **Decision:** Prisma for migrations and standard CRUD. Raw SQL via `prisma.$queryRaw` for hot paths.
 
 **Rationale:**
+
 - Prisma provides a typed migration system (solves the "no migrations" problem)
 - Prisma's generated client is safe and typed for standard operations
 - Hot paths (availability check, booking creation, reporting queries) require fine-grained SQL control — window functions, CTEs, atomic INSERT with conflict check, partitioned table queries
@@ -323,6 +368,7 @@ integration.accounting_sync_log — audit trail of all accounting sync attempts:
 > **Current state:** not yet implemented (see Known Gap 5). Reads hit Postgres directly today; the cache layer below is the target design.
 
 **Cache targets:**
+
 - Venue / resource / bookable unit data (TTL: 5 minutes, invalidate on update)
 - Pricing rules (TTL: 1 minute, invalidate on rule change)
 - Access rules (TTL: 1 minute, invalidate on rule change)
@@ -336,6 +382,7 @@ integration.accounting_sync_log — audit trail of all accounting sync attempts:
 > **Current state:** implemented today as lightweight **HTTP fan-out** between services (see each service's `src/event-bus/`). Redis / Service Bus transport is the target, not yet wired.
 
 **Events:**
+
 - `booking.created` → confirmation email, inventory decrement, cache invalidation, stats refresh
 - `booking.cancelled` → slot release notification, refund initiation, cache invalidation
 - `membership.activated` → access rules cache invalidation
@@ -394,24 +441,24 @@ Azure DevOps              — CI/CD pipelines (familiar from .NET)
 
 ### Service responsibilities
 
-| Service | Responsibility | Status |
-|---|---|---|
-| **template-service** | Portal template system (Bold top-nav / Club sidebar-nav) | ✅ Built |
-| **venue-service** | Venues, resources, bookable units, add-on catalogue, availability configs, blackout dates, resource groups, organisations (incl. `hasTeams` flag), affiliations, sponsors | ✅ Built |
-| **people-service** | Persons, households, roles, tags, lifecycle history, relationships, segments (static + dynamic with condition-based rebuild) | ✅ Built |
-| **booking-service** | Bookings, series, add-ons, availability checking, booking rules, approvals, stats, auto-expiry, group sessions, booking participants, pricing rules engine, refund policies | ✅ Built |
-| **admin-service** | Admin users, RBAC | ✅ Built |
-| **membership-service** | Membership schemes, plans, memberships, entitlement policies, renewal automation | ✅ Built |
-| **coaching-service** | Coaches, lesson types, coach availability, lesson sessions | ✅ Built |
-| **team-service** | Teams (incl. `fixturesUrl`, `isPublic`), rosters (incl. `role`, `photoUrl`), fixtures, player availability, squad selection, charge runs, public read API for customer portal | ✅ Built |
-| **competition-service** | Competitions, divisions, entries, draw generation, matches, results, standings, rankings (ELO + points table), match submissions, work cards, discipline cases | ✅ Built |
-| **payment-service** | Gateway-agnostic payment processing — Stripe live, GoCardless ready | ✅ Built |
-| **comms-service** | Campaigns (bulk email/SMS sends), message log, system templates with per-tenant customisation (footer, reply-to) | ✅ Built |
-| **pricing-service** | Price calculation at booking time — applies pricing rules, surcharges, discounts | Superseded — pricing rules now live in booking-service |
-| **access-rules-service** | Who can book what, when, advance windows, booking limits — independent of membership | Phase 4 — not started |
-| **admin-portal** | Next.js admin interface — all domains | ✅ Built |
-| **customer-portal** | Multi-tenant Next.js customer-facing portal | ✅ Built |
-| **mobile-app** | Expo React Native app | ✅ Built |
+| Service                  | Responsibility                                                                                                                                                                | Status                                                 |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| **template-service**     | Portal template system (Bold top-nav / Club sidebar-nav)                                                                                                                      | ✅ Built                                               |
+| **venue-service**        | Venues, resources, bookable units, add-on catalogue, availability configs, blackout dates, resource groups, organisations (incl. `hasTeams` flag), affiliations, sponsors     | ✅ Built                                               |
+| **people-service**       | Persons, households, roles, tags, lifecycle history, relationships, segments (static + dynamic with condition-based rebuild)                                                  | ✅ Built                                               |
+| **booking-service**      | Bookings, series, add-ons, availability checking, booking rules, approvals, stats, auto-expiry, group sessions, booking participants, pricing rules engine, refund policies   | ✅ Built                                               |
+| **admin-service**        | Admin users, RBAC                                                                                                                                                             | ✅ Built                                               |
+| **membership-service**   | Membership schemes, plans, memberships, entitlement policies, renewal automation                                                                                              | ✅ Built                                               |
+| **coaching-service**     | Coaches, lesson types, coach availability, lesson sessions                                                                                                                    | ✅ Built                                               |
+| **team-service**         | Teams (incl. `fixturesUrl`, `isPublic`), rosters (incl. `role`, `photoUrl`), fixtures, player availability, squad selection, charge runs, public read API for customer portal | ✅ Built                                               |
+| **competition-service**  | Competitions, divisions, entries, draw generation, matches, results, standings, rankings (ELO + points table), match submissions, work cards, discipline cases                | ✅ Built                                               |
+| **payment-service**      | Gateway-agnostic payment processing — Stripe live, GoCardless ready                                                                                                           | ✅ Built                                               |
+| **comms-service**        | Campaigns (bulk email/SMS sends), message log, system templates with per-tenant customisation (footer, reply-to)                                                              | ✅ Built                                               |
+| **pricing-service**      | Price calculation at booking time — applies pricing rules, surcharges, discounts                                                                                              | Superseded — pricing rules now live in booking-service |
+| **access-rules-service** | Who can book what, when, advance windows, booking limits — independent of membership                                                                                          | Phase 4 — not started                                  |
+| **admin-portal**         | Next.js admin interface — all domains                                                                                                                                         | ✅ Built                                               |
+| **customer-portal**      | Multi-tenant Next.js customer-facing portal                                                                                                                                   | ✅ Built                                               |
+| **mobile-app**           | Expo React Native app                                                                                                                                                         | ✅ Built                                               |
 
 ---
 
@@ -421,17 +468,18 @@ Azure DevOps              — CI/CD pipelines (familiar from .NET)
 
 Three distinct types — previously conflated into one model:
 
-| Type | Example | Availability check? | Inventory |
-|---|---|---|---|
-| `linked_resource` | Changing room, ball machine | Yes — time-slot locked, conflict detection required | Capacity of the linked bookable unit |
-| `service` | Coaching, ball boy, towel hire | Soft — may have limited availability | Staff/capacity count |
-| `product` | Tube of balls, grip tape, merchandise | No | Stock level (decrement on booking) |
+| Type              | Example                               | Availability check?                                 | Inventory                            |
+| ----------------- | ------------------------------------- | --------------------------------------------------- | ------------------------------------ |
+| `linked_resource` | Changing room, ball machine           | Yes — time-slot locked, conflict detection required | Capacity of the linked bookable unit |
+| `service`         | Coaching, ball boy, towel hire        | Soft — may have limited availability                | Staff/capacity count                 |
+| `product`         | Tube of balls, grip tape, merchandise | No                                                  | Stock level (decrement on booking)   |
 
 ### Lighting / floodlights
 
 **Not a bookable add-on.** Lighting is a **computed pricing attribute**:
+
 - Resource has `has_floodlights: true` flag
-- A pricing rule defines: *"apply £X surcharge when booking this resource after 16:00 between October and March"*
+- A pricing rule defines: _"apply £X surcharge when booking this resource after 16:00 between October and March"_
 - The customer never selects it — the pricing engine evaluates conditions at booking time and includes it in the price breakdown
 - Handled by the **pricing rules engine** in `venue-service` / `pricing-service`
 
@@ -439,15 +487,16 @@ Three distinct types — previously conflated into one model:
 
 A booking has a subject — the entity the booking is for:
 
-| `booking_subject_type` | `booking_subject_id` points to | Example |
-|---|---|---|
-| `individual` | `customer.customers.id` | Member booking a court |
-| `team` | `customer.teams.id` | Team captain booking a pitch |
-| `league` | (future) league fixture ID | League fixture allocation |
+| `booking_subject_type` | `booking_subject_id` points to | Example                      |
+| ---------------------- | ------------------------------ | ---------------------------- |
+| `individual`           | `customer.customers.id`        | Member booking a court       |
+| `team`                 | `customer.teams.id`            | Team captain booking a pitch |
+| `league`               | (future) league fixture ID     | League fixture allocation    |
 
 ### Recurring / series bookings
 
 Series bookings are first-class:
+
 - `booking.booking_series` stores the recurrence rule (iCal RRULE format), season dates, slot time
 - Individual `booking.bookings` records are generated for each occurrence, linked to the series
 - Cancel a single occurrence vs cancel the series are distinct operations
@@ -456,6 +505,7 @@ Series bookings are first-class:
 ### Resource configurations
 
 A physical space can be configured multiple ways:
+
 - Full pitch (exclusive, 1 booking at a time)
 - Two half-pitches (concurrent, each half independently bookable)
 - Training layout (different markings, different capacity)
@@ -465,6 +515,7 @@ A physical space can be configured multiple ways:
 ### Access rules — independent of membership
 
 Booking access rules are owned by the **access-rules-service**, not the membership service. Rules apply to:
+
 - Membership plan holders
 - Users with specific roles (coach, committee member, team captain, junior, public)
 - Team types
@@ -797,13 +848,13 @@ GROUP BY unit_id
 
 ### Caching targets — ❌ Not implemented (Known Gap 5)
 
-| Data | Cache key pattern | TTL | Invalidation trigger |
-|---|---|---|---|
-| Venue / resource / unit | `venue:{tenantId}:{venueId}` | 5 min | Admin update |
-| Pricing rules | `pricing:{tenantId}` | 1 min | Rule change |
-| Access rules | `rules:{tenantId}` | 1 min | Rule change |
-| Customer memberships | `memberships:{customerId}` | 30 sec | membership.activated/expired |
-| Availability slots | `avail:{tenantId}:{venueId}:{date}` | 10 sec | booking.created/cancelled |
+| Data                    | Cache key pattern                   | TTL    | Invalidation trigger         |
+| ----------------------- | ----------------------------------- | ------ | ---------------------------- |
+| Venue / resource / unit | `venue:{tenantId}:{venueId}`        | 5 min  | Admin update                 |
+| Pricing rules           | `pricing:{tenantId}`                | 1 min  | Rule change                  |
+| Access rules            | `rules:{tenantId}`                  | 1 min  | Rule change                  |
+| Customer memberships    | `memberships:{customerId}`          | 30 sec | membership.activated/expired |
+| Availability slots      | `avail:{tenantId}:{venueId}:{date}` | 10 sec | booking.created/cancelled    |
 
 ### Materialized views for reporting — ◻️ Target-only
 
@@ -841,12 +892,12 @@ CREATE POLICY tenant_isolation ON booking.bookings
 
 ### Fastify adapter (mandatory) — ✅ Implemented (all services)
 
-All NestJS services must use the Fastify adapter — 3x throughput vs Express default:
+All NestJS services use the Fastify adapter for a consistent, lightweight HTTP stack:
 
 ```typescript
 const app = await NestFactory.create<NestFastifyApplication>(
   AppModule,
-  new FastifyAdapter({ logger: true })
+  new FastifyAdapter({ logger: true }),
 )
 ```
 
@@ -867,32 +918,35 @@ Key metrics to track: p50/p95/p99 response times, cache hit rate (target >90%), 
 
 ### Migration strategy
 
-The migration from Supabase to Azure is a **configuration change, not a code change**, provided these rules are followed during development:
+The PostgreSQL access layer is portable by configuration, but the **full platform migration is not
+configuration-only**. Identity, regional routing, event transport, infrastructure, secrets and
+operations still require explicit implementation and rollout. Preserve database portability with
+these rules:
 
 1. Never import or use the Supabase client SDK in service code — connect via Prisma/pg only
 2. All connection strings and secrets via environment variables
-3. Dockerize every service from day one
+3. Containerise every service before environment deployment
 4. Use standard Redis client (`ioredis`) — works identically against Azure Cache for Redis
 5. Use NestJS microservices with swappable transport
 6. Never use Supabase-specific PostgreSQL extensions not available on Azure
 
 ### Service mapping
 
-| Component | Pilot (Supabase phase) | Production (Azure) |
-|---|---|---|
-| PostgreSQL | Supabase Pro | Azure Database for PostgreSQL Flexible Server |
-| Connection pooling | Supavisor (built-in) | PgBouncer (built-in Flexible Server) |
-| Read replica | Supabase Pro replica | Flexible Server read replica |
-| Redis | Local / Redis Cloud | Azure Cache for Redis |
-| Event bus | Redis pub/sub | Azure Service Bus |
-| Service hosting | Local Node processes (`run-all.sh`); Dockerfiles are Azure deploy prep | Azure Container Apps |
-| Front-end portals | Local (`next dev`) | Azure Static Web Apps |
-| CDN + load balancer | — | Azure Front Door |
-| API gateway | — | Azure API Management |
-| Secrets | `.env` files | Azure Key Vault |
-| Observability | Console logs | Azure Monitor + Application Insights |
-| Container registry | Local | Azure Container Registry |
-| CI/CD | Manual | Azure DevOps |
+| Component           | Current repository / pilot assumption                                 | Target Azure state                            |
+| ------------------- | ---------------------------------------------------------------------- | --------------------------------------------- |
+| PostgreSQL          | Shared PostgreSQL configured by environment; prior pilot used Supabase | Azure Database for PostgreSQL Flexible Server |
+| Connection pooling  | Prisma URLs carry pooler settings; actual endpoint/config not validated | PgBouncer (built-in Flexible Server)          |
+| Read replica        | Configuration seam exists; application reads still use the writer      | Flexible Server read replica                  |
+| Redis               | None                                                                    | Azure Managed Redis                           |
+| Event bus           | Transactional outbox relays over authenticated HTTP fan-out             | Azure Service Bus                             |
+| Service hosting     | No environment; local `run-all.sh`; 6 service Dockerfiles              | Azure Container Apps or approved AKS option   |
+| Front-end portals   | No environment; local Next.js development                              | Azure Static Web Apps                         |
+| CDN + load balancer | —                                                                      | Azure Front Door                              |
+| API gateway         | —                                                                      | Azure API Management                          |
+| Secrets             | `.env` files                                                           | Azure Key Vault                               |
+| Observability       | Console logs                                                           | Azure Monitor + Application Insights          |
+| Container registry  | None                                                                    | Azure Container Registry                      |
+| CI/CD               | GitHub Actions CI; no environment deployment pipeline                  | GitHub Actions or Azure DevOps deployment     |
 
 ### Azure migration steps (when ready)
 
@@ -1033,7 +1087,8 @@ pg_restore --no-owner -d $AZURE_POSTGRES_URL clubspark_$(date +%Y%m%d).dump
 - [x] `QuickBooksClientService` — customer upsert, invoice creation, credit memo creation, income accounts + tax codes lookup (sandbox + production URLs)
 - [x] `AccountingSyncService` — real-time handlers for `payment.succeeded` → invoice, `payment.refund_issued` → credit note, `membership.activated` → invoice; nightly `@Cron(EVERY_DAY_AT_2AM)` batch reconciliation for `pending/failed` log rows
 - [x] `OAuthConnectionsService` — Xero and QuickBooks authorisation redirect, callback token exchange, token refresh, disconnect
-- [x] `POST /v1/events/inbound` updated to fire accounting sync alongside webhook dispatch (fire-and-forget)
+- [x] `POST /v1/events/inbound` dispatches accounting sync through a durable, idempotently claimed
+      Integration inbox; processing is awaited and failures are retryable rather than fire-and-forget
 - [x] Admin portal: Accounting page under Settings (provider connection cards, settings form, sync log table with pagination)
 - [x] 16 accounting integration tests (oauth-connections, accounting-settings, sync-log — 1 spec file)
 - [x] Total integration tests: 47 (4 spec files)
@@ -1254,4 +1309,4 @@ CMD ["node", "dist/main.js"]
 
 ---
 
-*Document maintained alongside development. Update the relevant phase checklist as tasks are completed.*
+_Document maintained alongside development. Update the relevant phase checklist as tasks are completed._

@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Patch, Param, Body, Query, HttpCode, HttpStatus, NotFoundException } from '@nestjs/common'
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Param,
+  Body,
+  Query,
+  HttpCode,
+  HttpStatus,
+  NotFoundException,
+} from '@nestjs/common'
 import { ApiTags, ApiSecurity, ApiQuery } from '@nestjs/swagger'
 import { BookableUnitsService } from './bookable-units.service.js'
 import { CreateBookableUnitDto } from './dto/create-bookable-unit.dto.js'
@@ -29,7 +40,8 @@ export class BookableUnitsController {
   @Patch('bookable-units/:id')
   async update(
     @Param('id') id: string,
-    @Body() body: {
+    @Body()
+    body: {
       name?: string
       unitType?: string
       sortOrder?: number
@@ -52,7 +64,7 @@ export class BookableUnitsController {
   }
 
   @Get('units/:id/conflicts')
-  async getConflicts(@Param('id') id: string) {
-    return this.service.getConflicts(id)
+  async getConflicts(@Param('id') id: string, @TenantCtx() ctx: TenantContext) {
+    return this.service.getConflicts(ctx.tenantId, id)
   }
 }

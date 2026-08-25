@@ -41,4 +41,74 @@ export class VenueReferenceService {
 
     return { data: { venues, resources, bookableUnits } }
   }
+
+  async activeBookableUnitCount(tenantId: string) {
+    const count = await this.prisma.read.bookableUnit.count({
+      where: { tenantId, isActive: true },
+    })
+    return { data: { count } }
+  }
+
+  async bookingProjectionSnapshot(tenantId: string) {
+    // The watermark must come from the SAME clock as the row timestamps it will
+    // be compared against. Row `updatedAt` is Prisma's client-generated value and
+    // live events stamp `sourceUpdatedAt` from this process, so a database
+    // `transaction_timestamp()` watermark mixed two clocks: if this host's clock
+    // trailed the database's, every mutation made after a backfill was judged
+    // "stale" by the consumer, dropped, and never retried.
+    const generatedAt = new Date()
+    return this.prisma.read.$transaction(
+      async (tx) => {
+        const [resources, bookableUnits, rawConflicts] = await Promise.all([
+          tx.resource.findMany({
+            where: { tenantId },
+            select: {
+              id: true,
+              venueId: true,
+              groupId: true,
+              hasLighting: true,
+              isActive: true,
+              updatedAt: true,
+            },
+          }),
+          tx.bookableUnit.findMany({
+            where: { tenantId },
+            select: {
+              id: true,
+              venueId: true,
+              resourceId: true,
+              name: true,
+              unitType: true,
+              isActive: true,
+            },
+          }),
+          tx.$queryRaw<{ unitId: string; conflictingUnitId: string }[]>`
+            SELECT uc.unit_id AS "unitId", uc.conflicting_unit_id AS "conflictingUnitId"
+            FROM venue.unit_conflicts uc
+            JOIN venue.bookable_units unit_row
+              ON unit_row.id = uc.unit_id AND unit_row.tenant_id = ${tenantId}::uuid
+            JOIN venue.bookable_units conflicting_row
+              ON conflicting_row.id = uc.conflicting_unit_id
+             AND conflicting_row.tenant_id = ${tenantId}::uuid
+          `,
+        ])
+
+        const unitConflicts = rawConflicts.map((row) =>
+          row.unitId < row.conflictingUnitId
+            ? row
+            : { unitId: row.conflictingUnitId, conflictingUnitId: row.unitId },
+        )
+
+        return {
+          data: {
+            generatedAt: generatedAt.toISOString(),
+            resources,
+            bookableUnits,
+            unitConflicts,
+          },
+        }
+      },
+      { isolationLevel: 'RepeatableRead' },
+    )
+  }
 }

@@ -13,10 +13,12 @@ import { RefundPoliciesRepository } from '../refund-policies/refund-policies.rep
 import { PeopleModule } from '../people/people.module.js'
 import { OutboxModule } from '../outbox/outbox.module.js'
 import { VenueModule } from '../venue/venue.module.js'
+import { ProjectionsModule } from '../projections/projections.module.js'
 
 @Module({
   imports: [
     VenueModule,
+    ProjectionsModule,
     OutboxModule,
     PeopleModule,
     AvailabilityModule,

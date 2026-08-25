@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common'
+import { ScheduleModule } from '@nestjs/schedule'
 import { ConfigModule } from '@nestjs/config'
 import { join } from 'node:path'
 import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core'
@@ -11,6 +12,7 @@ import { HealthModule } from './health/health.module.js'
 import { EventBusModule } from './event-bus/event-bus.module.js'
 import { OrdersModule } from './orders/orders.module.js'
 import { ProductsModule } from './products/products.module.js'
+import { OutboxModule } from './outbox/outbox.module.js'
 
 @Module({
   imports: [
@@ -23,11 +25,13 @@ import { ProductsModule } from './products/products.module.js'
       load: [configuration],
       envFilePath: join(__dirname, '..', '.env'),
     }),
+    ...(process.env['NODE_ENV'] === 'test' ? [] : [ScheduleModule.forRoot()]),
     PrismaModule,
     EventBusModule,
     HealthModule,
     OrdersModule,
     ProductsModule,
+    OutboxModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

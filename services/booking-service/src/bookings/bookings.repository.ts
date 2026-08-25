@@ -229,11 +229,11 @@ export class BookingsRepository {
     return rows[0] ?? null
   }
 
-  async findResourceGroupId(resourceId: string): Promise<string | null> {
+  async findResourceGroupId(tenantId: string, resourceId: string): Promise<string | null> {
     const rows = await this.prisma.read.$queryRaw<{ groupId: string | null }[]>`
       SELECT group_id AS "groupId"
       FROM venue.resources
-      WHERE id = ${resourceId}::uuid
+      WHERE tenant_id = ${tenantId}::uuid AND id = ${resourceId}::uuid
       LIMIT 1
     `
     return rows[0]?.groupId ?? null
@@ -571,7 +571,10 @@ export class BookingsRepository {
     return rows[0] ?? null
   }
 
-  async getStats(tenantId: string): Promise<{
+  async getStats(
+    tenantId: string,
+    activeUnits: number,
+  ): Promise<{
     totalBookedHours: number
     bookedHours30d: number
     addOnRevenue: number
@@ -582,7 +585,7 @@ export class BookingsRepository {
   }> {
     const cutoff30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
-    const [bookingRows, addOnRows, customerRows, revenueRows, unitRows] = await Promise.all([
+    const [bookingRows, addOnRows, customerRows, revenueRows] = await Promise.all([
       this.prisma.read.$queryRaw<[{ totalBookedHours: number; bookedHours30d: number }]>`
         SELECT
           COALESCE(SUM(EXTRACT(EPOCH FROM (ends_at - starts_at)) / 3600)
@@ -610,15 +613,9 @@ export class BookingsRepository {
         FROM booking.bookings
         WHERE tenant_id = ${tenantId}::uuid
       `,
-      this.prisma.read.$queryRaw<[{ activeUnits: number }]>`
-        SELECT COUNT(*)::int AS "activeUnits"
-        FROM venue.bookable_units
-        WHERE tenant_id = ${tenantId}::uuid AND is_active = true
-      `,
     ])
 
     const bookedHours30d = bookingRows[0]?.bookedHours30d ?? 0
-    const activeUnits = unitRows[0]?.activeUnits ?? 0
     // 16 operational hours per day (06:00–22:00), 30 days
     const totalPossibleHours30d = activeUnits * 16 * 30
     const utilisationRate30d =
@@ -956,15 +953,22 @@ export class BookingsRepository {
     `
   }
 
-  /** Stamp reminder_sent_at on a booking so it only fires once. */
-  async markReminderSent(id: string): Promise<void> {
-    await this.prisma.write.$queryRaw`
-      UPDATE booking.bookings
-      SET reminder_sent_at = now(),
-          updated_at       = now()
-      WHERE id = ${id}::uuid
-        AND reminder_sent_at IS NULL
-    `
+  /** Atomically claim a reminder and record its durable event. */
+  async queueReminder(
+    id: string,
+    withinTx: (tx: Prisma.TransactionClient) => Promise<void>,
+  ): Promise<boolean> {
+    return this.prisma.write.$transaction(async (tx) => {
+      const claimed = await tx.$queryRaw<{ id: string }[]>`
+        UPDATE booking.bookings
+        SET reminder_sent_at = now(), updated_at = now()
+        WHERE id = ${id}::uuid AND reminder_sent_at IS NULL
+        RETURNING id::text
+      `
+      if (claimed.length === 0) return false
+      await withinTx(tx)
+      return true
+    })
   }
 
   // ─── Booking Participants ───────────────────────────────────────────────────

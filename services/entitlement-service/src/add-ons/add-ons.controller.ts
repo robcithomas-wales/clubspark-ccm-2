@@ -7,7 +7,7 @@ import type { TenantContext } from '@clubspark/auth'
 type RequestWithCtx = { tenantContext?: TenantContext }
 
 @ApiTags('add-ons')
-@Controller('v1/add-ons')
+@Controller({ path: 'add-ons', version: '1' })
 export class AddOnsController {
   constructor(private readonly service: AddOnsService) {}
 

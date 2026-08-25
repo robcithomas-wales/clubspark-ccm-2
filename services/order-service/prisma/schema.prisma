@@ -110,6 +110,23 @@ model Price {
   @@schema("commerce")
 }
 
+model EventOutbox {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  eventType     String    @map("event_type")
+  payload       Json
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime  @default(now()) @map("next_attempt_at") @db.Timestamptz(6)
+  publishedAt   DateTime? @map("published_at") @db.Timestamptz(6)
+  lastError     String?   @map("last_error")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([publishedAt, nextAttemptAt], map: "event_outbox_pending_idx")
+  @@index([tenantId, createdAt], map: "event_outbox_tenant_idx")
+  @@map("event_outbox")
+  @@schema("commerce")
+}
+
 enum OrderStatus {
   pending
   confirmed

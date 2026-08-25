@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { Cron, CronExpression } from '@nestjs/schedule'
 import { BookingsRepository } from '../bookings.repository.js'
-import { EventBusService } from '../../event-bus/event-bus.service.js'
+import { OutboxRepository } from '../../outbox/outbox.repository.js'
 import { PeopleClient } from '../../people/people.client.js'
 import { VenueClient } from '../../venue/venue.client.js'
 
@@ -20,7 +20,7 @@ export class BookingReminderTask {
 
   constructor(
     private readonly repo: BookingsRepository,
-    private readonly eventBus: EventBusService,
+    private readonly outbox: OutboxRepository,
     private readonly people: PeopleClient,
     private readonly venue: VenueClient,
   ) {}
@@ -77,7 +77,7 @@ export class BookingReminderTask {
       const person = b.customerId ? customers.get(b.tenantId)?.get(b.customerId) : undefined
       const place = venues.get(b.tenantId)?.get(b.id)
       try {
-        await this.eventBus.publish({
+        const event = {
           type: 'booking.reminder_due',
           tenantId: b.tenantId,
           occurredAt: new Date().toISOString(),
@@ -91,8 +91,11 @@ export class BookingReminderTask {
           endsAt: b.endsAt,
           venueName: place?.venueName ?? null,
           resourceName: place?.resourceName ?? null,
-        })
-        await this.repo.markReminderSent(b.id)
+        } as const
+        const queued = await this.repo.queueReminder(b.id, (tx) => this.outbox.enqueue(tx, event))
+        if (!queued) {
+          this.logger.debug({ bookingId: b.id }, 'Reminder already claimed by another replica')
+        }
       } catch (err) {
         // Log and continue — a failure for one booking must not block others
         this.logger.error(

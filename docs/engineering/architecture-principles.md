@@ -23,6 +23,10 @@ file is the tight, rule-based version: each item is something a change could *br
    - *Documented exception:* analytics/reporting may do **read-only** cross-schema SQL for
      aggregation (e.g. `analytics-service` member scoring). New cross-schema access **outside
      read-only reporting** is a red flag.
+   - *Temporary compatibility exception:* Booking's five tenant-scoped Venue/Coaching hot-path
+     reads may remain only while `BOOKING_VENUE_PROJECTION_MODE` and
+     `BOOKING_COACHING_PROJECTION_MODE` roll through `legacy` → `shadow` → `projection`. No new
+     foreign-schema read may be added. Remove the fallbacks after migrated projection cutover.
 2. **Layering:** controller → service → repository. Controllers stay thin (routing, validation,
    response shaping); business logic lives in the service; all data access lives in the
    repository/Prisma layer. No Prisma in controllers; no business logic in repositories.
@@ -33,6 +37,9 @@ file is the tight, rule-based version: each item is something a change could *br
      admin routes) are authenticated with the shared `INTERNAL_SECRET` (`X-Internal-Secret`),
      fail-closed in production. A new `@SkipTenant` cross-service endpoint that isn't secret-
      gated is a structural break. (Detail: `security-and-data-boundaries.md`.)
+   - A state change that other domains rely on must use a transactional outbox, the versioned
+     domain-event envelope and an idempotent consumer/inbox. Direct best-effort publication is
+     suitable only for explicitly classified, non-critical notifications.
 4. **Multi-tenancy is structural** — tenant/organisation context comes from the Supabase JWT /
    `x-tenant-id` headers and scopes every tenant-data query. (Query-level detail is enforced by
    `security-reviewer`; the *reviewer here* flags structural breaks — e.g. a new global table.)

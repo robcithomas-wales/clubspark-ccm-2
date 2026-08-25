@@ -14,9 +14,19 @@ import type { FastifyRequest } from 'fastify'
  * `run-all.sh` exports NODE_ENV=development, so a dev-mode bypass here would
  * leave bulk-mutation endpoints unauthenticated on every developer machine.
  *
- * Fail closed everywhere except NODE_ENV='test', where the integration suites
- * run without a configured secret. Set INTERNAL_SECRET in each service's .env
- * for local development — see .env.example.
+ * **Fails closed unconditionally — there is no environment-based bypass.**
+ *
+ * This guard used to return true outright when NODE_ENV==='test', so the suites
+ * could run without a configured secret. That made an ambient environment
+ * variable sufficient to remove the only authenticator from endpoints that take
+ * the tenant from a caller-supplied header — i.e. unauthenticated cross-tenant
+ * writes. `process.env` is read per request, `@nestjs/config` copies `.env` keys
+ * into it, and NODE_ENV is a value engineers set casually, so the blast radius
+ * was one stray line in one file.
+ *
+ * Tests now do what a real caller does: set INTERNAL_SECRET and send the header.
+ * That is one line of setup and it means the suites actually cover this guard
+ * rather than skipping it.
  *
  * ⚠️ The value must be IDENTICAL across all services. A mismatch does not fail
  * loudly; it makes every cross-service call and domain event 401 quietly.
@@ -24,8 +34,6 @@ import type { FastifyRequest } from 'fastify'
 @Injectable()
 export class InternalSecretGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
-    if (process.env['NODE_ENV'] === 'test') return true
-
     const secret = process.env['INTERNAL_SECRET']
     if (!secret) {
       throw new UnauthorizedException('Internal secret is not configured')

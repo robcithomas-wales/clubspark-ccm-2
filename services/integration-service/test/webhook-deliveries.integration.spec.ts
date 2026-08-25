@@ -3,6 +3,7 @@ import supertest from 'supertest'
 import { getApp, closeApp } from './helpers/app.js'
 import { prisma, checkDbAvailable, cleanAll } from './helpers/db.js'
 import { TEST_TENANT_ID, TEST_NONEXISTENT_ID } from './fixtures/index.js'
+import { WebhookDeliveriesRepository } from '../src/webhook-deliveries/webhook-deliveries.repository.js'
 
 const HEADERS = { 'x-tenant-id': TEST_TENANT_ID }
 const JSON_HEADERS = { ...HEADERS, 'content-type': 'application/json' }
@@ -39,6 +40,12 @@ async function waitFor<T>(
   }
   return last
 }
+
+/**
+ * Claims order by `created_at` across the whole queue, so a fixture must be
+ * older than any pre-existing due delivery to be the row a limit-1 claim takes.
+ */
+const FIXTURE_CLAIM_ORDER_DATE = new Date('2000-01-01T00:00:00.000Z')
 
 const DB_AVAILABLE = await checkDbAvailable()
 
@@ -207,6 +214,54 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
     const updated = await prisma.webhookDelivery.findUnique({ where: { id: delivery.id } })
     expect(updated?.status).toBe('pending')
     expect(updated?.attempts).toBe(0)
+  })
+
+  it('allows only one worker to claim a due delivery', async () => {
+    const sub = await createSubscription(request)
+    const delivery = await prisma.webhookDelivery.create({
+      data: {
+        subscriptionId: sub.id,
+        eventType: 'booking.confirmed',
+        payload: {},
+        status: 'pending',
+        nextRetryAt: new Date(Date.now() - 1_000),
+        // The claim is queue-wide, not tenant-scoped, and orders by created_at.
+        // The shared database holds other tenants' due deliveries, so a
+        // present-dated fixture is never the row a limit-1 claim picks. Backdate
+        // it so both workers race for *this* row.
+        createdAt: FIXTURE_CLAIM_ORDER_DATE,
+      },
+    })
+    const repository = new WebhookDeliveriesRepository({ write: prisma } as never)
+
+    const claims = await Promise.all([
+      repository.claimPending(1, 30),
+      repository.claimPending(1, 30),
+    ])
+
+    // The loser claims the next-oldest due row, which may belong to another
+    // tenant, so assert exclusivity on the fixture rather than a total count.
+    expect(claims.flat().filter((row) => row.id === delivery.id)).toHaveLength(1)
+  })
+
+  it('reclaims failed deliveries when their retry time is due', async () => {
+    const sub = await createSubscription(request)
+    const delivery = await prisma.webhookDelivery.create({
+      data: {
+        subscriptionId: sub.id,
+        eventType: 'booking.confirmed',
+        payload: {},
+        status: 'failed',
+        attempts: 1,
+        nextRetryAt: new Date(Date.now() - 1_000),
+        createdAt: FIXTURE_CLAIM_ORDER_DATE,
+      },
+    })
+    const repository = new WebhookDeliveriesRepository({ write: prisma } as never)
+
+    const claimed = await repository.claimPending(1, 30)
+
+    expect(claimed.map((row) => row.id)).toContain(delivery.id)
   })
 
   it('returns 404 on retry of non-existent delivery', async () => {

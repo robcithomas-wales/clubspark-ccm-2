@@ -1,9 +1,36 @@
-import { Controller, Post, Body, Logger, UseGuards } from '@nestjs/common'
+import {
+  Controller,
+  Post,
+  Body,
+  Logger,
+  UseGuards,
+  ConflictException,
+  ServiceUnavailableException,
+} from '@nestjs/common'
 import { ApiTags, ApiOperation, ApiSecurity } from '@nestjs/swagger'
 import { SkipTenant } from '@clubspark/auth'
 import { InternalSecretGuard } from '@clubspark/auth'
 import { NotificationsService } from '../notifications/notifications.service.js'
 import type { DomainEvent } from './domain-events.js'
+import { EventInboxService, type InboxOutcome } from './event-inbox.service.js'
+
+/**
+ * Turn an inbox outcome into the answer the producer needs.
+ *
+ * A refused claim must NOT be acknowledged: the relay marks the outbox row
+ * published on any 2xx, so acking "busy" drops the event entirely.
+ */
+function ackOrRetry(outcome: InboxOutcome, type: string): void {
+  if (outcome === 'processed' || outcome === 'duplicate') return
+  if (outcome === 'payloadConflict') {
+    throw new ConflictException(
+      `Event ${type} was already received with a different payload — same eventId, changed content`,
+    )
+  }
+  throw new ServiceUnavailableException(
+    `Event ${type} is being processed by another worker — retry`,
+  )
+}
 
 /**
  * Inbound event endpoint — PILOT mode only.
@@ -42,7 +69,10 @@ import type { DomainEvent } from './domain-events.js'
 export class EventsController {
   private readonly logger = new Logger(EventsController.name)
 
-  constructor(private readonly notifications: NotificationsService) {}
+  constructor(
+    private readonly notifications: NotificationsService,
+    private readonly inbox: EventInboxService,
+  ) {}
 
   /**
    * Receives a domain event from any publisher service.
@@ -59,7 +89,8 @@ export class EventsController {
   @ApiOperation({ summary: 'Inbound domain event (pilot: HTTP; production: Azure Service Bus)' })
   async inbound(@Body() event: DomainEvent): Promise<{ received: boolean }> {
     this.logger.log(`[EventBus INBOUND] ${event.type} — tenant ${event.tenantId}`)
-    await this.notifications.handle(event)
+    const outcome = await this.inbox.process(event, () => this.notifications.handle(event))
+    ackOrRetry(outcome, event.type)
     return { received: true }
   }
 }

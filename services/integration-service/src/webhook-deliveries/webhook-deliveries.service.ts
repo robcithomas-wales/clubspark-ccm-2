@@ -39,14 +39,15 @@ export class WebhookDeliveriesService {
       })),
     )
 
-    this.logger.log(
-      `[Dispatch] ${event.type} → ${subscriptions.length} subscription(s) queued`,
-    )
+    this.logger.log(`[Dispatch] ${event.type} → ${subscriptions.length} subscription(s) queued`)
   }
 
   @Cron(CronExpression.EVERY_30_SECONDS)
   async processPending(): Promise<void> {
-    const due = await this.deliveriesRepo.findPending(50)
+    // claimPending atomically moves nextRetryAt beyond the HTTP timeout while
+    // holding row locks. A second replica skips these rows; a crashed worker's
+    // lease expires and makes them eligible again.
+    const due = await this.deliveriesRepo.claimPending(50, 30)
     if (!due.length) return
 
     this.logger.log(`[Worker] Processing ${due.length} pending deliveries`)
@@ -58,7 +59,8 @@ export class WebhookDeliveriesService {
     // to the caller's tenant. WebhookDelivery has no tenantId of its own — tenancy
     // is derived via subscription.tenantId, so verify the subscription first.
     const subscription = await this.subscriptionsRepo.findById(tenantId, subscriptionId)
-    if (!subscription) throw new NotFoundException(`Webhook subscription ${subscriptionId} not found`)
+    if (!subscription)
+      throw new NotFoundException(`Webhook subscription ${subscriptionId} not found`)
 
     const { data, total } = await this.deliveriesRepo.findBySubscription(
       subscriptionId,

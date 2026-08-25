@@ -4,7 +4,7 @@ import { ForecastingService } from './forecasting.service.js'
 import { TenantCtx, type TenantContext } from '../common/decorators/tenant-context.decorator.js'
 
 @ApiTags('Forecasting')
-@Controller('v1/forecasts')
+@Controller({ path: 'forecasts', version: '1' })
 export class ForecastingController {
   constructor(private readonly service: ForecastingService) {}
 
@@ -30,7 +30,9 @@ export class ForecastingController {
   }
 
   @Get('dead-slots')
-  @ApiOperation({ summary: 'Get units with dead slots (predicted <30% occupancy) in next 3–14 days' })
+  @ApiOperation({
+    summary: 'Get units with dead slots (predicted <30% occupancy) in next 3–14 days',
+  })
   deadSlots(@TenantCtx() ctx: TenantContext) {
     return this.service.getDeadSlots(ctx.tenantId)
   }

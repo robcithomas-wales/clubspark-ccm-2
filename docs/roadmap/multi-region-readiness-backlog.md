@@ -1,32 +1,34 @@
 # Multi-Region Readiness — Required Actions
 
-> **Status:** Active · **Created:** 2026-07-31
+> **Status:** Active · **Created:** 2026-07-31 · **Updated:** 2026-08-25
 > **Question it answers:** what is still required before this platform can run in EU/US/AU?
 > **Parent:** [`pilot-to-production.md`](pilot-to-production.md) · **ADR:** [`../architecture/scalability-and-multi-region.md`](../architecture/scalability-and-multi-region.md)
 
-Every item below is verified against the code and the live database, not inferred. Counts are real
-`grep`/`pg_catalog` results as of 2026-07-31.
+The original counts were verified against the code and live database on 2026-07-31. Current status
+was re-verified against repository code on 2026-08-25; newly committed migrations have not yet been
+replayed in an environment.
 
 ## Already cleared
 
-- **Cross-service *writes*** — people-service no longer writes `booking.*` / `membership.*`. Replaced
+- **Cross-service _writes_** — people-service no longer writes `booking.*` / `membership.*`. Replaced
   by a compensating saga. This was the one item with no workaround: a distributed transaction cannot
   span regional databases.
 - **Cross-schema foreign key** `membership.memberships → people.persons` — dropped. A DB-level FK
   between two services physically prevents separate regional databases.
 - **The repository can build its own database.** Six services previously had no migrations at all;
   a new regional database was impossible to create. Now verified from empty on every PR by CI.
-- **Schema drift is a blocking gate** for 11 of 14 services.
+- **Schema drift is a blocking gate** for all 14 services; `KNOWN_DRIFT` is empty.
 
 ## The verdict today
 
-**Not fit.** The keystone is untouched: booking-service still reads three other services' schemas
-directly. A single SQL query spanning `venue.*`, `people.*` and `coaching.*` cannot execute once
-those schemas live in separate regional databases.
+**Not yet fit, but the keystone implementation exists.** Booking no longer reads `people.*` or
+`auth.*`. Five tenant-scoped Venue/Coaching compatibility reads remain because the new Booking-owned
+projections default to `legacy` until their migrations, per-tenant backfill, reconciliation and
+shadow comparison have run. A regional split remains blocked until those fallbacks are removed.
 
 ---
 
-## MR-1 — Booking stops reading `people.*` and `auth.*` 🔴 BLOCKING
+## MR-1 — Booking stops reading `people.*` and `auth.*` ✅ DONE IN CODE
 
 **Why first:** it is the smallest of the blocking reads, and it removes the `auth.users` dependency —
 which blocks **Azure**, not just regions. `auth.users` is Supabase-owned and does not exist on Azure
@@ -35,13 +37,13 @@ It is currently papered over by a shim in `scripts/sql/000_shared_bootstrap.sql`
 
 **Exact sites (7):**
 
-| File | Line | Reads |
-|---|---|---|
-| `bookings.repository.ts` | 137, 138 | `people.persons`, `auth.users` (list) |
-| `bookings.repository.ts` | 203, 204 | `people.persons`, `auth.users` (detail) |
-| `bookings.repository.ts` | 848 | `people.persons` (top-customers report) |
-| `bookings.repository.ts` | 942 | `people.persons` (reminder cron) |
-| `booking-series.repository.ts` | 158 | `people.persons` (series detail) |
+| File                           | Line     | Reads                                   |
+| ------------------------------ | -------- | --------------------------------------- |
+| `bookings.repository.ts`       | 137, 138 | `people.persons`, `auth.users` (list)   |
+| `bookings.repository.ts`       | 203, 204 | `people.persons`, `auth.users` (detail) |
+| `bookings.repository.ts`       | 848      | `people.persons` (top-customers report) |
+| `bookings.repository.ts`       | 942      | `people.persons` (reminder cron)        |
+| `booking-series.repository.ts` | 158      | `people.persons` (series detail)        |
 
 All seven read the same handful of display fields: first name, last name, email, phone.
 
@@ -49,28 +51,35 @@ All seven read the same handful of display fields: first name, last name, email,
 booking hydrates display fields after its own query. Batch, not per-row: the list endpoint is
 paginated and an N+1 would be untenable.
 
-**Acceptance:** no `people.*` or `auth.*` in booking SQL; the `auth.users` shim deleted from the
-bootstrap; booking + series suites green; a from-scratch CI database no longer needs an auth schema.
+**Completed:** Booking and series repositories no longer query `people.*` or `auth.*`; display data
+is batch-hydrated through the tenant-scoped People API. Remove the obsolete bootstrap auth shim when
+the next empty-database migration replay confirms no remaining dependency.
 
-## MR-2 — Transactional outbox 🔴 BLOCKING
+## MR-2 — Transactional outbox 🟠 PARTIAL
 
-7 fire-and-forget `void eventBus.publish(...)` sites; events can vanish silently. Once services are
-decoupled, async messaging **is** the consistency mechanism, and MR-3's projections depend on it.
+Strict transactional outboxes now cover the critical implemented flows in Booking, Membership,
+Payment and Order; Venue and Coaching also persist projection events transactionally. Comms,
+Integration and People have durable inbox claims for covered consumers. Remaining work is a full
+publisher/consumer classification, external metrics and alerting, operator replay evidence and the
+Azure Service Bus transport.
 
 **Acceptance:** killing a subscriber mid-flow loses zero events.
 
-## MR-3 — Booking stops reading `venue.*` 🔴 BLOCKING
+## MR-3 — Booking stops reading `venue.*` 🟠 CODE COMPLETE, ACTIVATION BLOCKING
 
-13 sites: `venue.resources` (5), `venue.bookable_units` (4), `venue.venues` (3),
-`venue.unit_conflicts` (1). These are the **hot paths** — availability, pricing, booking creation.
+Display and reporting reads have moved to Venue APIs. Four hot-path compatibility queries remain:
+bookable-unit validation, resource-group lookup, lighting and unit conflicts.
 
-**Approach:** a booking-owned projection maintained from venue events, not synchronous API calls —
-an API hop per availability cell is untenable. Depends on MR-2 for reliable updates.
+**Implemented:** a Booking-owned projection maintained from versioned Venue outbox events, with a
+tenant snapshot, idempotent/out-of-order consumer, reconciliation and
+`BOOKING_VENUE_PROJECTION_MODE`. Apply migrations, backfill/reconcile, run shadow comparisons, cut
+over and then delete the legacy SQL.
 
-## MR-4 — Booking stops reading `coaching.*` 🔴 BLOCKING
+## MR-4 — Booking stops reading `coaching.*` 🟠 CODE COMPLETE, ACTIVATION BLOCKING
 
-2 sites: `coaching.lesson_sessions` in the availability conflict check. Same projection approach as
-MR-3.
+One compatibility query to `coaching.lesson_sessions` remains in the availability conflict check.
+The source outbox, occupancy snapshot, Booking projection, idempotent consumer, reconciliation and
+`BOOKING_COACHING_PROJECTION_MODE` are implemented. Activation follows the same sequence as MR-3.
 
 ## MR-5 — Tenant → region as a first-class concept ✅ DONE 2026-08-05
 
@@ -80,16 +89,17 @@ refuses to start; a token claiming a different home region is refused with 403.
 
 **Still open, and it belongs with this item:** the tenant registry is split across
 `admin.organisations` and `venue.organisations`. Routing must read one authoritative registry that
-sits *outside* every region — resolving "which region?" cannot itself require knowing the region.
+sits _outside_ every region — resolving "which region?" cannot itself require knowing the region.
 venue-service already upserts into admin, so the flow exists; it just is not declared or enforced.
 See [`../architecture/data-classification.md`](../architecture/data-classification.md).
 
-## MR-6 — Cron leader election 🟠
+## MR-6 — Scheduled-job concurrency 🟠 HARDENED; PROOF/METRICS OPEN
 
-10 scheduled jobs across 6 services, all unguarded — they fire on **every** replica. Until fixed the
-platform cannot run more than one replica of anything without duplicate charges, emails and
-reminders. Not strictly a *region* blocker, but "production-ready" and "single replica only" are
-incompatible.
+Scheduled work is catalogued in
+[`../architecture/scheduled-job-safety.md`](../architecture/scheduled-job-safety.md). Queue workers
+use atomic row claims/leases, singleton batches use database-time conditional leases, and outbox
+relays use row locking. Two-runner concurrency tests and job duration/skipped/failure/stale-work
+metrics are still required before multi-replica production approval.
 
 ## MR-7 — Identity decision 🔴 BLOCKING (decision) / 🟠 (execution)
 
@@ -124,11 +134,11 @@ that exists every request fails with "Token is missing tenantId claim".
 
 ## Order and why
 
-1. **MR-1** — smallest blocking read, and the only item that unblocks **Azure** itself.
-2. **MR-2** — the consistency mechanism MR-3/MR-4 rely on.
-3. **MR-3 → MR-4** — the hot-path projections.
-4. **MR-5 / MR-6 / MR-7** — parallelisable once the above are moving.
-5. **MR-8** — opportunistic.
+1. **Activate MR-3/MR-4** — migrate, backfill, reconcile, shadow, cut over, observe and remove the
+   five legacy SQL reads.
+2. **Finish MR-2/MR-6 evidence** — event inventory, metrics/alerts/replay, and two-runner job tests.
+3. **MR-7** — make and execute the regional identity decision.
+4. **MR-5 global registry/routing and MR-8 cleanup** — complete before region two activation.
 
 ## Honest caveat
 

@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common'
-import { Cron, CronExpression } from '@nestjs/schedule'
+import { Cron } from '@nestjs/schedule'
 import { MembershipsRepository } from '../memberships.repository'
-import { EventBusService } from '../../event-bus/event-bus.service'
+import { OutboxRepository } from '../../outbox/outbox.repository'
+import { JobLeaseService } from '../../scheduled-jobs/job-lease.service'
 
 /**
  * Runs daily at midnight (00:05 to avoid exact midnight contention) and:
@@ -17,31 +18,41 @@ export class MembershipExpiryTask {
 
   constructor(
     private readonly repo: MembershipsRepository,
-    private readonly eventBus: EventBusService,
+    private readonly outbox: OutboxRepository,
+    private readonly leases: JobLeaseService,
   ) {}
 
   @Cron('5 0 * * *') // 00:05 every day
   async runDailyExpiry() {
-    const now = new Date()
-
-    const lapsed = await this.repo.lapseExpired(now)
-    if (lapsed > 0) {
-      this.logger.log({ count: lapsed }, 'Auto-lapsed expired memberships')
+    const lease = await this.leases.tryAcquire('membership-daily-expiry', 6 * 60 * 60)
+    if (!lease) {
+      this.logger.log('Membership daily expiry skipped; another replica owns the lease')
+      return
     }
+    try {
+      const now = new Date()
 
-    const expired = await this.repo.expireLapsed(now)
-    if (expired > 0) {
-      this.logger.log({ count: expired }, 'Auto-expired lapsed memberships past grace period')
+      const lapsed = await this.repo.lapseExpired(now)
+      if (lapsed > 0) {
+        this.logger.log({ count: lapsed }, 'Auto-lapsed expired memberships')
+      }
+
+      const expired = await this.repo.expireLapsed(now)
+      if (expired > 0) {
+        this.logger.log({ count: expired }, 'Auto-expired lapsed memberships past grace period')
+      }
+
+      // Queue pending renewal memberships for autoRenew=true members expiring within 7 days
+      const renewed = await this.repo.createAutoRenewals(now, 7)
+      if (renewed > 0) {
+        this.logger.log({ count: renewed }, 'Auto-renewal memberships queued')
+      }
+
+      // Fire renewal reminder events for memberships expiring in 6–8 days
+      await this.sendRenewalReminders()
+    } finally {
+      await this.leases.release(lease)
     }
-
-    // Queue pending renewal memberships for autoRenew=true members expiring within 7 days
-    const renewed = await this.repo.createAutoRenewals(now, 7)
-    if (renewed > 0) {
-      this.logger.log({ count: renewed }, 'Auto-renewal memberships queued')
-    }
-
-    // Fire renewal reminder events for memberships expiring in 6–8 days
-    await this.sendRenewalReminders()
   }
 
   private async sendRenewalReminders(): Promise<void> {
@@ -52,7 +63,7 @@ export class MembershipExpiryTask {
 
     for (const m of due) {
       try {
-        await this.eventBus.publish({
+        const event = {
           type: 'membership.renewal_due',
           tenantId: m.tenantId,
           occurredAt: new Date().toISOString(),
@@ -60,8 +71,13 @@ export class MembershipExpiryTask {
           customerId: m.customerId,
           planName: m.planName,
           endDate: m.endDate?.toISOString().slice(0, 10) ?? null,
-        })
-        await this.repo.markRenewalReminderSent(m.id)
+        } as const
+        const queued = await this.repo.queueRenewalReminder(m.id, (tx) =>
+          this.outbox.enqueue(tx, event),
+        )
+        if (!queued) {
+          this.logger.debug(`Renewal reminder ${m.id} already claimed by another replica`)
+        }
       } catch (err) {
         this.logger.error(`Failed to send renewal reminder for membership ${m.id}: ${String(err)}`)
       }

@@ -6,9 +6,10 @@ import { BookingsRepository } from '../bookings/bookings.repository.js'
 import { AvailabilityModule } from '../availability/availability.module.js'
 import { PeopleModule } from '../people/people.module.js'
 import { VenueModule } from '../venue/venue.module.js'
+import { ProjectionsModule } from '../projections/projections.module.js'
 
 @Module({
-  imports: [VenueModule, PeopleModule, AvailabilityModule],
+  imports: [VenueModule, PeopleModule, AvailabilityModule, ProjectionsModule],
   controllers: [BookingSeriesController],
   providers: [BookingSeriesService, BookingSeriesRepository, BookingsRepository],
 })

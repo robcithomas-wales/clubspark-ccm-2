@@ -31,12 +31,17 @@
     "dev:comms": "npm run dev --workspace=services/comms-service",
     "dev:integration": "npm run dev --workspace=services/integration-service",
     "dev:analytics": "npm run dev --workspace=services/analytics-service",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
-    "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\"",
+    "lint": "NODE_OPTIONS=--max-old-space-size=8192 eslint .",
+    "lint:fix": "NODE_OPTIONS=--max-old-space-size=8192 eslint . --fix",
+    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,json,md}\"",
     "migrate:all": "./scripts/migrate-all.sh",
-    "check:drift": "./scripts/check-migration-drift.sh"
+    "check:drift": "./scripts/check-migration-drift.sh",
+    "setup:env": "node scripts/setup-env.mjs",
+    "check:env": "node scripts/setup-env.mjs --check",
+    "migrate:status": "./scripts/migrate-status.sh",
+    "projection:ops": "node scripts/projection-ops.mjs",
+    "lint:changed": "./scripts/lint-changed.sh"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.0.0",

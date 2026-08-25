@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common'
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 
 /** The venue columns booking attaches to a booking row. */
@@ -6,6 +6,27 @@ export interface VenueFields {
   venueName: string | null
   resourceName: string | null
   unitName: string | null
+}
+
+export interface VenueProjectionSnapshot {
+  generatedAt: string
+  resources: Array<{
+    id: string
+    venueId: string
+    groupId: string | null
+    hasLighting: boolean | null
+    isActive: boolean
+    updatedAt: string
+  }>
+  bookableUnits: Array<{
+    id: string
+    venueId: string
+    resourceId: string
+    name: string
+    unitType: string
+    isActive: boolean
+  }>
+  unitConflicts: Array<{ unitId: string; conflictingUnitId: string }>
 }
 
 const EMPTY: VenueFields = { venueName: null, resourceName: null, unitName: null }
@@ -73,6 +94,67 @@ export class VenueClient {
       resourceName: r.resourceId ? (lookup.resources.get(r.resourceId) ?? null) : null,
       unitName: r.bookableUnitId ? (lookup.units.get(r.bookableUnitId) ?? null) : null,
     }))
+  }
+
+  /**
+   * Returns the capacity denominator for booking's utilisation report.
+   *
+   * Unlike display-name hydration, this cannot degrade to zero: zero is a valid
+   * venue result and would turn an upstream outage into a plausible but false
+   * utilisation percentage.
+   */
+  async getActiveBookableUnitCount(tenantId: string): Promise<number> {
+    try {
+      const headers: Record<string, string> = { 'x-tenant-id': tenantId }
+      if (this.internalSecret) headers['x-internal-secret'] = this.internalSecret
+
+      const res = await fetch(
+        `${this.baseUrl}/venue-reference/internal/active-bookable-unit-count`,
+        { headers, signal: AbortSignal.timeout(TIMEOUT_MS) },
+      )
+      if (!res.ok) {
+        throw new Error(`venue-service returned ${res.status}`)
+      }
+
+      const json = (await res.json()) as { data?: { count?: unknown } }
+      const count = json.data?.count
+      if (!Number.isInteger(count) || (count as number) < 0) {
+        throw new Error('venue-service returned an invalid active unit count')
+      }
+      return count as number
+    } catch (err) {
+      this.logger.error(
+        { err: String(err) },
+        'venue-service capacity lookup failed — utilisation report is unavailable',
+      )
+      throw new ServiceUnavailableException('Booking utilisation is temporarily unavailable')
+    }
+  }
+
+  async fetchBookingProjectionSnapshot(tenantId: string): Promise<VenueProjectionSnapshot> {
+    try {
+      const headers: Record<string, string> = { 'x-tenant-id': tenantId }
+      if (this.internalSecret) headers['x-internal-secret'] = this.internalSecret
+
+      const res = await fetch(
+        `${this.baseUrl}/venue-reference/internal/booking-projection-snapshot`,
+        { headers, signal: AbortSignal.timeout(30_000) },
+      )
+      if (!res.ok) throw new Error(`venue-service returned ${res.status}`)
+
+      const json = (await res.json()) as { data?: VenueProjectionSnapshot }
+      if (
+        !json.data ||
+        !Array.isArray(json.data.resources) ||
+        !Array.isArray(json.data.bookableUnits)
+      ) {
+        throw new Error('venue-service returned an invalid projection snapshot')
+      }
+      return json.data
+    } catch (err) {
+      this.logger.error({ err: String(err) }, 'venue-service projection snapshot failed')
+      throw new ServiceUnavailableException('Venue projection refresh is temporarily unavailable')
+    }
   }
 
   private async fetchNames(

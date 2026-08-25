@@ -325,3 +325,99 @@ model EventOutbox {
   @@map("event_outbox")
   @@schema("booking")
 }
+
+/// Booking-owned read model of the Venue resource fields needed by create and pricing.
+model VenueResourceProjection {
+  tenantId        String    @map("tenant_id") @db.Uuid
+  id              String    @db.Uuid
+  venueId         String    @map("venue_id") @db.Uuid
+  groupId         String?   @map("group_id") @db.Uuid
+  hasLighting     Boolean?  @map("has_lighting")
+  isActive        Boolean   @map("is_active")
+  sourceUpdatedAt DateTime? @map("source_updated_at") @db.Timestamptz(6)
+  projectedAt     DateTime  @default(now()) @map("projected_at") @db.Timestamptz(6)
+
+  @@id([tenantId, id])
+  @@index([tenantId, venueId], map: "venue_resource_projection_tenant_venue_idx")
+  @@map("venue_resource_projection")
+  @@schema("booking")
+}
+
+/// Booking-owned read model of Venue bookable-unit identity and validity.
+model BookableUnitProjection {
+  tenantId        String    @map("tenant_id") @db.Uuid
+  id              String    @db.Uuid
+  venueId         String    @map("venue_id") @db.Uuid
+  resourceId      String    @map("resource_id") @db.Uuid
+  name            String
+  unitType        String    @map("unit_type")
+  isActive        Boolean   @map("is_active")
+  sourceUpdatedAt DateTime? @map("source_updated_at") @db.Timestamptz(6)
+  projectedAt     DateTime  @default(now()) @map("projected_at") @db.Timestamptz(6)
+
+  @@id([tenantId, id])
+  @@index([tenantId, venueId], map: "bookable_unit_projection_tenant_venue_idx")
+  @@index([tenantId, resourceId], map: "bookable_unit_projection_tenant_resource_idx")
+  @@map("bookable_unit_projection")
+  @@schema("booking")
+}
+
+/// Undirected Venue unit-conflict edges copied into Booking for availability checks.
+model UnitConflictProjection {
+  tenantId          String   @map("tenant_id") @db.Uuid
+  unitId            String   @map("unit_id") @db.Uuid
+  conflictingUnitId String   @map("conflicting_unit_id") @db.Uuid
+  projectedAt       DateTime @default(now()) @map("projected_at") @db.Timestamptz(6)
+
+  @@id([tenantId, unitId, conflictingUnitId])
+  @@index([tenantId, conflictingUnitId], map: "unit_conflict_projection_reverse_idx")
+  @@map("unit_conflict_projection")
+  @@schema("booking")
+}
+
+/// Booking-owned occupancy read model sourced from Coaching lesson sessions.
+model CoachingOccupancyProjection {
+  tenantId        String   @map("tenant_id") @db.Uuid
+  id              String   @db.Uuid
+  bookableUnitId  String   @map("bookable_unit_id") @db.Uuid
+  startsAt        DateTime @map("starts_at") @db.Timestamptz(6)
+  endsAt          DateTime @map("ends_at") @db.Timestamptz(6)
+  status          String
+  sourceUpdatedAt DateTime @map("source_updated_at") @db.Timestamptz(6)
+  projectedAt     DateTime @default(now()) @map("projected_at") @db.Timestamptz(6)
+
+  @@id([tenantId, id])
+  @@index([tenantId, bookableUnitId, startsAt, endsAt], map: "coaching_occupancy_lookup_idx")
+  @@map("coaching_occupancy_projection")
+  @@schema("booking")
+}
+
+/// Durable idempotency receipt for projection events.
+model ProjectionEventReceipt {
+  tenantId    String   @map("tenant_id") @db.Uuid
+  eventId     String   @map("event_id") @db.Uuid
+  eventType   String   @map("event_type")
+  occurredAt  DateTime @map("occurred_at") @db.Timestamptz(6)
+  processedAt DateTime @default(now()) @map("processed_at") @db.Timestamptz(6)
+
+  @@id([tenantId, eventId])
+  @@index([tenantId, processedAt], map: "projection_event_receipt_processed_idx")
+  @@map("projection_event_receipts")
+  @@schema("booking")
+}
+
+/// Latest source timestamp per projected entity, including deletion tombstones.
+model ProjectionEntityCursor {
+  tenantId        String   @map("tenant_id") @db.Uuid
+  source          String
+  entityType      String   @map("entity_type")
+  entityId        String   @map("entity_id") @db.Uuid
+  sourceUpdatedAt DateTime @map("source_updated_at") @db.Timestamptz(6)
+  deleted         Boolean  @default(false)
+  projectedAt     DateTime @default(now()) @map("projected_at") @db.Timestamptz(6)
+
+  @@id([tenantId, source, entityType, entityId])
+  @@index([tenantId, source, projectedAt], map: "projection_entity_cursor_source_idx")
+  @@map("projection_entity_cursors")
+  @@schema("booking")
+}
