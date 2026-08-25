@@ -78,15 +78,15 @@ Every `schema.prisma` now declares `directUrl = env("DIRECT_DATABASE_URL")`, so 
 session connection for migrations while the app keeps using the pooler. Set both in each service's
 `.env` — see any `.env.example`. On a plain Postgres they are the same value.
 
-## Two shims that must be removed
+## Shared bootstrap compatibility
 
-Both live in [`../../scripts/sql/000_shared_bootstrap.sql`](../../scripts/sql/000_shared_bootstrap.sql):
+The shared bootstrap lives in
+[`../../scripts/sql/000_shared_bootstrap.sql`](../../scripts/sql/000_shared_bootstrap.sql):
 
-1. **`auth.users`** — booking-service LEFT JOINs Supabase's `auth.users` for customer name/email
-   fallback. That schema is Supabase-owned and does not exist on plain PostgreSQL **or on Azure
-   Database for PostgreSQL**. This makes it a migration blocker, not just a test inconvenience.
-   Delete the shim when WO-1.2(a) removes those joins.
-2. **`shared.set_updated_at()`** — membership's ten triggers call it. Six other services define an
+1. ✅ **`auth.users` shim removed.** Booking no longer reads Supabase-owned `auth.users`; customer
+   display fields come from the tenant-scoped People API. Empty-database builds therefore do not
+   need an `auth` schema.
+2. **`shared.set_updated_at()` remains** — membership's ten triggers call it. Six other services define an
    identical private copy in their own schema. Worth converging on one approach.
 
 ## Things deliberately removed
@@ -111,9 +111,9 @@ the previous history is still inspectable. Delete it once you are satisfied.
 - **The three orphaned schemas** (`identity`, `crm`, `customer` — 13 tables between them) still exist
   in the live database. Empty and unreferenced; dropping them is a separate deliberate step.
 
-## Drift: reconciled for 11 of 14, and now a blocking gate
+## Drift: reconciled for all 14, and now a blocking gate
 
-`npm run check:drift` is **blocking in CI** as of 2026-07-31. Any *new* drift fails the build.
+`npm run check:drift` is **blocking in CI** as of 2026-07-31. Any _new_ drift fails the build.
 
 **The database was authoritative, not the schema files.** The drift was mostly `timestamptz` columns
 that `schema.prisma` declared as bare `DateTime` — which Prisma maps to `TIMESTAMP(3)`, i.e. **no
@@ -131,13 +131,13 @@ sat in a `KNOWN_DRIFT` allowlist rather than being fixed.
 
 Resolving it meant answering, per relation, **add the missing foreign key, or keep the relation
 application-level?** The answer was to add them: 15 keys across the three services
-(`20260804000000_add_missing_foreign_keys`). They are all *intra*-schema, so they cost nothing in
+(`20260804000000_add_missing_foreign_keys`). They are all _intra_-schema, so they cost nothing in
 regional terms, and the pilot had no meaningful data to reconcile — this gets materially harder once
 there are customers.
 
 **`KNOWN_DRIFT` is now empty, and all 14 services are clean.** Keep it that way: while the list held
 three names it also masked the outbox tables being absent from `schema.prisma`, and only the one
-service *not* on the list failed the build.
+service _not_ on the list failed the build.
 
 Three things fell out of doing this, each worth knowing:
 
@@ -146,7 +146,7 @@ Three things fell out of doing this, each worth knowing:
   `NOT NULL`. The code wrote `?? null` into them. It had never failed only because those paths were
   untested; `schema.prisma` being wrong is what hid it from the compiler.
 - **Deduplicate constraints by table+column, not by name.** The first pass filtered existing keys by
-  constraint *name*; four relations already had one under a hand-written `_fk` name, so it added a
+  constraint _name_; four relations already had one under a hand-written `_fk` name, so it added a
   second identical constraint to each. Both were enforced — nothing was unprotected — but Prisma
   expects exactly one per relation, so it read as permanent, unfixable drift.
 - **Never edit a migration that has already been applied.** Those four drops were first appended to

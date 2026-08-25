@@ -1,7 +1,14 @@
 # Platform Domain Inventory
 **Prepared for:** CPO  
-**Date:** April 2026  
+**Date:** April 2026 · **Product alignment updated:** 24 August 2026
 **Purpose:** Accurate baseline of all built domains and available functionality — starting point for gap analysis and feature roadmap.
+
+> **Current versus target:** This inventory describes the running pilot. It does not redefine the
+> CPO-approved product vocabulary. In the target model, **tenant means NGB**, an organisation may
+> associate with multiple tenants, and a platform-level Person may span organisations and ideally
+> tenants. The pilot currently scopes most records by an organisation-equivalent `tenant_id` and
+> stores organisation-scoped Person records. See the [CPO decision log](../decisions/2026-08-24-cpo-product-architecture-decisions.md)
+> and [pilot model review aid](pilot-hierarchy-and-membership.md).
 
 ---
 
@@ -13,7 +20,7 @@ Each section covers one domain. Within each domain:
 - **Admin portal** — what admins can do
 - **Customer portal / Mobile** — what members/customers can do
 
-All 12 backend services are live. The admin portal, customer portal (web), and mobile app (Expo/React Native) are all deployed.
+All 15 backend services are live. The admin portal, customer portal (web), and mobile app (Expo/React Native) are all deployed.
 
 ---
 
@@ -23,7 +30,7 @@ All 12 backend services are live. The admin portal, customer portal (web), and m
 | Model | What it stores |
 |---|---|
 | **Venue** | Name, timezone, city, country. Linked to an organisation. |
-| **Organisation** | The club/NGB entity. Name, slug, about text, logo, branding (primary colour, app name). |
+| **Organisation** | The operating club/provider record in the pilot. Name, slug, about text, logo and branding. This is not the target NGB tenant itself. |
 | **ResourceGroup** | Named grouping of resources (e.g. "Clay Courts", "Grass Courts"). Has sport, colour, sort order. |
 | **Resource** | A bookable physical asset — court, pitch, lane, etc. Properties: name, resource type, sport, surface, indoor/outdoor, lighting availability, booking purposes (array), active status, public attributes (JSON), visible attributes. |
 | **BookableUnit** | A bookable slot configuration on a resource. Supports full/half/split configurations. Has capacity, type, sort order, optional-extra flag (e.g. changing room, ball machine). Units can have a parent unit (hierarchical — booking a half-court blocks the full court). |
@@ -197,7 +204,7 @@ All 12 backend services are live. The admin portal, customer portal (web), and m
 ### Data models
 | Model | What it stores |
 |---|---|
-| **Person** | First/last name, email, phone, date of birth, gender, lifecycle state (prospect/active/lapsed/churned/inactive/banned), roles (array), household membership flag, notes. |
+| **Person** | Organisation-scoped contact/profile in the pilot: identity details, lifecycle, roles, household flag and notes. A cross-organisation platform Person remains target architecture. |
 | **Tag** | Free-text label attached to a person. Tenant-scoped. |
 | **Relationship** | Typed link between two persons (e.g. parent/child, partner). |
 | **Segment** | Named group of people. Type: static (manually curated list) or dynamic (AND/OR rule engine). |

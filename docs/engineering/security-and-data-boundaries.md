@@ -80,6 +80,9 @@ Endpoints that skip the tenant guard because another service calls them (event-b
   `x-tenant-id` header fallback: enabled in test/dev, never in production.
 - Such endpoints may read `tenantId` from the event body (inherent to internal delivery) — the
   shared secret is what authorises the call, not the tenant guard.
+- Durable event consumers must claim an event idempotently in their own tenant-scoped inbox before
+  applying side effects. Persist the payload hash and operational metadata needed for duplicate or
+  conflict detection; do not duplicate personal event payloads into inbox audit rows.
 
 ## Data boundaries between services
 

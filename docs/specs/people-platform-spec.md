@@ -86,7 +86,7 @@ The admin portal has a customer list, a detail view and a create form. There is 
 | Automation / workflows | Not started | Major |
 | Relationship model | Built — households, parent/child, guardian, relationships API + UI | None (pilot scope) |
 | Reporting / insights | Not started | Major |
-| Multi-org identity | Not built (is_coach, home_tenant_id fields not on model) | Low (Phase 4) |
+| Platform person across organisations/tenants | Not built; current person is organisation-scoped | Strategic target, post-pilot architecture required |
 
 ### Root cause
 
@@ -246,6 +246,14 @@ CREATE INDEX idx_persons_lifecycle         ON people.persons (tenant_id, lifecyc
 CREATE INDEX idx_persons_engagement        ON people.persons (tenant_id, engagement_band);
 CREATE INDEX idx_persons_last_activity     ON people.persons (tenant_id, last_activity_at DESC);
 ```
+
+> **Target identity boundary — CPO decision, 24 August 2026:** `people.persons` is the current
+> organisation Contact/Profile, not the final global identity record. The platform must support one
+> Person linked to several organisations and should support that person across NGB tenants where
+> residency, consent and authorisation permit. The final design must separate authentication
+> identity, platform Person and organisation Contact/Profile; `is_coach` and `home_tenant_id` are not
+> an adequate target model. This is not required to ship the pilot, but it is a one-way-door design
+> constraint for subsequent work.
 
 ### 5.2 Roles
 
@@ -870,7 +878,7 @@ WhatsApp and push notifications are Phase 4.
 - [ ] AI insights job (Claude API): weekly at-risk report, high-value segment identification, suggested automation rules
 - [ ] Insights surface in admin portal
 - [ ] Deduplication tooling (UI-assisted merge of duplicate person records)
-- [ ] Multi-org coach identity (coach spanning multiple tenants)
+- [ ] Platform Person with organisation Contact/Profile links; cross-tenant support subject to residency and authorisation design
 - [ ] HubSpot outbound sync (optional — if CFO has existing HubSpot usage)
 - [ ] Advanced reporting: retention cohorts, lifecycle funnel, LTV by segment
 
@@ -907,7 +915,7 @@ Given this is a pilot environment, the following is the recommended cut for what
 | SMS / WhatsApp | Phase 3/4 |
 | Automation workflows | Phase 4 — pilot doesn't need automation yet |
 | AI insights | Phase 4 |
-| Multi-org coach identity | Complex, low pilot priority |
+| Platform Person across organisations/tenants | Not required for pilot; strategically required before multi-org identity-dependent features |
 | HubSpot integration | Only if CFO has existing HubSpot workflows |
 
 This means the pilot delivers a system that the CFO will recognise as genuinely transformative — a real person profile, segmentation, lifecycle visibility, financial view — without the risk of over-scoping and under-delivering.

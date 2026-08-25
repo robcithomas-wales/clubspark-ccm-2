@@ -3,6 +3,12 @@
 > **Version:** Phase 0 complete (April 2026) — Internal Staff Portal, Products & Pricing, AI Analytics, Integration Layer, Accounting Integration, Comms Centre, Anomaly Detection, Utilisation Forecasting, Player Matching added
 > **Audience:** Internal — product, engineering, commercial teams
 
+> **Product-alignment note (24 August 2026):** This document inventories built capability; it is not
+> the committed target capability map. The CPO has confirmed accounting sync, split payments, AI
+> analytics and the internal staff portal; disciplinary cases and external-rating Work Cards are not
+> committed product scope; rankings require build-versus-integrate discovery. See the
+> [decision log](../decisions/2026-08-24-cpo-product-architecture-decisions.md).
+
 ---
 
 ## Overview
@@ -335,6 +341,13 @@ All reports include date-range filtering and CSV export. All reports include a *
 - **Portal Design** — customer portal appearance settings
 
 ### Website Content Management
+
+The current Home/Events/News CMS is only a partial implementation. A full website builder is a
+Foundations requirement. Target event ownership is: coach-led multi-activity/multi-session formats
+in Coaching, tournaments in Recreational Competitions, and a separate social/ticketed Events
+feature. Discovery should first be exposed as embeddable club/coach widgets, with aggregation and
+cross-provider search planned later.
+
 - **Home page** — edit the content shown on the customer-facing home page
 - **Events** — manage public events
 - **News** — publish news posts

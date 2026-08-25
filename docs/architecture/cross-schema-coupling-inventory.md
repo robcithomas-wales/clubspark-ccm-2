@@ -1,7 +1,7 @@
 # Cross-Schema Coupling Inventory (WO-1.0)
 
-> **Status:** Complete — awaiting `@architecture-reviewer` sign-off
-> **Date:** 2026-07-29
+> **Status:** Maintained inventory — implementation re-verified 2026-08-25
+> **Date:** 2026-07-29 · **Updated:** 2026-08-25
 > **Work order:** [`../roadmap/phase-1-backlog.md`](../roadmap/phase-1-backlog.md) §1 WO-1.0
 > **ADR:** [`scalability-and-multi-region.md`](scalability-and-multi-region.md)
 
@@ -38,17 +38,17 @@ All access is via `$queryRaw`; none of it goes through the Prisma client.
 
 | # | Site | Foreign object(s) | Purpose | Frequency | Strategy |
 |---|---|---|---|---|---|
-| B1 | [`bookings.repository.ts:137-141`](../../services/booking-service/src/bookings/bookings.repository.ts#L137-L141) `findAll` | `people.persons`, `auth.users`, `venue.venues`, `venue.resources`, `venue.bookable_units` | Display names on the booking list | Warm — paginated admin list | **Projection** (names only) |
-| B2 | [`bookings.repository.ts:203-207`](../../services/booking-service/src/bookings/bookings.repository.ts#L203-L207) `findById` | same five | Display names for one booking | Warm | **Projection** (shares B1's) |
-| B3 | [`bookings.repository.ts:237`](../../services/booking-service/src/bookings/bookings.repository.ts#L237) `findBookableUnit` | `venue.bookable_units` | Validate the unit on booking create | **Hot** — every create | **Projection** |
-| B4 | [`bookings.repository.ts:246`](../../services/booking-service/src/bookings/bookings.repository.ts#L246) `findResourceGroupId` | `venue.resources` | Resolve resource group for pricing/conflicts | **Hot** | **Projection** |
-| B5 | [`bookings.repository.ts:604`](../../services/booking-service/src/bookings/bookings.repository.ts#L604) `stats` | `venue.bookable_units` | Count active units for the utilisation % | Occasional — dashboard | **API call** to venue |
-| B6 | [`bookings.repository.ts:827`](../../services/booking-service/src/bookings/bookings.repository.ts#L827) `topCustomers` | `people.persons` | Customer names in a report | Occasional — report | **API batch hydrate** |
-| B7 | `bookings.repository.ts` `findDueReminders` | ~~`people.people`~~ → `people.persons`, `venue.venues`, `venue.resources` | Enrich the reminder event payload | Hourly cron | **Projection**; bug fixed ✅ (§4), joins now tenant-qualified |
-| A1 | [`availability.repository.ts:96`](../../services/booking-service/src/availability/availability.repository.ts#L96) | `coaching.lesson_sessions` | Coaching sessions block bookable units | **Hot** — every availability query | **Projection** from coaching events |
-| A2 | [`availability.repository.ts:128`](../../services/booking-service/src/availability/availability.repository.ts#L128) | `venue.unit_conflicts` | Unit conflict map (parent/child courts) | **Hot** | **Projection** |
-| P1 | [`pricing.repository.ts:119`](../../services/booking-service/src/pricing/pricing.repository.ts#L119) `getResourceLighting` | `venue.resources.has_lighting` | Lighting surcharge on a quote | **Hot** — every quote | **Projection** (shares B4's) |
-| S1 | [`booking-series.repository.ts:158`](../../services/booking-service/src/booking-series/booking-series.repository.ts#L158) | `people.persons` | Customer names on a series | Warm | **API batch hydrate** |
+| B1 | `bookings.repository.ts` `findAll` | formerly `people.persons`, `auth.users`, `venue.venues`, `venue.resources`, `venue.bookable_units` | Display names on the booking list | Warm — paginated admin list | ✅ **Resolved:** batch/API hydration through People and Venue clients |
+| B2 | `bookings.repository.ts` `findById` | formerly the same five | Display names for one booking | Warm | ✅ **Resolved:** batch/API hydration through People and Venue clients |
+| B3 | `bookings.repository.ts` `findBookableUnit` | `venue.bookable_units` | Validate the unit on booking create | **Hot** — every create | **Projection implemented behind `BOOKING_VENUE_PROJECTION_MODE`; tenant-scoped legacy fallback retained for rollout** |
+| B4 | `bookings.repository.ts` `findResourceGroupId` | `venue.resources` | Resolve resource group for pricing/conflicts | **Hot** | **Projection implemented behind the same rollout switch; tenant-scoped legacy fallback retained** |
+| B5 | `bookings.repository.ts` `getStats` | `venue.bookable_units` | Count active units for the utilisation % | Occasional — dashboard | **Resolved 2026-08-24:** authenticated Venue API call; report fails rather than treating upstream failure as zero capacity |
+| B6 | `bookings.repository.ts` `topCustomers` | formerly `people.persons` | Customer names in a report | Occasional — report | ✅ **Resolved:** People batch lookup |
+| B7 | `bookings.repository.ts` `findDueReminders` | formerly `people.persons`, `venue.venues`, `venue.resources` | Enrich the reminder event payload | Hourly cron | ✅ **Resolved:** tenant-grouped People/Venue API hydration; original table-name bug remains regression-covered (§4) |
+| A1 | `availability.repository.ts` `getCoachingSessionConflicts` | `coaching.lesson_sessions` | Coaching sessions block bookable units | **Hot** — every booking create | **Projection implemented behind `BOOKING_COACHING_PROJECTION_MODE`; tenant-scoped legacy fallback retained for rollout** |
+| A2 | `availability.repository.ts` `getConflictMapForUnits` | `venue.unit_conflicts` | Unit conflict map (parent/child courts) | **Hot** | **Projection implemented behind the rollout switch; legacy query now scopes through both units' tenant ownership** |
+| P1 | `pricing.repository.ts` `getResourceLighting` | `venue.resources.has_lighting` | Lighting surcharge on a quote | **Hot** — every quote | **Projection implemented behind the rollout switch; tenant-scoped legacy fallback retained** |
+| S1 | `booking-series.repository.ts` | formerly `people.persons` | Customer names on a series | Warm | ✅ **Resolved:** People/Venue API hydration |
 
 ### 1a. Schema-level coupling — ✅ RESOLVED 2026-07-29
 
@@ -152,11 +152,9 @@ an unhandled rejection with no alert.
 a future breakage is visible instead of invisible; and `test/booking-reminders.integration.spec.ts`
 guards it — validated by reintroducing the typo (4 of its 5 tests fail with the bug present).
 
-**Also hardened while here:** all three joins in that query are now tenant-qualified
-(`AND x.tenant_id = b.tenant_id`). Nothing validates that a booking's `customer_id` belongs to the
-booking's tenant, so the unqualified join could resolve another tenant's person and email them about
-this booking. The same unqualified pattern remains in the B1/B2/B6/S1 read paths and should be closed
-as part of WO-1.2(a).
+**Also hardened while here:** the interim joins were tenant-qualified. Those joins have since been
+removed; reminder rows are grouped by tenant and hydrated through authenticated People and Venue
+APIs, so the original cross-tenant resolution path no longer exists.
 
 ---
 
@@ -208,14 +206,22 @@ synchronous API calls — an API hop per availability cell would be untenable.
 
 **Still open:**
 
-1. **WO-1.2(a)** — booking's cross-schema *reads* of `people.*` / `auth.*` (B1, B2, B6, S1). Note
-   these carry the same untenanted-join issue closed in §4; fix both together.
-2. **WO-1.1** — the venue/coaching projection. Scope is concrete: resources (`id`, `name`,
+1. **Activate WO-1.1** — the Venue/Coaching projection code is complete, but its additive
+   migrations have not been applied and the read switches still default to `legacy`. The projection
+   scope is: resources (`id`, `name`,
    `group_id`, `has_lighting`), bookable_units (`id`, `name`, `resource_id`, `venue_id`,
    `is_active`, `tenant_id`), venues (`id`, `name`), unit_conflicts (`unit_id`,
-   `conflicting_unit_id`), coaching lesson_sessions (`id`, `bookable_unit_id`, `starts_at`,
-   `ends_at`, `status`, `tenant_id`), person display fields (`id`, `first_name`, `last_name`,
-   `email`, `phone`). A small, stable surface — which supports the projection choice.
+   `conflicting_unit_id`) and coaching occupancy (`id`, `bookable_unit_id`, `starts_at`,
+   `ends_at`, `status`, `tenant_id`).
+2. **After migration:** backfill and reconcile per tenant, run `shadow`, cut over to `projection`,
+   observe lag/failures, then remove the five legacy SQL fallbacks (B3, B4, A1, A2 and P1).
+
+**Progress 2026-08-24:** B5 is closed. `BookingsService.getStats` now obtains the active
+bookable-unit denominator from a narrow, tenant-scoped, internal-secret-protected Venue API.
+Display hydration still degrades to blank labels, but the capacity lookup deliberately fails with
+503 when Venue is unavailable because substituting zero would produce a plausible but incorrect
+utilisation result. On 2026-08-25, source inspection confirmed that only the five hot-path
+Venue/Coaching compatibility reads B3, B4, A1, A2 and P1 remain in Booking runtime SQL.
 
 ### Known residuals from the §2 saga
 

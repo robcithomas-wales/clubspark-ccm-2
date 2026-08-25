@@ -1,7 +1,7 @@
 # ADR: Scalability & Multi-Region Architecture
 
-> **Status:** Proposed
-> **Date:** 2026-07-29
+> **Status:** Accepted direction; implementation in progress
+> **Date:** 2026-07-29 · **Implementation status updated:** 2026-08-25
 > **Audience:** CTOO, engineering leadership
 > **Decision drivers:** hard data-residency (EU/US/AU), ~50k users, Azure (AKS/Redis/Service Bus),
 > one-region-first rollout, ~6-month horizon to first production region.
@@ -13,20 +13,38 @@ disagree, this document reflects the code.
 
 ---
 
-## 1. Context — what the pilot actually is today
+## 1. Context — original pilot baseline and current delta
 
-Verified against the code (not the docs):
+The bullets below record the code-evidenced **29 July baseline**, retained because it explains the
+decision. They are not the current implementation status. As of 25 August:
+
+- People/Auth and display-only Venue joins have been removed from Booking and replaced by
+  authenticated, tenant-scoped service APIs.
+- Booking-owned Venue and Coaching projections, source outboxes, snapshots, reconciliation and
+  `legacy`/`shadow`/`projection` switches are implemented locally. Migrations, backfill, shadow
+  evidence and cutover have not happened, so five legacy Venue/Coaching SQL fallbacks remain active
+  by default.
+- Critical covered state changes in Booking, Membership, Payment, Order, Venue and Coaching use
+  transactional outboxes. Covered Comms, Integration and People consumers use durable inbox claims.
+  Transport is still local HTTP fan-out; Azure Service Bus and a complete event-contract inventory
+  remain future work.
+- Scheduled queue work uses atomic row claims and singleton batches use database-time leases.
+  Two-runner proof and operational metrics remain open.
+- The physical database, regional routing, identity provider, Redis/read replica and Azure
+  environments remain unchanged from the baseline.
+
+Original baseline, verified against the code (not the docs):
 
 - **One physical PostgreSQL instance.** All 15 services set `DATABASE_URL` to the *same* host.
   "One schema per service" is **namespacing inside a single database**, not separate databases.
-- **Cross-schema coupling in core paths.** `booking-service` reads `venue.*`, `people.*`,
+- **Cross-schema coupling in core paths.** `booking-service` read `venue.*`, `people.*`,
   `auth.*` and `coaching.*` directly via SQL JOINs (availability, pricing, booking reads) — not
   just the sanctioned read-only analytics exception. Worse, `people-service` **writes** into
   `booking.*` and `membership.*` in a single distributed transaction (customer merge / `rehome`).
   This **contradicts invariants #1 (sole writer) and #3 (never a shared database)** in
   `architecture-principles.md`. Full site-by-site list:
   [`cross-schema-coupling-inventory.md`](cross-schema-coupling-inventory.md).
-- **Lossy internal event bus.** `EventBus.publish()` is called as `void publish(...)` (unawaited)
+- **Lossy internal event bus.** `EventBus.publish()` was called as `void publish(...)` (unawaited)
   and swallows delivery errors, with no outbox, retry, or dead-letter. Internal domain events can
   be permanently lost. (integration-service *does* have a durable outbound-webhook queue, but it
   sits downstream of this lossy hop.)
@@ -42,8 +60,10 @@ Verified against the code (not the docs):
   cleanly. **But** in-process `@Cron` jobs (analytics/booking/membership/integration) will
   **multi-fire** once there is more than one replica.
 
-**Verdict:** cleaner than most pilots on portability and statelessness; but structurally a
-**shared-database monolith wearing 15 deployables**, with no regional concept.
+**Current verdict:** not yet region-ready. The code now contains the required decoupling and
+horizontal-safety mechanisms, but the shared database and default legacy projection modes mean the
+regional boundary is not operational until migrations, backfill, shadow comparison and cutover are
+completed.
 
 ## 2. Decision drivers
 
