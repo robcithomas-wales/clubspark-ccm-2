@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common'
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import type { AppConfig } from '../config/configuration.js'
 import { ProjectionsRepository } from './projections.repository.js'
@@ -26,7 +26,16 @@ export class CoachingProjectionReadsService {
     if (this.mode === 'legacy') return legacy()
     const projected = () =>
       this.projections.getCoachingConflicts(tenantId, unitIds, startsAt, endsAt)
-    if (this.mode === 'projection') return projected()
+    if (this.mode === 'projection') {
+      // An un-backfilled tenant returns no occupancy rows, which reads as "no
+      // coaching session in the way" and books straight over one. Fail closed.
+      if (!(await this.projections.isSourceProjected(tenantId, 'coaching'))) {
+        throw new ServiceUnavailableException(
+          'Coaching projection is not populated for this tenant — backfill before enabling projection reads',
+        )
+      }
+      return projected()
+    }
     const legacyValue = await legacy()
     try {
       const projectionValue = await projected()

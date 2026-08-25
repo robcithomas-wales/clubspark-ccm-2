@@ -5,6 +5,9 @@ import type { VenueProjectionEvent } from '../event-bus/event-bus.service.js'
 
 export const MAX_ATTEMPTS = 10
 
+/** How long a claimed row is hidden from other relay replicas. */
+export const LEASE_SECONDS = 60
+
 export interface PendingEvent {
   id: string
   eventType: string
@@ -23,16 +26,38 @@ export class OutboxRepository {
     `
   }
 
+  /**
+   * Claim a batch under a short lease.
+   *
+   * `FOR UPDATE SKIP LOCKED` alone only holds other workers off until this
+   * transaction commits, and the relay must commit before publishing — holding a
+   * write transaction open across HTTP fan-out exceeds Prisma's transaction
+   * timeout (so nothing is recorded and the batch redelivers forever) and pins
+   * the service's single pooled write connection for the duration. Pushing
+   * `next_attempt_at` forward makes the claim outlive the transaction, so another
+   * replica skips these rows while they are in flight.
+   */
   claimBatch(tx: Prisma.TransactionClient, limit: number): Promise<PendingEvent[]> {
     return tx.$queryRaw<PendingEvent[]>`
+      WITH candidates AS (
+        SELECT id
+        FROM venue.event_outbox
+        WHERE published_at IS NULL
+          AND attempts < ${MAX_ATTEMPTS}
+          AND next_attempt_at <= now()
+        ORDER BY created_at
+        LIMIT ${limit}
+        FOR UPDATE SKIP LOCKED
+      ), leased AS (
+        UPDATE venue.event_outbox outbox
+        SET next_attempt_at = now() + make_interval(secs => ${LEASE_SECONDS})
+        FROM candidates
+        WHERE outbox.id = candidates.id
+        RETURNING outbox.id, outbox.event_type, outbox.payload, outbox.attempts, outbox.created_at
+      )
       SELECT id::text, event_type AS "eventType", payload, attempts
-      FROM venue.event_outbox
-      WHERE published_at IS NULL
-        AND attempts < ${MAX_ATTEMPTS}
-        AND next_attempt_at <= now()
+      FROM leased
       ORDER BY created_at
-      LIMIT ${limit}
-      FOR UPDATE SKIP LOCKED
     `
   }
 

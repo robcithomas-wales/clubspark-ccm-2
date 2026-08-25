@@ -50,8 +50,10 @@ describe('Order transactional outbox', () => {
         occurredAt: '2026-08-24T10:00:00.000Z',
       },
     }
+    // The claim runs in `tx`; the publish and the outcome write run on the plain
+    // client, after it has committed.
     const prisma = {
-      write: { $transaction: vi.fn(async (work) => work(tx)) },
+      write: { marker: 'client', $transaction: vi.fn(async (work) => work(tx)) },
     }
     const outbox = {
       claimBatch: vi.fn().mockResolvedValue([row]),
@@ -71,7 +73,8 @@ describe('Order transactional outbox', () => {
         producer: 'order-service',
       }),
     )
-    expect(outbox.markPublished).toHaveBeenCalledWith(tx, row.id)
+    expect(outbox.claimBatch).toHaveBeenCalledWith(tx, 50)
+    expect(outbox.markPublished).toHaveBeenCalledWith(prisma.write, row.id)
     expect(outbox.markFailed).not.toHaveBeenCalled()
   })
 

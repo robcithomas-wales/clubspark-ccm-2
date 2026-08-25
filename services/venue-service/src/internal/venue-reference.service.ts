@@ -50,11 +50,15 @@ export class VenueReferenceService {
   }
 
   async bookingProjectionSnapshot(tenantId: string) {
+    // The watermark must come from the SAME clock as the row timestamps it will
+    // be compared against. Row `updatedAt` is Prisma's client-generated value and
+    // live events stamp `sourceUpdatedAt` from this process, so a database
+    // `transaction_timestamp()` watermark mixed two clocks: if this host's clock
+    // trailed the database's, every mutation made after a backfill was judged
+    // "stale" by the consumer, dropped, and never retried.
+    const generatedAt = new Date()
     return this.prisma.read.$transaction(
       async (tx) => {
-        const [watermark] = await tx.$queryRaw<{ generatedAt: Date }[]>`
-          SELECT transaction_timestamp() AS "generatedAt"
-        `
         const [resources, bookableUnits, rawConflicts] = await Promise.all([
           tx.resource.findMany({
             where: { tenantId },
@@ -97,7 +101,7 @@ export class VenueReferenceService {
 
         return {
           data: {
-            generatedAt: (watermark?.generatedAt ?? new Date()).toISOString(),
+            generatedAt: generatedAt.toISOString(),
             resources,
             bookableUnits,
             unitConflicts,

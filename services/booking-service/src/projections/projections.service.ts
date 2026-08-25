@@ -1,5 +1,4 @@
 import { BadRequestException, Injectable } from '@nestjs/common'
-import { isUUID } from 'class-validator'
 import { CoachingClient } from '../coaching/coaching.client.js'
 import type { CoachingOccupancyEventDto } from './dto/coaching-occupancy-event.dto.js'
 import { VenueClient } from '../venue/venue.client.js'
@@ -42,11 +41,16 @@ export class ProjectionsService {
     if (headerTenantId !== event.tenantId)
       throw new BadRequestException('x-tenant-id must match event tenantId')
     const data = event.data
-    if (typeof data['id'] !== 'string' || !isUUID(data['id']))
-      throw new BadRequestException('event data.id must be a UUID')
+    // Non-empty strings, not UUID variants. class-validator's isUUID is
+    // variant-strict and rejects the platform's own default tenant/org ids
+    // ('aaaaaaaa-…', '11111111-…'), so a UUID check here 400s every seed-tenant
+    // event — which the producer's relay reads as a delivery failure, retries ten
+    // times and dead-letters, leaving the projection silently diverged.
+    if (typeof data['id'] !== 'string' || !data['id'])
+      throw new BadRequestException('event data.id is required')
     if (event.type === 'coaching.occupancy.upserted.v1') {
-      if (typeof data['bookableUnitId'] !== 'string' || !isUUID(data['bookableUnitId']))
-        throw new BadRequestException('event data.bookableUnitId must be a UUID')
+      if (typeof data['bookableUnitId'] !== 'string' || !data['bookableUnitId'])
+        throw new BadRequestException('event data.bookableUnitId is required')
       if (typeof data['status'] !== 'string' || !data['status'])
         throw new BadRequestException('event data.status is required')
       for (const field of ['startsAt', 'endsAt']) {
@@ -70,8 +74,8 @@ export class ProjectionsService {
 
   private validateVenueEvent(event: VenueProjectionEventDto): void {
     const data = event.data
-    const requireUuid = (field: string) => {
-      if (typeof data[field] !== 'string' || !isUUID(data[field])) {
+    const requireId = (field: string) => {
+      if (typeof data[field] !== 'string' || !data[field]) {
         throw new BadRequestException(`event data.${field} is required`)
       }
     }
@@ -80,17 +84,17 @@ export class ProjectionsService {
         throw new BadRequestException(`event data.${field} is required`)
       }
     }
-    requireUuid('id')
+    requireId('id')
 
     if (event.type === 'venue.resource.upserted.v1') {
-      requireUuid('venueId')
+      requireId('venueId')
       if (typeof data['isActive'] !== 'boolean') {
         throw new BadRequestException('event data.isActive must be boolean')
       }
     }
     if (event.type === 'venue.bookable-unit.upserted.v1') {
-      requireUuid('venueId')
-      requireUuid('resourceId')
+      requireId('venueId')
+      requireId('resourceId')
       requireString('name')
       requireString('unitType')
       if (typeof data['isActive'] !== 'boolean') {
@@ -100,7 +104,7 @@ export class ProjectionsService {
     if (
       event.type === 'venue.unit-conflicts.replaced.v1' &&
       (!Array.isArray(data['conflictingUnitIds']) ||
-        !data['conflictingUnitIds'].every((id) => typeof id === 'string' && isUUID(id)))
+        !data['conflictingUnitIds'].every((id) => typeof id === 'string' && id.length > 0))
     ) {
       throw new BadRequestException('event data.conflictingUnitIds must be a string array')
     }

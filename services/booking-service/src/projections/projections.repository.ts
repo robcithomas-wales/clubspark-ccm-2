@@ -103,6 +103,23 @@ export class ProjectionsRepository {
     })
   }
 
+  /**
+   * Has this tenant's projection of `source` ever been populated?
+   *
+   * Every projection read returns "nothing found" for an un-backfilled tenant,
+   * and for conflicts and coaching occupancy "nothing found" reads as "no
+   * conflict" — i.e. the double-booking guard silently switches off. A read whose
+   * failure mode is an overbooking must not treat emptiness as an answer, so the
+   * `projection` path gates on a cursor existing for the source.
+   */
+  async isSourceProjected(tenantId: string, source: 'venue' | 'coaching'): Promise<boolean> {
+    const cursor = await this.prisma.read.projectionEntityCursor.findFirst({
+      where: { tenantId, source },
+      select: { tenantId: true },
+    })
+    return cursor !== null
+  }
+
   async status(tenantId: string) {
     const [
       resources,
@@ -446,12 +463,27 @@ export class ProjectionsRepository {
       switch (event.type) {
         case 'venue.resource.upserted.v1': {
           const data = event.data as ResourceEventData
+          // Destructure rather than spread `event.data`. Spreading let a payload
+          // key set a column that is not the producer's to set — `tenantId` most
+          // of all, which would relocate the row into another tenant and defeat
+          // the header-vs-body tenant check on this same request.
+          const fields = {
+            venueId: data.venueId,
+            groupId: data.groupId,
+            hasLighting: data.hasLighting,
+            isActive: data.isActive,
+          }
           await tx.venueResourceProjection.upsert({
             where: {
               tenantId_id: { tenantId: event.tenantId, id: data.id },
             },
-            create: { ...data, tenantId: event.tenantId, sourceUpdatedAt },
-            update: { ...data, sourceUpdatedAt, projectedAt: new Date() },
+            create: { ...fields, id: data.id, tenantId: event.tenantId, sourceUpdatedAt },
+            update: {
+              ...fields,
+              tenantId: event.tenantId,
+              sourceUpdatedAt,
+              projectedAt: new Date(),
+            },
           })
           break
         }
@@ -464,12 +496,24 @@ export class ProjectionsRepository {
         }
         case 'venue.bookable-unit.upserted.v1': {
           const data = event.data as UnitEventData
+          const fields = {
+            venueId: data.venueId,
+            resourceId: data.resourceId,
+            name: data.name,
+            unitType: data.unitType,
+            isActive: data.isActive,
+          }
           await tx.bookableUnitProjection.upsert({
             where: {
               tenantId_id: { tenantId: event.tenantId, id: data.id },
             },
-            create: { ...data, tenantId: event.tenantId, sourceUpdatedAt },
-            update: { ...data, sourceUpdatedAt, projectedAt: new Date() },
+            create: { ...fields, id: data.id, tenantId: event.tenantId, sourceUpdatedAt },
+            update: {
+              ...fields,
+              tenantId: event.tenantId,
+              sourceUpdatedAt,
+              projectedAt: new Date(),
+            },
           })
           break
         }

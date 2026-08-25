@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { Cron, CronExpression } from '@nestjs/schedule'
-import { Prisma } from '../generated/prisma'
 import { PrismaService } from '../prisma/prisma.service'
 import { EventBusService } from '../event-bus/event-bus.service'
 import { OutboxRepository, MAX_ATTEMPTS } from './outbox.repository'
@@ -8,6 +7,9 @@ import type { DomainEvent } from '../event-bus/event-bus.service'
 
 /** How many events one pass will attempt. Keeps a backlog from blocking a tick. */
 const BATCH_SIZE = 50
+
+/** Only the claim runs in a transaction now, so this is generous. */
+const CLAIM_TIMEOUT_MS = 15_000
 
 /**
  * Delivers events recorded in the outbox.
@@ -43,34 +45,39 @@ export class OutboxRelay {
   }
 
   private async deliverBatch(): Promise<void> {
-    await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const batch = await this.outbox.claimBatch(tx, BATCH_SIZE)
-      if (batch.length === 0) return
-
-      for (const row of batch) {
-        if (row.attempts >= MAX_ATTEMPTS) {
-          // Leave it claimed-but-unpublished. Dead-lettered rows stay visible in
-          // the table rather than being deleted, so the loss is auditable.
-          continue
-        }
-        try {
-          await this.eventBus.publishDurably({
-            ...row.payload,
-            eventId: row.payload.eventId ?? row.id,
-            correlationId: row.payload.correlationId ?? row.id,
-            schemaVersion: row.payload.schemaVersion ?? 1,
-            producer: row.payload.producer ?? 'membership-service',
-          } as DomainEvent)
-          await this.outbox.markPublished(tx, row.id)
-        } catch (err) {
-          await this.outbox.markFailed(tx, row.id, row.attempts, String(err))
-          this.logger.warn(
-            { eventId: row.id, type: row.eventType, attempts: row.attempts + 1 },
-            'Outbox delivery failed — will retry with backoff',
-          )
-        }
-      }
+    // Claim inside a short transaction, publish OUTSIDE it, then record each
+    // outcome in its own statement. Publishing inside the claim transaction blew
+    // Prisma's 5s transaction timeout as soon as a consumer was slow — and on
+    // abort the markPublished/markFailed writes rolled back with it, so
+    // `attempts` never advanced and dead-lettering could never trigger.
+    const batch = await this.prisma.$transaction((tx) => this.outbox.claimBatch(tx, BATCH_SIZE), {
+      timeout: CLAIM_TIMEOUT_MS,
     })
+    if (batch.length === 0) return
+
+    for (const row of batch) {
+      if (row.attempts >= MAX_ATTEMPTS) {
+        // Leave it claimed-but-unpublished. Dead-lettered rows stay visible in
+        // the table rather than being deleted, so the loss is auditable.
+        continue
+      }
+      try {
+        await this.eventBus.publishDurably({
+          ...row.payload,
+          eventId: row.payload.eventId ?? row.id,
+          correlationId: row.payload.correlationId ?? row.id,
+          schemaVersion: row.payload.schemaVersion ?? 1,
+          producer: row.payload.producer ?? 'membership-service',
+        } as DomainEvent)
+        await this.outbox.markPublished(this.prisma, row.id)
+      } catch (err) {
+        await this.outbox.markFailed(this.prisma, row.id, row.attempts, String(err))
+        this.logger.warn(
+          { eventId: row.id, type: row.eventType, attempts: row.attempts + 1 },
+          'Outbox delivery failed — will retry with backoff',
+        )
+      }
+    }
   }
 
   /**

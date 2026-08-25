@@ -8,6 +8,8 @@ import {
   HttpCode,
   HttpStatus,
   UseGuards,
+  ConflictException,
+  ServiceUnavailableException,
 } from '@nestjs/common'
 import { ApiTags, ApiSecurity } from '@nestjs/swagger'
 import type { FastifyRequest } from 'fastify'
@@ -15,7 +17,25 @@ import { Request } from '@nestjs/common'
 import { ActivitiesService } from './activities.service.js'
 import { SkipTenant } from '@clubspark/auth'
 import { InternalSecretGuard } from '@clubspark/auth'
-import { EventInboxService } from './event-inbox.service.js'
+import { EventInboxService, type InboxOutcome } from './event-inbox.service.js'
+
+/**
+ * Turn an inbox outcome into the answer the producer needs.
+ *
+ * A refused claim must NOT be acknowledged: the relay marks the outbox row
+ * published on any 2xx, so acking "busy" drops the event entirely.
+ */
+function ackOrRetry(outcome: InboxOutcome, type: string): void {
+  if (outcome === 'processed' || outcome === 'duplicate') return
+  if (outcome === 'payloadConflict') {
+    throw new ConflictException(
+      `Event ${type} was already received with a different payload — same eventId, changed content`,
+    )
+  }
+  throw new ServiceUnavailableException(
+    `Event ${type} is being processed by another worker — retry`,
+  )
+}
 
 @ApiTags('activities')
 @Controller()
@@ -37,7 +57,10 @@ export class ActivitiesController {
   @Post('events/inbound')
   @HttpCode(HttpStatus.NO_CONTENT)
   async inbound(@Body() event: Record<string, unknown>) {
-    await this.inbox.process(event as never, () => this.service.handleInboundEvent(event as any))
+    const outcome = await this.inbox.process(event as never, () =>
+      this.service.handleInboundEvent(event as any),
+    )
+    ackOrRetry(outcome, String(event['type'] ?? 'unknown'))
   }
 
   /** List activity timeline for a person. */

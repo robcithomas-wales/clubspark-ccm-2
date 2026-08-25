@@ -1,8 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
 import { CoachingProjectionReadsService } from '../src/projections/coaching-projection-reads.service.js'
 
-function build(mode: 'legacy' | 'shadow' | 'projection', projected: { id: string }[]) {
-  const repository = { getCoachingConflicts: vi.fn().mockResolvedValue(projected) }
+function build(
+  mode: 'legacy' | 'shadow' | 'projection',
+  projected: { id: string }[],
+  populated = true,
+) {
+  const repository = {
+    getCoachingConflicts: vi.fn().mockResolvedValue(projected),
+    isSourceProjected: vi.fn().mockResolvedValue(populated),
+  }
   const config = { get: vi.fn().mockReturnValue({ coachingReadMode: mode }) }
   return {
     reads: new CoachingProjectionReadsService(repository as never, config as never),
@@ -23,6 +30,22 @@ describe('CoachingProjectionReadsService', () => {
         legacy,
       ),
     ).resolves.toEqual([{ id: 'legacy' }])
+    expect(repository.getCoachingConflicts).not.toHaveBeenCalled()
+  })
+
+  it('refuses to answer from an unpopulated projection', async () => {
+    // No occupancy rows would otherwise read as "no coaching session in the way",
+    // and the booking would be written straight over one.
+    const { reads, repository } = build('projection', [], false)
+    await expect(
+      reads.getConflicts(
+        'tenant',
+        ['unit'],
+        '2026-08-24T10:00:00Z',
+        '2026-08-24T11:00:00Z',
+        vi.fn(),
+      ),
+    ).rejects.toThrow(/not populated/i)
     expect(repository.getCoachingConflicts).not.toHaveBeenCalled()
   })
 

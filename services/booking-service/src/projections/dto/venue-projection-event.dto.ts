@@ -1,4 +1,4 @@
-import { IsISO8601, IsIn, IsObject, IsUUID } from 'class-validator'
+import { IsISO8601, IsIn, IsNotEmpty, IsObject, IsString } from 'class-validator'
 
 export const VENUE_PROJECTION_EVENT_TYPES = [
   'venue.resource.upserted.v1',
@@ -11,13 +11,15 @@ export const VENUE_PROJECTION_EVENT_TYPES = [
 export type VenueProjectionEventType = (typeof VENUE_PROJECTION_EVENT_TYPES)[number]
 
 export class VenueProjectionEventDto {
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   eventId!: string
 
   @IsIn(VENUE_PROJECTION_EVENT_TYPES)
   type!: VenueProjectionEventType
 
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   tenantId!: string
 
   @IsISO8601()

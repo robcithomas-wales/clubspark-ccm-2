@@ -100,8 +100,12 @@ export class SessionsRepository {
 
   async update(tenantId: string, id: string, dto: UpdateSessionDto) {
     return this.prisma.$transaction(async (tx) => {
+      // Scope the write itself, inside the transaction. The service layer's
+      // findById check is a separate statement outside it, so it cannot stop a
+      // cross-tenant write — and an unscoped write emits the projection event
+      // under the victim's tenant.
       const session = await tx.lessonSession.update({
-        where: { id },
+        where: { id, tenantId },
         data: {
           ...(dto.startsAt !== undefined && { startsAt: new Date(dto.startsAt) }),
           ...(dto.endsAt !== undefined && { endsAt: new Date(dto.endsAt) }),
@@ -125,13 +129,15 @@ export class SessionsRepository {
 
   async delete(tenantId: string, id: string) {
     return this.prisma.$transaction(async (tx) => {
-      const session = await tx.lessonSession.delete({ where: { id } })
+      const session = await tx.lessonSession.delete({ where: { id, tenantId } })
       if (session.bookableUnitId) {
         const now = new Date().toISOString()
         await this.outbox.enqueue(tx, {
           eventId: randomUUID(),
           type: 'coaching.occupancy.deleted.v1',
-          tenantId,
+          // From the row, not the request: a tombstone must land in the tenant
+          // whose projection actually holds the row.
+          tenantId: session.tenantId,
           occurredAt: now,
           sourceUpdatedAt: now,
           data: { id },

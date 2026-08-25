@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 import { EventInboxService } from '../src/events/event-inbox.service.js'
 import type { DomainEvent } from '../src/events/domain-events.js'
 
@@ -12,14 +13,22 @@ const event: DomainEvent = {
   occurredAt: '2026-08-24T10:00:00.000Z',
 }
 
+const PAYLOAD_HASH = createHash('sha256').update(JSON.stringify(event)).digest('hex')
+
 describe('EventInboxService', () => {
   it('does not repeat a completed or currently claimed event', async () => {
     const handler = vi.fn().mockResolvedValue(undefined)
     const service = new EventInboxService({
-      write: { $queryRaw: vi.fn().mockResolvedValue([]) },
+      write: {
+        $queryRaw: vi
+          .fn()
+          .mockResolvedValueOnce([])
+          // The claim is refused, then the row is inspected to see why.
+          .mockResolvedValueOnce([{ status: 'processing', payloadHash: PAYLOAD_HASH }]),
+      },
     } as never)
 
-    await expect(service.process(event, handler)).resolves.toBe(false)
+    await expect(service.process(event, handler)).resolves.toBe('busy')
     expect(handler).not.toHaveBeenCalled()
   })
 
@@ -31,7 +40,7 @@ describe('EventInboxService', () => {
     }
     const service = new EventInboxService({ write } as never)
 
-    await expect(service.process(event, handler)).resolves.toBe(true)
+    await expect(service.process(event, handler)).resolves.toBe('processed')
     expect(handler).toHaveBeenCalledOnce()
     expect(write.$executeRaw).toHaveBeenCalledOnce()
   })

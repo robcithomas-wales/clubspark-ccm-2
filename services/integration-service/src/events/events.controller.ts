@@ -1,11 +1,37 @@
-import { Controller, Post, Body, Logger, UseGuards } from '@nestjs/common'
+import {
+  Controller,
+  Post,
+  Body,
+  Logger,
+  UseGuards,
+  ConflictException,
+  ServiceUnavailableException,
+} from '@nestjs/common'
 import { ApiTags, ApiOperation, ApiSecurity } from '@nestjs/swagger'
 import { SkipTenant } from '@clubspark/auth'
 import { InternalSecretGuard } from '@clubspark/auth'
 import { WebhookDeliveriesService } from '../webhook-deliveries/webhook-deliveries.service.js'
 import { AccountingSyncService } from '../accounting-sync/accounting-sync.service.js'
 import type { DomainEvent } from './domain-events.js'
-import { EventInboxService } from './event-inbox.service.js'
+import { EventInboxService, type InboxOutcome } from './event-inbox.service.js'
+
+/**
+ * Turn an inbox outcome into the answer the producer needs.
+ *
+ * A refused claim must NOT be acknowledged: the relay marks the outbox row
+ * published on any 2xx, so acking "busy" drops the event entirely.
+ */
+function ackOrRetry(outcome: InboxOutcome, type: string): void {
+  if (outcome === 'processed' || outcome === 'duplicate') return
+  if (outcome === 'payloadConflict') {
+    throw new ConflictException(
+      `Event ${type} was already received with a different payload — same eventId, changed content`,
+    )
+  }
+  throw new ServiceUnavailableException(
+    `Event ${type} is being processed by another worker — retry`,
+  )
+}
 
 @ApiTags('events')
 @Controller({ path: 'events', version: '1' })
@@ -26,7 +52,7 @@ export class EventsController {
   async inbound(@Body() event: DomainEvent): Promise<{ received: boolean }> {
     this.logger.log(`[Inbound] ${event.type} — tenant ${event.tenantId}`)
 
-    await this.inbox.process(event, async () => {
+    const outcome = await this.inbox.process(event, async () => {
       // Do not acknowledge the publisher until durable downstream work has been
       // recorded. A rejected handler causes the source outbox to retry.
       const work: Promise<void>[] = [this.deliveries.dispatch(event)]
@@ -78,6 +104,7 @@ export class EventsController {
 
       await Promise.all(work)
     })
+    ackOrRetry(outcome, event.type)
     return { received: true }
   }
 }
