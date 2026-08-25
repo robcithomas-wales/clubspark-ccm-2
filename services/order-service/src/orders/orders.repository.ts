@@ -11,19 +11,11 @@ export class OrdersRepository {
     tenantId: string,
     organisationId: string | undefined,
     dto: CreateOrderDto,
+    withinTx: (
+      tx: Prisma.TransactionClient,
+      order: Order & { items: OrderItem[] },
+    ) => Promise<void>,
   ): Promise<Order & { items: OrderItem[] }> {
-    // Idempotency: return existing order if key already used
-    if (dto.idempotencyKey) {
-      const existing = await this.prisma.read.order.findUnique({
-        where: { idempotencyKey: dto.idempotencyKey },
-        include: { items: true },
-      })
-      if (existing) {
-        if (existing.tenantId !== tenantId) throw new ConflictException('Idempotency key conflict')
-        return existing
-      }
-    }
-
     const currency = dto.currency ?? 'GBP'
     const items = dto.items.map((item) => ({
       tenantId,
@@ -38,27 +30,61 @@ export class OrdersRepository {
 
     const totalAmount = items.reduce((sum, i) => sum + i.totalAmount, 0)
 
-    return this.prisma.write.order.create({
-      data: {
-        tenantId,
-        organisationId,
-        personId: dto.personId,
-        currency,
-        totalAmount,
-        subjectType: dto.subjectType,
-        subjectId: dto.subjectId,
-        idempotencyKey: dto.idempotencyKey,
-        metadata: dto.metadata as Prisma.InputJsonValue | undefined,
-        items: { create: items },
-      },
-      include: { items: true },
-    })
+    try {
+      return await this.prisma.write.$transaction(async (tx) => {
+        // Returning an existing idempotent order must not emit order.created again.
+        if (dto.idempotencyKey) {
+          const existing = await tx.order.findUnique({
+            where: { idempotencyKey: dto.idempotencyKey },
+            include: { items: true },
+          })
+          if (existing) {
+            if (existing.tenantId !== tenantId) {
+              throw new ConflictException('Idempotency key conflict')
+            }
+            return existing
+          }
+        }
+
+        const order = await tx.order.create({
+          data: {
+            tenantId,
+            organisationId,
+            personId: dto.personId,
+            currency,
+            totalAmount,
+            subjectType: dto.subjectType,
+            subjectId: dto.subjectId,
+            idempotencyKey: dto.idempotencyKey,
+            metadata: dto.metadata as Prisma.InputJsonValue | undefined,
+            items: { create: items },
+          },
+          include: { items: true },
+        })
+        await withinTx(tx, order)
+        return order
+      })
+    } catch (err) {
+      // Two concurrent requests can both miss the initial read. The unique key
+      // chooses one winner; the loser returns that committed order and must not
+      // enqueue a second order.created event.
+      if (dto.idempotencyKey && (err as { code?: string }).code === 'P2002') {
+        const existing = await this.prisma.write.order.findUnique({
+          where: { idempotencyKey: dto.idempotencyKey },
+          include: { items: true },
+        })
+        if (existing) {
+          if (existing.tenantId !== tenantId) {
+            throw new ConflictException('Idempotency key conflict')
+          }
+          return existing
+        }
+      }
+      throw err
+    }
   }
 
-  async findById(
-    tenantId: string,
-    id: string,
-  ): Promise<(Order & { items: OrderItem[] }) | null> {
+  async findById(tenantId: string, id: string): Promise<(Order & { items: OrderItem[] }) | null> {
     return this.prisma.read.order.findFirst({
       where: { id, tenantId },
       include: { items: true },
@@ -104,11 +130,19 @@ export class OrdersRepository {
     tenantId: string,
     id: string,
     status: OrderStatus,
+    withinTx: (
+      tx: Prisma.TransactionClient,
+      order: Order & { items: OrderItem[] },
+    ) => Promise<void>,
   ): Promise<Order & { items: OrderItem[] }> {
-    return this.prisma.write.order.update({
-      where: { id },
-      data: { status },
-      include: { items: true },
+    return this.prisma.write.$transaction(async (tx) => {
+      const order = await tx.order.update({
+        where: { id, tenantId },
+        data: { status },
+        include: { items: true },
+      })
+      await withinTx(tx, order)
+      return order
     })
   }
 }

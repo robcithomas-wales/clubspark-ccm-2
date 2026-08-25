@@ -53,7 +53,13 @@ export class OutboxRelay {
           continue
         }
         try {
-          await this.eventBus.publish(row.payload as DomainEvent)
+          await this.eventBus.publishDurably({
+            ...row.payload,
+            eventId: row.payload.eventId ?? row.id,
+            correlationId: row.payload.correlationId ?? row.id,
+            schemaVersion: row.payload.schemaVersion ?? 1,
+            producer: row.payload.producer ?? 'booking-service',
+          } as DomainEvent)
           await this.outbox.markPublished(tx, row.id)
         } catch (err) {
           await this.outbox.markFailed(tx, row.id, row.attempts, String(err))

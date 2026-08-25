@@ -4,6 +4,7 @@ import { SkipTenant } from '@clubspark/auth'
 import { InternalSecretGuard } from '@clubspark/auth'
 import { NotificationsService } from '../notifications/notifications.service.js'
 import type { DomainEvent } from './domain-events.js'
+import { EventInboxService } from './event-inbox.service.js'
 
 /**
  * Inbound event endpoint — PILOT mode only.
@@ -42,7 +43,10 @@ import type { DomainEvent } from './domain-events.js'
 export class EventsController {
   private readonly logger = new Logger(EventsController.name)
 
-  constructor(private readonly notifications: NotificationsService) {}
+  constructor(
+    private readonly notifications: NotificationsService,
+    private readonly inbox: EventInboxService,
+  ) {}
 
   /**
    * Receives a domain event from any publisher service.
@@ -59,7 +63,7 @@ export class EventsController {
   @ApiOperation({ summary: 'Inbound domain event (pilot: HTTP; production: Azure Service Bus)' })
   async inbound(@Body() event: DomainEvent): Promise<{ received: boolean }> {
     this.logger.log(`[EventBus INBOUND] ${event.type} — tenant ${event.tenantId}`)
-    await this.notifications.handle(event)
+    await this.inbox.process(event, () => this.notifications.handle(event))
     return { received: true }
   }
 }

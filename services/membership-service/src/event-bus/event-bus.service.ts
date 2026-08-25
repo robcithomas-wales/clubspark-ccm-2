@@ -6,6 +6,10 @@ export type MembershipEventType =
   | 'membership.expired'
 
 export interface DomainEvent {
+  eventId?: string
+  correlationId?: string
+  schemaVersion?: number
+  producer?: string
   type: MembershipEventType
   tenantId: string
   occurredAt: string
@@ -33,8 +37,18 @@ export class EventBusService {
   }
 
   async publish(event: DomainEvent): Promise<void> {
+    await this.deliver(event, false)
+  }
+
+  /** Outbox delivery must reject when any subscriber rejects the event. */
+  async publishDurably(event: DomainEvent): Promise<void> {
+    await this.deliver(event, true)
+  }
+
+  private async deliver(event: DomainEvent, strict: boolean): Promise<void> {
     // PILOT: HTTP POST to subscribers
     // PRODUCTION: Azure Service Bus topic 'membership-events'
+    const failures: string[] = []
     for (const url of this.subscribers) {
       try {
         const res = await fetch(url, {
@@ -44,12 +58,17 @@ export class EventBusService {
         })
         if (!res.ok) {
           this.logger.warn(`EventBus publish failed → ${url} (${res.status}): ${event.type}`)
+          failures.push(`${url} returned ${res.status}`)
         } else {
           this.logger.debug(`[EventBus] Published ${event.type} → ${url}`)
         }
       } catch (err) {
         this.logger.error(`[EventBus] Could not publish ${event.type} → ${url}: ${String(err)}`)
+        failures.push(`${url}: ${String(err)}`)
       }
+    }
+    if (strict && failures.length) {
+      throw new Error(`Event delivery failed: ${failures.join('; ')}`)
     }
   }
 

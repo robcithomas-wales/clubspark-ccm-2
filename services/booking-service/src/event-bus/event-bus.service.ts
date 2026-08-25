@@ -5,6 +5,10 @@ import type { AppConfig } from '../config/configuration.js'
 export type DomainEventType = 'booking.confirmed' | 'booking.cancelled' | 'booking.reminder_due'
 
 export interface DomainEvent {
+  eventId?: string
+  correlationId?: string
+  schemaVersion?: number
+  producer?: string
   type: DomainEventType
   tenantId: string
   occurredAt: string
@@ -75,6 +79,16 @@ export class EventBusService {
   }
 
   async publish(event: DomainEvent): Promise<void> {
+    await this.deliver(event, false)
+  }
+
+  /** Outbox delivery must fail loudly so the relay retains and retries the row. */
+  async publishDurably(event: DomainEvent): Promise<void> {
+    await this.deliver(event, true)
+  }
+
+  private async deliver(event: DomainEvent, strict: boolean): Promise<void> {
+    const failures: string[] = []
     for (const url of this.subscribers) {
       try {
         const res = await fetch(url, {
@@ -84,13 +98,17 @@ export class EventBusService {
         })
         if (!res.ok) {
           this.logger.warn(`EventBus publish failed → ${url} (${res.status}): ${event.type}`)
+          failures.push(`${url} returned ${res.status}`)
         } else {
           this.logger.debug(`[EventBus] Published ${event.type} → ${url}`)
         }
       } catch (err) {
-        // Never throw — event bus failures must not break the originating operation
         this.logger.error(`[EventBus] Could not publish ${event.type} → ${url}: ${String(err)}`)
+        failures.push(`${url}: ${String(err)}`)
       }
+    }
+    if (strict && failures.length) {
+      throw new Error(`Event delivery failed: ${failures.join('; ')}`)
     }
   }
 

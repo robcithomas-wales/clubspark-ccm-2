@@ -15,11 +15,15 @@ import { Request } from '@nestjs/common'
 import { ActivitiesService } from './activities.service.js'
 import { SkipTenant } from '@clubspark/auth'
 import { InternalSecretGuard } from '@clubspark/auth'
+import { EventInboxService } from './event-inbox.service.js'
 
 @ApiTags('activities')
 @Controller()
 export class ActivitiesController {
-  constructor(private readonly service: ActivitiesService) {}
+  constructor(
+    private readonly service: ActivitiesService,
+    private readonly inbox: EventInboxService,
+  ) {}
 
   /**
    * Inbound domain events from booking-service, membership-service, etc.
@@ -33,7 +37,7 @@ export class ActivitiesController {
   @Post('events/inbound')
   @HttpCode(HttpStatus.NO_CONTENT)
   async inbound(@Body() event: Record<string, unknown>) {
-    await this.service.handleInboundEvent(event as any)
+    await this.inbox.process(event as never, () => this.service.handleInboundEvent(event as any))
   }
 
   /** List activity timeline for a person. */

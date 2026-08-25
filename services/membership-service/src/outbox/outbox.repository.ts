@@ -47,6 +47,7 @@ export class OutboxRepository {
       SELECT id::text, event_type AS "eventType", payload, attempts
       FROM membership.event_outbox
       WHERE published_at IS NULL
+        AND attempts < ${MAX_ATTEMPTS}
         AND next_attempt_at <= now()
       ORDER BY created_at
       LIMIT ${limit}

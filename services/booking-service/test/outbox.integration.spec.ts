@@ -147,7 +147,7 @@ describe.runIf(DB_AVAILABLE)('Transactional outbox', () => {
         bookableUnitId: TEST_UNIT_ID,
         ...futureSlot(),
       })
-    const publish = vi.spyOn(eventBus, 'publish').mockResolvedValue(undefined)
+    const publish = vi.spyOn(eventBus, 'publishDurably').mockResolvedValue(undefined)
 
     await relay.flush()
 
@@ -171,7 +171,9 @@ describe.runIf(DB_AVAILABLE)('Transactional outbox', () => {
         ...futureSlot(),
       })
 
-    const publish = vi.spyOn(eventBus, 'publish').mockRejectedValue(new Error('subscriber down'))
+    const publish = vi
+      .spyOn(eventBus, 'publishDurably')
+      .mockRejectedValue(new Error('subscriber down'))
     await relay.flush()
 
     const afterFailure = await outboxRows('booking.confirmed')
@@ -200,7 +202,7 @@ describe.runIf(DB_AVAILABLE)('Transactional outbox', () => {
         bookableUnitId: TEST_UNIT_ID,
         ...futureSlot(),
       })
-    const publish = vi.spyOn(eventBus, 'publish').mockRejectedValue(new Error('down'))
+    const publish = vi.spyOn(eventBus, 'publishDurably').mockRejectedValue(new Error('down'))
 
     await relay.flush()
     await relay.flush() // immediately again — should be skipped by next_attempt_at

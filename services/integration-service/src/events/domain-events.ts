@@ -11,6 +11,10 @@ export type DomainEventType =
   | 'fixture.reminder_due'
 
 export interface DomainEvent {
+  eventId?: string
+  correlationId?: string
+  schemaVersion?: number
+  producer?: string
   type: DomainEventType
   tenantId: string
   occurredAt: string

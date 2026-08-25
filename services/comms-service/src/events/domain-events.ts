@@ -31,9 +31,13 @@ export type DomainEventType =
   | 'fixture.reminder_due'
 
 export interface BaseDomainEvent {
+  eventId?: string
+  correlationId?: string
+  schemaVersion?: number
+  producer?: string
   type: DomainEventType
   tenantId: string
-  occurredAt: string  // ISO 8601
+  occurredAt: string // ISO 8601
 }
 
 // ─── Booking Events ───────────────────────────────────────────────────────────
@@ -49,8 +53,8 @@ export interface BookingConfirmedEvent extends BaseDomainEvent {
   venueName: string
   resourceName: string
   bookableUnitName: string
-  startsAt: string   // ISO 8601
-  endsAt: string     // ISO 8601
+  startsAt: string // ISO 8601
+  endsAt: string // ISO 8601
   price?: number
   currency?: string
 }
@@ -79,7 +83,7 @@ export interface BookingReminderDueEvent extends BaseDomainEvent {
   bookableUnitName: string
   startsAt: string
   endsAt: string
-  hoursUntil: number  // 24 | 1
+  hoursUntil: number // 24 | 1
 }
 
 // ─── Membership Events ────────────────────────────────────────────────────────
