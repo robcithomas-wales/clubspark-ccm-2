@@ -41,6 +41,12 @@ async function waitFor<T>(
   return last
 }
 
+/**
+ * Claims order by `created_at` across the whole queue, so a fixture must be
+ * older than any pre-existing due delivery to be the row a limit-1 claim takes.
+ */
+const FIXTURE_CLAIM_ORDER_DATE = new Date('2000-01-01T00:00:00.000Z')
+
 const DB_AVAILABLE = await checkDbAvailable()
 
 async function createSubscription(
@@ -212,13 +218,18 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
 
   it('allows only one worker to claim a due delivery', async () => {
     const sub = await createSubscription(request)
-    await prisma.webhookDelivery.create({
+    const delivery = await prisma.webhookDelivery.create({
       data: {
         subscriptionId: sub.id,
         eventType: 'booking.confirmed',
         payload: {},
         status: 'pending',
         nextRetryAt: new Date(Date.now() - 1_000),
+        // The claim is queue-wide, not tenant-scoped, and orders by created_at.
+        // The shared database holds other tenants' due deliveries, so a
+        // present-dated fixture is never the row a limit-1 claim picks. Backdate
+        // it so both workers race for *this* row.
+        createdAt: FIXTURE_CLAIM_ORDER_DATE,
       },
     })
     const repository = new WebhookDeliveriesRepository({ write: prisma } as never)
@@ -228,7 +239,9 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
       repository.claimPending(1, 30),
     ])
 
-    expect(claims.flat()).toHaveLength(1)
+    // The loser claims the next-oldest due row, which may belong to another
+    // tenant, so assert exclusivity on the fixture rather than a total count.
+    expect(claims.flat().filter((row) => row.id === delivery.id)).toHaveLength(1)
   })
 
   it('reclaims failed deliveries when their retry time is due', async () => {
@@ -241,6 +254,7 @@ describe.runIf(DB_AVAILABLE)('Webhook Deliveries — integration', () => {
         status: 'failed',
         attempts: 1,
         nextRetryAt: new Date(Date.now() - 1_000),
+        createdAt: FIXTURE_CLAIM_ORDER_DATE,
       },
     })
     const repository = new WebhookDeliveriesRepository({ write: prisma } as never)
