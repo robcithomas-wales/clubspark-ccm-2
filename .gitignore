@@ -24,6 +24,7 @@ playwright-report/
 .env.*.local
 # Per-service escape hatch, applied on top of the generated .env
 .env.override
+.projection-backfill-state.json
 
 # Editor/tool backups. `.env` is ignored but `.env.bak` was not, so any tool or
 # script that saved a backup put the live database password one `git add -A`

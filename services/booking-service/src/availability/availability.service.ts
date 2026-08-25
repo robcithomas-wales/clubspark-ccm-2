@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config'
 import { AvailabilityRepository } from './availability.repository.js'
 import type { AppConfig } from '../config/configuration.js'
 import type { TenantContext } from '../common/decorators/tenant-context.decorator.js'
+import { VenueProjectionReadsService } from '../projections/venue-projection-reads.service.js'
 
 interface VenueUnit {
   id: string
@@ -18,10 +19,10 @@ interface VenueUnit {
 }
 
 interface VenueAvailabilityConfig {
-  opensAt: string           // "HH:MM"
-  closesAt: string          // "HH:MM"
+  opensAt: string // "HH:MM"
+  closesAt: string // "HH:MM"
   slotDurationMinutes: number
-  newDayReleaseTime: string | null  // "HH:MM" or null
+  newDayReleaseTime: string | null // "HH:MM" or null
 }
 
 const DEFAULT_CONFIG: VenueAvailabilityConfig = {
@@ -39,6 +40,7 @@ export class AvailabilityService {
   constructor(
     private readonly repo: AvailabilityRepository,
     config: ConfigService<AppConfig, true>,
+    private readonly venueProjectionReads: VenueProjectionReadsService,
   ) {
     const vs = config.get('venueService', { infer: true })
     this.venueServiceUrl = vs.url
@@ -54,7 +56,11 @@ export class AvailabilityService {
     startsAt: string,
     endsAt: string,
   ) {
-    const conflictMap = await this.repo.getConflictMapForUnits([bookableUnitId])
+    const conflictMap = await this.venueProjectionReads.getConflictMap(
+      ctx.tenantId,
+      [bookableUnitId],
+      () => this.repo.getConflictMapForUnits(ctx.tenantId, [bookableUnitId]),
+    )
     const unitIds = conflictMap.get(bookableUnitId) ?? [bookableUnitId]
 
     const rows = await this.repo.getOverlappingBookings(ctx.tenantId, unitIds, startsAt, endsAt)
@@ -85,7 +91,9 @@ export class AvailabilityService {
     const unitIds = units.map((u) => u.id)
 
     // ONE query for all unit conflicts — fixes the N+1
-    const conflictMap = await this.repo.getConflictMapForUnits(unitIds)
+    const conflictMap = await this.venueProjectionReads.getConflictMap(ctx.tenantId, unitIds, () =>
+      this.repo.getConflictMapForUnits(ctx.tenantId, unitIds),
+    )
 
     // Build slots from config (opensAt → closesAt, slotDurationMinutes intervals)
     const slots = this.buildSlots(date, opensAt, closesAt, slotDurationMinutes)
@@ -158,12 +166,7 @@ export class AvailabilityService {
    * Build slots from opensAt to closesAt at slotDurationMinutes intervals.
    * Times are treated as clock times and appended to the date in UTC.
    */
-  private buildSlots(
-    date: string,
-    opensAt: string,
-    closesAt: string,
-    durationMinutes: number,
-  ) {
+  private buildSlots(date: string, opensAt: string, closesAt: string, durationMinutes: number) {
     const slots = []
     const openParts = opensAt.split(':').map(Number)
     const closeParts = closesAt.split(':').map(Number)
@@ -222,9 +225,7 @@ export class AvailabilityService {
     if (date <= today) return { released: true, releasesAt: null }
 
     // For future dates: slots release at newDayReleaseTime on the day before `date`
-    const releaseDateStr = new Date(
-      new Date(date).getTime() - 24 * 60 * 60 * 1000,
-    )
+    const releaseDateStr = new Date(new Date(date).getTime() - 24 * 60 * 60 * 1000)
       .toISOString()
       .slice(0, 10)
 
@@ -256,9 +257,7 @@ export class AvailabilityService {
       const configs: any[] = json.data ?? []
 
       // Prefer day-specific config over catch-all
-      const daySpecific = configs.find(
-        (c) => c.dayOfWeek === dayOfWeek && c.isActive !== false,
-      )
+      const daySpecific = configs.find((c) => c.dayOfWeek === dayOfWeek && c.isActive !== false)
       const catchAll = configs.find(
         (c) => (c.dayOfWeek === null || c.dayOfWeek === undefined) && c.isActive !== false,
       )

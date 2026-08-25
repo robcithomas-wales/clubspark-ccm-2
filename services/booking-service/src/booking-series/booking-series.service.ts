@@ -14,6 +14,7 @@ import type { UpdateBookingSeriesDto } from './dto/update-booking-series.dto.js'
 import type { TenantContext } from '../common/decorators/tenant-context.decorator.js'
 import { PeopleClient } from '../people/people.client.js'
 import { VenueClient } from '../venue/venue.client.js'
+import { VenueProjectionReadsService } from '../projections/venue-projection-reads.service.js'
 
 @Injectable()
 export class BookingSeriesService {
@@ -25,6 +26,7 @@ export class BookingSeriesService {
     private readonly availabilityRepo: AvailabilityRepository,
     private readonly people: PeopleClient,
     private readonly venue: VenueClient,
+    private readonly venueProjectionReads: VenueProjectionReadsService,
   ) {}
 
   async list(ctx: TenantContext) {
@@ -42,7 +44,11 @@ export class BookingSeriesService {
 
   async create(ctx: TenantContext, dto: CreateBookingSeriesDto) {
     // Validate the bookable unit
-    const unit = await this.bookingsRepo.findBookableUnit(ctx.tenantId, dto.bookableUnitId)
+    const unit = await this.venueProjectionReads.findBookableUnit(
+      ctx.tenantId,
+      dto.bookableUnitId,
+      () => this.bookingsRepo.findBookableUnit(ctx.tenantId, dto.bookableUnitId),
+    )
     if (!unit) throw new NotFoundException('Bookable unit not found')
     if (!unit.isActive) throw new ConflictException('Bookable unit is inactive')
     if (unit.venueId !== dto.venueId)
@@ -53,7 +59,11 @@ export class BookingSeriesService {
     if (new Date(dto.endsAt) <= new Date(dto.startsAt))
       throw new BadRequestException('endsAt must be after startsAt')
 
-    const conflictMap = await this.availabilityRepo.getConflictMapForUnits([dto.bookableUnitId])
+    const conflictMap = await this.venueProjectionReads.getConflictMap(
+      ctx.tenantId,
+      [dto.bookableUnitId],
+      () => this.availabilityRepo.getConflictMapForUnits(ctx.tenantId, [dto.bookableUnitId]),
+    )
     const unitIds = conflictMap.get(dto.bookableUnitId) ?? [dto.bookableUnitId]
 
     this.logger.log(

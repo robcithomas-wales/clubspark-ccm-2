@@ -110,7 +110,10 @@ export class AvailabilityRepository {
    *
    * Returns a Map: unitId → [unitId, ...conflictingUnitIds]
    */
-  async getConflictMapForUnits(unitIds: string[]): Promise<Map<string, string[]>> {
+  async getConflictMapForUnits(
+    tenantId: string,
+    unitIds: string[],
+  ): Promise<Map<string, string[]>> {
     if (unitIds.length === 0) return new Map()
 
     const rows = await this.prisma.read.$queryRaw<
@@ -125,9 +128,15 @@ export class AvailabilityRepository {
           WHEN unit_id = ANY(${unitIds}::uuid[]) THEN conflicting_unit_id::text
           ELSE unit_id::text
         END AS "conflictingUnitId"
-      FROM venue.unit_conflicts
-      WHERE unit_id              = ANY(${unitIds}::uuid[])
-         OR conflicting_unit_id  = ANY(${unitIds}::uuid[])
+      FROM venue.unit_conflicts conflict
+      JOIN venue.bookable_units unit_row
+        ON unit_row.id = conflict.unit_id
+       AND unit_row.tenant_id = ${tenantId}::uuid
+      JOIN venue.bookable_units conflicting_row
+        ON conflicting_row.id = conflict.conflicting_unit_id
+       AND conflicting_row.tenant_id = ${tenantId}::uuid
+      WHERE conflict.unit_id = ANY(${unitIds}::uuid[])
+         OR conflict.conflicting_unit_id = ANY(${unitIds}::uuid[])
     `
 
     // Initialise every unit with itself

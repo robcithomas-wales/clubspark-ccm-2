@@ -1,5 +1,6 @@
 import {
   Controller,
+  Get,
   Post,
   Body,
   Headers,
@@ -63,5 +64,30 @@ export class VenueReferenceController {
   batch(@Headers('x-tenant-id') tenantId: string | undefined, @Body() dto: VenueReferenceDto) {
     if (!tenantId) throw new BadRequestException('x-tenant-id header is required')
     return this.service.lookup(tenantId, dto)
+  }
+
+  /**
+   * Narrow operational statistic used by booking-service's utilisation report.
+   *
+   * Kept separate from the batch display lookup because this value is required
+   * for a calculation: callers must fail the report if it is unavailable rather
+   * than silently treating an upstream failure as zero capacity.
+   */
+  @Get('internal/active-bookable-unit-count')
+  @SkipTenant()
+  @UseGuards(InternalSecretGuard)
+  @ApiExcludeEndpoint()
+  activeBookableUnitCount(@Headers('x-tenant-id') tenantId: string | undefined) {
+    if (!tenantId) throw new BadRequestException('x-tenant-id header is required')
+    return this.service.activeBookableUnitCount(tenantId)
+  }
+
+  @Get('internal/booking-projection-snapshot')
+  @SkipTenant()
+  @UseGuards(InternalSecretGuard)
+  @ApiExcludeEndpoint()
+  bookingProjectionSnapshot(@Headers('x-tenant-id') tenantId: string | undefined) {
+    if (!tenantId) throw new BadRequestException('x-tenant-id header is required')
+    return this.service.bookingProjectionSnapshot(tenantId)
   }
 }

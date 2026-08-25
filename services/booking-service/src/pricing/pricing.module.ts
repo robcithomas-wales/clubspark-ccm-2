@@ -3,9 +3,10 @@ import { PricingController } from './pricing.controller.js'
 import { PricingService } from './pricing.service.js'
 import { PricingRepository } from './pricing.repository.js'
 import { MembershipModule } from '../membership/membership.module.js'
+import { ProjectionsModule } from '../projections/projections.module.js'
 
 @Module({
-  imports: [MembershipModule],
+  imports: [MembershipModule, ProjectionsModule],
   controllers: [PricingController],
   providers: [PricingService, PricingRepository],
   exports: [PricingService],

@@ -60,6 +60,7 @@ const SERVICE_ROLE_KEY_ALLOWLIST = new Set(['venue'])
 // means an unset value is silently insecure rather than a startup failure, so
 // --check flags it.
 const SERVICE_EXTRA_KEYS = {
+  booking: [{ key: 'BOOKING_VENUE_PROJECTION_MODE' }, { key: 'BOOKING_COACHING_PROJECTION_MODE' }],
   integration: [
     { key: 'API_KEY_HASH_SECRET', productionRequired: true },
     { key: 'TOKEN_ENCRYPTION_KEY', productionRequired: true },
@@ -92,6 +93,8 @@ const OPTIONAL_ROOT_KEYS = [
   'DB_CONNECTION_LIMIT',
   'SUPABASE_ANON_KEY',
   'PUBLIC_BASE_DOMAIN',
+  'BOOKING_VENUE_PROJECTION_MODE',
+  'BOOKING_COACHING_PROJECTION_MODE',
   'NODE_ENV',
 ]
 

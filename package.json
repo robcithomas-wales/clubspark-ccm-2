@@ -40,6 +40,7 @@
     "setup:env": "node scripts/setup-env.mjs",
     "check:env": "node scripts/setup-env.mjs --check",
     "migrate:status": "./scripts/migrate-status.sh",
+    "projection:ops": "node scripts/projection-ops.mjs",
     "lint:changed": "./scripts/lint-changed.sh"
   },
   "devDependencies": {

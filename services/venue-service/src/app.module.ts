@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
 import { join } from 'node:path'
 import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core'
+import { ScheduleModule } from '@nestjs/schedule'
 import { configuration } from './config/configuration.js'
 import { PrismaModule } from './prisma/prisma.module.js'
 import { AuthModule, supabaseAuth } from '@clubspark/auth'
@@ -21,6 +22,7 @@ import { AffiliationsModule } from './affiliations/affiliations.module.js'
 import { SponsorsModule } from './sponsors/sponsors.module.js'
 import { SeasonalSchedulesModule } from './seasonal-schedules/seasonal-schedules.module.js'
 import { VenueReferenceModule } from './internal/venue-reference.module.js'
+import { OutboxModule } from './outbox/outbox.module.js'
 
 @Module({
   imports: [
@@ -34,7 +36,9 @@ import { VenueReferenceModule } from './internal/venue-reference.module.js'
       load: [configuration],
       envFilePath: join(__dirname, '..', '.env'),
     }),
+    ...(process.env['NODE_ENV'] === 'test' ? [] : [ScheduleModule.forRoot()]),
     PrismaModule,
+    OutboxModule,
     HealthModule,
     VenuesModule,
     ResourcesModule,

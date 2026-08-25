@@ -12,6 +12,9 @@ export const configuration = () => ({
     defaultTenantId: process.env['DEFAULT_TENANT_ID'] ?? 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
     defaultOrgId: process.env['DEFAULT_ORG_ID'] ?? '11111111-1111-1111-1111-111111111111',
   },
+  coachingService: {
+    url: process.env['COACHING_SERVICE_URL'] ?? 'http://localhost:4007',
+  },
 
   membershipService: {
     url: process.env['MEMBERSHIP_SERVICE_URL'] ?? 'http://localhost:4010',
@@ -27,6 +30,11 @@ export const configuration = () => ({
 
   integrationService: {
     url: process.env['INTEGRATION_SERVICE_URL'] ?? 'http://localhost:4016',
+  },
+
+  projections: {
+    venueReadMode: process.env['BOOKING_VENUE_PROJECTION_MODE'] ?? 'legacy',
+    coachingReadMode: process.env['BOOKING_COACHING_PROJECTION_MODE'] ?? 'legacy',
   },
 })
 

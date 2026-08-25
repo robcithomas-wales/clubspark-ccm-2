@@ -41,4 +41,70 @@ export class VenueReferenceService {
 
     return { data: { venues, resources, bookableUnits } }
   }
+
+  async activeBookableUnitCount(tenantId: string) {
+    const count = await this.prisma.read.bookableUnit.count({
+      where: { tenantId, isActive: true },
+    })
+    return { data: { count } }
+  }
+
+  async bookingProjectionSnapshot(tenantId: string) {
+    return this.prisma.read.$transaction(
+      async (tx) => {
+        const [watermark] = await tx.$queryRaw<{ generatedAt: Date }[]>`
+          SELECT transaction_timestamp() AS "generatedAt"
+        `
+        const [resources, bookableUnits, rawConflicts] = await Promise.all([
+          tx.resource.findMany({
+            where: { tenantId },
+            select: {
+              id: true,
+              venueId: true,
+              groupId: true,
+              hasLighting: true,
+              isActive: true,
+              updatedAt: true,
+            },
+          }),
+          tx.bookableUnit.findMany({
+            where: { tenantId },
+            select: {
+              id: true,
+              venueId: true,
+              resourceId: true,
+              name: true,
+              unitType: true,
+              isActive: true,
+            },
+          }),
+          tx.$queryRaw<{ unitId: string; conflictingUnitId: string }[]>`
+            SELECT uc.unit_id AS "unitId", uc.conflicting_unit_id AS "conflictingUnitId"
+            FROM venue.unit_conflicts uc
+            JOIN venue.bookable_units unit_row
+              ON unit_row.id = uc.unit_id AND unit_row.tenant_id = ${tenantId}::uuid
+            JOIN venue.bookable_units conflicting_row
+              ON conflicting_row.id = uc.conflicting_unit_id
+             AND conflicting_row.tenant_id = ${tenantId}::uuid
+          `,
+        ])
+
+        const unitConflicts = rawConflicts.map((row) =>
+          row.unitId < row.conflictingUnitId
+            ? row
+            : { unitId: row.conflictingUnitId, conflictingUnitId: row.unitId },
+        )
+
+        return {
+          data: {
+            generatedAt: (watermark?.generatedAt ?? new Date()).toISOString(),
+            resources,
+            bookableUnits,
+            unitConflicts,
+          },
+        }
+      },
+      { isolationLevel: 'RepeatableRead' },
+    )
+  }
 }

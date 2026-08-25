@@ -16,6 +16,9 @@ import { OrderModule } from './order-client/order.module.js'
 import { ProgrammesModule } from './programmes/programmes.module.js'
 import { EnrolmentsModule } from './enrolments/enrolments.module.js'
 import { AttendanceModule } from './attendance/attendance.module.js'
+import { ScheduleModule } from '@nestjs/schedule'
+import { OutboxModule } from './outbox/outbox.module.js'
+import { CoachingProjectionModule } from './internal/coaching-projection.module.js'
 
 @Module({
   imports: [
@@ -28,7 +31,10 @@ import { AttendanceModule } from './attendance/attendance.module.js'
       load: [configuration],
       envFilePath: join(__dirname, '..', '.env'),
     }),
+    ...(process.env['NODE_ENV'] === 'test' ? [] : [ScheduleModule.forRoot()]),
     PrismaModule,
+    OutboxModule,
+    CoachingProjectionModule,
     OrderModule,
     HealthModule,
     CoachesModule,
