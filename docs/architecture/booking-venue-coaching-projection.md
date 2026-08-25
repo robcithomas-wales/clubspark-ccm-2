@@ -69,7 +69,8 @@ guard.
 - Snapshot failure preserves the last complete projection.
 - Duplicate and older events are acknowledged without changing data.
 - Projection lag/dead letters must be observable before enabling reads.
-- After final cutover, missing projection data fails closed for create/pricing rather than treating a
+- Projection reads require a populated projection for their source (503 otherwise). After final
+  cutover, missing projection data fails closed for create/pricing rather than treating a
   missing or inactive unit as valid.
 
 ## Rollback
@@ -86,9 +87,12 @@ running.
 
 1. Deploy the additive Booking, Venue and Coaching migrations.
 2. Deploy Booking consumers with both modes set to `legacy`.
-3. Deploy Venue and Coaching snapshot endpoints, outbox producers and relays.
+3. Deploy Venue and Coaching snapshot endpoints and outbox producers, with their **relays stopped**.
 4. Call `POST /booking-projections/internal/venue/refresh` and
-   `POST /booking-projections/internal/coaching/refresh` once for the tenant.
+   `POST /booking-projections/internal/coaching/refresh` once for the tenant, then start the relays.
+   Refresh replaces the projection and clears its cursors while retaining event receipts, so an
+   event consumed *during* a refresh is erased by it and suppressed from redelivery. Refresh before
+   the relays deliver, not after.
 5. Call `GET /booking-projections/internal/reconcile`; require `matches: true` and zero mismatches
    for resources, units, conflict edges and coaching occupancies.
 6. Set both modes to `shadow`, exercise booking create, pricing and availability, and require no
@@ -136,10 +140,20 @@ status reports actual pending age and exhausted delivery counts.
 - **Isolation:** snapshot, refresh, status and event routes require the internal secret and an
   explicit tenant; header and event tenant must match; all source and projection queries scope the
   tenant directly or through both conflict-edge units.
-- **Failure/rollout:** `legacy` remains the default. Shadow failures do not alter member results;
-  projection mode fails closed and can be rolled back by changing one environment value.
+- **Failure/rollout:** `legacy` remains the default. Shadow failures do not alter member results.
+  Projection mode fails closed on an **unpopulated** projection — each read first requires a
+  `projection_entity_cursors` row for its source and returns 503 otherwise, because an empty
+  projection would otherwise read as "no conflicts" and accept a double booking. It does **not** yet
+  fail closed on a *stale* projection: a populated-but-lagging read model (a dead-lettered relay, for
+  example) still answers. Lag/dead-letter metrics are therefore a precondition for cutover, not a
+  nice-to-have. Rollback remains one environment value.
 - **Migration:** both migrations are additive. They have not been applied or backfilled by this
   implementation, and projection mode must not be enabled until reconciliation succeeds.
 - **Residual risk:** projection freshness needs operational lag/dead-letter metrics before any
-  production cutover. Same-timestamp source mutations are extremely unlikely but should ultimately
-  use an explicit monotonic source revision when the transport contract is generalised.
+  production cutover — see the staleness gap above. Ordering compares timestamps, so it inherits
+  clock behaviour: snapshot watermarks and event `sourceUpdatedAt` now both come from the producing
+  service's own clock (they previously mixed a database `transaction_timestamp()` watermark with
+  application-clock event stamps, which could judge post-backfill mutations "stale" and drop them
+  permanently), but two replicas of one producer can still disagree. Same-timestamp mutations are
+  dropped by the `<=` comparison. Both want an explicit monotonic source revision when the transport
+  contract is generalised.

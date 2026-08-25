@@ -133,14 +133,14 @@ function loadRoot() {
     console.error(`\n  Root .env is missing: ${missing.join(', ')}\n`)
     process.exit(1)
   }
-  // NODE_ENV=test would disable InternalSecretGuard on every service (it returns
-  // true outright in that mode), leaving the internal cross-tenant write routes
-  // unauthenticated. Never let it reach a generated file.
+  // NODE_ENV=test makes every service load test wiring — and the test harnesses
+  // set it themselves, per run. A generated .env carrying it is always wrong.
+  // (It no longer disables InternalSecretGuard: that bypass was removed, and the
+  // guard now throws whenever INTERNAL_SECRET is unset, in every environment.)
   if (env.NODE_ENV && !['development', 'production'].includes(env.NODE_ENV)) {
     console.error(
       `\n  Root .env sets NODE_ENV=${env.NODE_ENV}. Only 'development' or 'production' are allowed here.` +
-        `\n  NODE_ENV=test disables InternalSecretGuard, which is the only authenticator on the` +
-        `\n  internal reassign-customer and events/inbound routes. The test harnesses set it themselves.\n`,
+        `\n  The test harnesses set NODE_ENV=test themselves, per run; a generated .env must not.\n`,
     )
     process.exit(1)
   }

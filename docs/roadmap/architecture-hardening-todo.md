@@ -1,7 +1,7 @@
 # Architecture hardening execution TODO
 
 > **Status:** Active
-> **Updated:** 25 August 2026
+> **Updated:** 25 August 2026 (post-review)
 > **Purpose:** Ordered development queue for making the pilot safe to scale and separate by region.
 > **Inputs:** [Pilot-to-production roadmap](pilot-to-production.md),
 > [coupling inventory](../architecture/cross-schema-coupling-inventory.md), and
@@ -22,6 +22,26 @@ tests, documentation, rollout and rollback evidence exist.
 - [x] Booking display hydration moved from People/Venue SQL joins to authenticated service APIs.
 - [x] Booking utilisation capacity moved from a Venue schema query to an authenticated Venue API.
 
+## P0 — security findings raised in review (pre-existing, not from this work)
+
+Both surfaced while reviewing the hardening branch on 25 August 2026. Neither is introduced by it;
+both concern the internal cross-tenant admin plane and want their own change.
+
+- [ ] **The internal staff portal authorises any authenticated Supabase user.**
+      `internal-portal/middleware.ts` checks only that a session exists. All portals share one
+      Supabase project and `venue-service` exposes unauthenticated self-registration
+      (`POST organisations/public/register`), so a self-service customer account can sign in and
+      reach every route that forwards `INTERNAL_SECRET` to admin-service: list and mutate any
+      organisation, flip any tenant's feature flags, read the platform audit log, and start an
+      impersonation session against any tenant. Needs an explicit staff claim, checked in the
+      middleware **and** re-checked in each route handler before the secret is attached. Requires a
+      decision on what marks a staff user (Supabase `app_metadata` role, directory group, allowlist).
+- [ ] **`admin-service` carries a local fork of the internal guard.**
+      `services/admin-service/src/internal/guards/internal.guard.ts` compares the secret with `===`
+      rather than the shared guard's constant-time compare, and trusts `x-staff-id` / `x-staff-email`
+      unverified — so audit entries are attributable to whatever the caller claims. Replace with
+      `InternalSecretGuard` from `@clubspark/auth` and derive staff identity from a verified token.
+
 ## P0 — work through next
 
 ### 1. Finish the Booking-owned Venue and Coaching projection
@@ -37,7 +57,10 @@ Goal: remove the five remaining hot-path cross-schema reads from Booking.
 - [x] Add migrations, tenant indexes, compatibility and rollback notes.
 - [x] Add transactional outbox support to Venue and Coaching for the projection events they own.
 - [x] Publish versioned create/update/deactivate/delete events from Venue (for currently exposed
-      mutation paths; bookable-unit deletion is not exposed today).
+      mutation paths; bookable-unit deletion is not exposed today). Includes resource-group deletion,
+      which sets `resources.group_id` to NULL through the foreign key: it now emits a resource event
+      per affected row, because the database-side change bumps no `updated_at` for a later resync to
+      notice.
 - [x] Publish versioned scheduled/rescheduled/cancelled events from Coaching.
 - [x] Add an authenticated snapshot/backfill contract to each source service.
 - [x] Add idempotent Booking consumers that tolerate duplicate and out-of-order events.
@@ -60,6 +83,37 @@ Definition of done:
 - Create, pricing and availability regression suites pass.
 - Backfill is repeatable, tenant-scoped and safe to resume.
 - Rollback can switch reads to the old path until the separate-database cutover.
+
+### 1a. Review findings still open on the projection work
+
+Raised by the reviewer agents on 25 August 2026. None block the additive migrations, all block a
+`projection` cutover or matter operationally.
+
+- [ ] Fail closed on a **stale** projection, not only an empty one. Reads now require a
+      `projection_entity_cursors` row for their source, so an un-backfilled tenant gets a 503
+      instead of "no conflicts" — but a populated-yet-lagging projection (dead-lettered relay) still
+      answers. Needs a lag bound in the read path, which needs the metrics below.
+- [ ] Add projection-lag, dead-letter and failed-event metrics with alerting. `status` and
+      `reconcile` expose the numbers; nothing watches them.
+- [ ] Replace timestamp ordering with an explicit monotonic source revision. Watermarks and event
+      stamps now share the producing service's clock, but two replicas of one producer can still
+      disagree, and equal timestamps are dropped by the `<=` comparison.
+- [ ] Make `refresh` safe to run while relays deliver — it clears cursors but retains event
+      receipts, so an event consumed mid-refresh is erased and then suppressed from redelivery. The
+      runbook now orders refresh before relay start; the code should enforce it.
+- [ ] Add a retention policy for `projection_event_receipts` (unbounded growth per tenant).
+- [ ] Compare reconciliation rows field-by-field rather than by `JSON.stringify` (implicit key-order
+      coupling reports every row as mismatched if a `select` changes).
+- [ ] Verify `venueId`/`resourceId`/`parentUnitId` belong to the caller's tenant on bookable-unit
+      create, and emit the tenant-scoped conflict list there as `update` already does.
+- [ ] Extract the outbox/inbox/lease mechanics into a shared package (tables stay service-owned).
+      Six copies of the relay, three of the inbox claim and two of the lease already differ; this is
+      the same drift that produced six variants of the auth guard.
+- [ ] Cover the claim SQL with database-backed tests — the inbox dedupe predicate and the projection
+      receipt/cursor logic are asserted only against mocked `$queryRaw` today, which is why two
+      defects in that SQL reached review.
+- [ ] Decide whether the new internal routes should be URI-versioned like the rest of the platform
+      (they rely on `VERSION_NEUTRAL`), and exclude the operator routes from Swagger.
 
 ### 2. Complete event-delivery reliability
 

@@ -100,10 +100,10 @@ flowchart TB
   inboxes -.-> comms
   inboxes -.-> integration
   inboxes -.-> people
-  leases -.-> membership
-  leases -.-> analytics
-  leases -.-> comms
-  leases -.-> integration
+  leases -.->|singleton batch lease| membership
+  leases -.->|singleton batch lease| analytics
+  leases -.->|row claim, not a lease| comms
+  leases -.->|row lease on retry rows| integration
 
   subgraph bookingReadModel["Booking-owned source projections — code complete, activation pending"]
     venueProjection["Venue projection<br/>resources, units, conflicts,<br/>groups and lighting"]

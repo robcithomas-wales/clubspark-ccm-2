@@ -206,8 +206,11 @@ synchronous API calls — an API hop per availability cell would be untenable.
 
 **Still open:**
 
-1. **Activate WO-1.1** — the Venue/Coaching projection code is complete, but its additive
-   migrations have not been applied and the read switches still default to `legacy`. The projection
+1. **Activate WO-1.1** — the Venue/Coaching projection code is complete for the enumerated mutation
+   paths, and the read switches still default to `legacy`. Its additive migrations are now applied to
+   the Supabase pilot database (25 August 2026) but no tenant has been backfilled. Outstanding before
+   any tenant leaves `legacy`: a staleness gate (reads fail closed on an *empty* projection, not yet
+   on a lagging one) and projection-lag/dead-letter metrics. The projection
    scope is: resources (`id`, `name`,
    `group_id`, `has_lighting`), bookable_units (`id`, `name`, `resource_id`, `venue_id`,
    `is_active`, `tenant_id`), venues (`id`, `name`), unit_conflicts (`unit_id`,
