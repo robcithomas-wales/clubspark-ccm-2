@@ -66,6 +66,20 @@ check_one() {
                src/common/decorators/skip-tenant.decorator.ts; do
     [ -f "$dir/$stale" ] && errs="$errs\n      ✗ $stale: local copy of shared auth — import from @clubspark/auth instead"
   done
+  # ...and by content, not just at those three paths. admin-service carried a fork
+  # for months at src/internal/guards/internal.guard.ts — a path this list did not
+  # name — so --all reported it compliant while it compared secrets with `===` and
+  # trusted an unverified x-staff-id. Match on what a guard DOES instead: any
+  # CanActivate implementation that inspects the internal secret or a token is
+  # authentication, and authentication comes from the shared package.
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    grep -qE "x-internal-secret|INTERNAL_SECRET|app_metadata|jwks|verifyToken" "$f" || continue
+    rel="${f#$dir/}"
+    errs="$errs\n      ✗ $rel: local auth guard — use InternalSecretGuard/TenantContextGuard from @clubspark/auth"
+  done <<EOF
+$(grep -rlE "implements +CanActivate" "$dir/src" 2>/dev/null || true)
+EOF
 
   # 5. Health routes exempt from the tenant guard (probes send no JWT/tenant header)
   #    The guard is global and fail-closed, so a health controller without @SkipTenant()

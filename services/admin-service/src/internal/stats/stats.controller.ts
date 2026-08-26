@@ -1,10 +1,12 @@
-import { Controller, Get, UseGuards } from '@nestjs/common'
+import { Controller, Get, UseGuards, UseInterceptors } from '@nestjs/common'
 import { ApiTags, ApiOperation } from '@nestjs/swagger'
 import { StatsService } from './stats.service.js'
-import { InternalGuard } from '../guards/internal.guard.js'
+import { InternalSecretGuard } from '@clubspark/auth'
+import { StaffAttributionInterceptor } from '../staff-attribution.interceptor.js'
 
 @ApiTags('internal/stats')
-@UseGuards(InternalGuard)
+@UseGuards(InternalSecretGuard)
+@UseInterceptors(StaffAttributionInterceptor)
 @Controller({ path: 'internal/stats', version: '1' })
 export class StatsController {
   constructor(private readonly service: StatsService) {}

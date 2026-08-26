@@ -1,6 +1,6 @@
 # Handover — state of the platform
 
-> **Date:** 2026-08-03 · **Audience:** engineers picking this up to take it to production
+> **Date:** 2026-08-26 · **Audience:** engineers picking this up to take it to production
 > Read this first, then [`CLAUDE.md`](../CLAUDE.md) for conventions.
 
 ## What this is
@@ -138,19 +138,29 @@ not have run on the target platform at all.
 
 ## Known issues — read before planning
 
-1. **4 hot-path `venue.*` reads remain** (unit validation, resource group, unit conflicts, lighting).
-   These block regionalization. The design question is unresolved: venue-service has **no event bus**
-   and only one of the four tables has an `updated_at`, so neither event-driven nor watermark sync is
-   available. Options and a recommendation are in the backlog under MR-3b.
+1. **5 hot-path `venue.*`/`coaching.*` reads remain — but no longer unsolved.** Booking now owns a
+   projection of the Venue and Coaching fields it needs, fed by versioned events from transactional
+   outboxes in both services (venue-service has an event bus now), with authenticated snapshot
+   endpoints for backfill and `npm run projection:ops` for backfill/reconcile/replay. **Every
+   projection read is off** — `BOOKING_VENUE_PROJECTION_MODE` and `BOOKING_COACHING_PROJECTION_MODE`
+   default to `legacy` and the old SQL is still the live path. Cutover per source is: backfill →
+   reconcile → `shadow` → `projection`, then delete the SQL. Blocking that: projection-lag and
+   dead-letter metrics, because reads fail closed on an *empty* projection but a populated-yet-lagging
+   one still answers. Contract and runbook:
+   [`architecture/booking-venue-coaching-projection.md`](architecture/booking-venue-coaching-projection.md).
 2. ~~No tenant→region concept exists.~~ **Added 2026-08-05.** `admin.organisations.home_region` is
    NOT NULL; every request carries `tenantContext.region` from `CLUBSPARK_REGION`; a service that
    cannot determine its region refuses to start. **Still open:** the tenant registry is split across
    `admin.organisations` and `venue.organisations`, and routing needs one authoritative registry
    outside every region — see
    [`architecture/data-classification.md`](architecture/data-classification.md).
-3. **10 `@Cron` jobs across 6 services fire on every replica.** The platform cannot run more than one
-   replica of anything without duplicate charges, emails and reminders. (The outbox relay is the
-   exception — it uses `FOR UPDATE SKIP LOCKED` and is already safe.)
+3. ~~10 `@Cron` jobs fire on every replica.~~ **Addressed 2026-08-25.** Queue-like work claims rows
+   (`FOR UPDATE SKIP LOCKED` plus a lease), whole-dataset batches take a database-time lease in
+   `<schema>.scheduled_job_leases`, campaign dispatch claims by atomic status transition, and
+   reminders claim-and-enqueue in one transaction. Relays stay row-claiming so they remain
+   horizontally scalable. **Still open:** two-runner concurrency tests per side effect, and job
+   duration/skipped-run/stale-work metrics — so treat multi-replica as *designed for* but not yet
+   *proven*. Inventory: [`architecture/scheduled-job-safety.md`](architecture/scheduled-job-safety.md).
 4. **Auth is Supabase JWKS** — single-region by construction. Moving to Entra External ID is
    still a decision that shapes the platform, but it is no longer a fifteen-service refactor:
    auth now lives in [`packages/auth`](../packages/auth/README.md) and each service selects a
@@ -187,6 +197,24 @@ not have run on the target platform at all.
   explicitly; be careful drawing conclusions from a local run.
 - **`@Cron` jobs are not registered when `NODE_ENV=test`**, because a job firing mid-test races the
   assertions. Tests that exercise a job call its method directly.
+
+## Moving this repository
+
+Verified 2026-08-26, before the move to a corporate organisation:
+
+- **No credential has ever been committed.** 151 commits scanned: no `.env` was ever tracked, no
+  JWTs, no `service_role` key, no private keys. Every `postgresql://` string in history is a
+  placeholder (`<password>`, `[password]`) or `postgres@localhost` for CI. No history rewrite is
+  needed before a transfer.
+- **CI requires no secrets.** `.github/workflows/ci.yml` references none — the migration and test
+  jobs run against an ephemeral Postgres 17 container, so nothing needs re-provisioning in a new
+  organisation.
+- 32 MB of git history, no large blobs.
+- Prefer GitHub's **Transfer ownership** over pushing to a fresh remote: transfer keeps history, pull
+  requests and review threads, and redirects the old URL. After it lands, check Actions are enabled,
+  branch protection on `main`, a CODEOWNERS file, and run `git remote set-url origin <new-url>`.
+- Live credentials (Supabase database and auth) exist only in git-ignored local `.env` files, which
+  the transfer does not touch. They move to Azure Key Vault with the deployment.
 
 ## Moving to Azure
 

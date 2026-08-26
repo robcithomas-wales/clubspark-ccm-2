@@ -1,13 +1,18 @@
-import { Controller, Get, Query, UseGuards, Request } from '@nestjs/common'
+import { Controller, Get, Query, UseGuards, Request, UseInterceptors } from '@nestjs/common'
 import { ApiTags, ApiOperation } from '@nestjs/swagger'
 import type { FastifyRequest } from 'fastify'
 import { AuditService } from './audit.service.js'
-import { InternalGuard, type InternalContext } from '../guards/internal.guard.js'
+import { InternalSecretGuard } from '@clubspark/auth'
+import {
+  StaffAttributionInterceptor,
+  type InternalContext,
+} from '../staff-attribution.interceptor.js'
 
 type InternalReq = FastifyRequest & { internalContext: InternalContext }
 
 @ApiTags('internal/audit')
-@UseGuards(InternalGuard)
+@UseGuards(InternalSecretGuard)
+@UseInterceptors(StaffAttributionInterceptor)
 @Controller({ path: 'internal/audit', version: '1' })
 export class AuditController {
   constructor(private readonly service: AuditService) {}
