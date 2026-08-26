@@ -1,17 +1,32 @@
 import {
-  Controller, Get, Put, Delete, Param, Body, HttpCode, HttpStatus, UseGuards, Request,
+  Controller,
+  Get,
+  Put,
+  Delete,
+  Param,
+  Body,
+  HttpCode,
+  HttpStatus,
+  UseGuards,
+  Request,
+  UseInterceptors,
 } from '@nestjs/common'
 import { ApiTags, ApiOperation } from '@nestjs/swagger'
 import type { FastifyRequest } from 'fastify'
 import { FeatureFlagsService } from './feature-flags.service.js'
 import { SetFlagDto } from './dto/set-flag.dto.js'
-import { InternalGuard, type InternalContext } from '../guards/internal.guard.js'
+import { InternalSecretGuard } from '@clubspark/auth'
+import {
+  StaffAttributionInterceptor,
+  type InternalContext,
+} from '../staff-attribution.interceptor.js'
 import { AuditService } from '../audit/audit.service.js'
 
 type InternalReq = FastifyRequest & { internalContext: InternalContext }
 
 @ApiTags('internal/feature-flags')
-@UseGuards(InternalGuard)
+@UseGuards(InternalSecretGuard)
+@UseInterceptors(StaffAttributionInterceptor)
 @Controller({ path: 'internal/organisations/:tenantId/flags', version: '1' })
 export class FeatureFlagsController {
   constructor(

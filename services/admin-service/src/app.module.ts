@@ -23,9 +23,11 @@ import { StatsModule } from './internal/stats/stats.module.js'
     AuthModule.forRoot(
       supabaseAuth({
         // Internal staff routes carry no end-user JWT — they are authenticated by
-        // @UseGuards(InternalGuard) on each controller instead. Anything added
-        // under these prefixes MUST carry that guard; AuthModule logs a warning at
-        // startup naming them, so the exposure is visible rather than silent.
+        // @UseGuards(InternalSecretGuard) on each controller instead. Anything
+        // added under these prefixes MUST carry that guard; AuthModule logs a
+        // warning at startup naming them, so the exposure is visible rather than
+        // silent. Staff attribution for the audit trail is a separate concern:
+        // @UseInterceptors(StaffAttributionInterceptor).
         internalPathPrefixes: ['/v1/internal/', '/internal/'],
       }),
     ),

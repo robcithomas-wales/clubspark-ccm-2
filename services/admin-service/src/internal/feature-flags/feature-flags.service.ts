@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../../prisma/prisma.service.js'
-import type { InternalContext } from '../guards/internal.guard.js'
+import type { InternalContext } from '../staff-attribution.interceptor.js'
 import type { SetFlagDto } from './dto/set-flag.dto.js'
 
 // The canonical list of flags the platform supports.

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../../prisma/prisma.service.js'
-import type { InternalContext } from '../guards/internal.guard.js'
+import type { InternalContext } from '../staff-attribution.interceptor.js'
 
 @Injectable()
 export class AuditService {
@@ -22,7 +22,9 @@ export class AuditService {
         action,
         targetType,
         targetId,
-        meta: (meta ?? {}) as never,
+        // `staffId` is a claim from a forgeable header until staff identity comes
+        // from a verified token; record which, so a reader of the trail can tell.
+        meta: { ...(meta ?? {}), actorSource: ctx.actorSource } as never,
       },
     })
   }

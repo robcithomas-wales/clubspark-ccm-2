@@ -36,11 +36,24 @@ both concern the internal cross-tenant admin plane and want their own change.
       impersonation session against any tenant. Needs an explicit staff claim, checked in the
       middleware **and** re-checked in each route handler before the secret is attached. Requires a
       decision on what marks a staff user (Supabase `app_metadata` role, directory group, allowlist).
-- [ ] **`admin-service` carries a local fork of the internal guard.**
-      `services/admin-service/src/internal/guards/internal.guard.ts` compares the secret with `===`
-      rather than the shared guard's constant-time compare, and trusts `x-staff-id` / `x-staff-email`
-      unverified — so audit entries are attributable to whatever the caller claims. Replace with
-      `InternalSecretGuard` from `@clubspark/auth` and derive staff identity from a verified token.
+      **Note:** the Azure/Entra migration does not close this by itself. The gap is middleware that
+      asks only "is there a session?", which is provider-independent. It closes only if staff and
+      customers end up in different directories *and* the portal validates a staff-only claim — so
+      add the claim check as part of the migration work, where the portal auth wiring is replaced
+      anyway.
+- [x] **`admin-service` carried a local fork of the internal guard.** Fixed 26 August 2026: the fork
+      is deleted, the five internal controllers authenticate with `InternalSecretGuard` from
+      `@clubspark/auth` (constant-time compare, fail-closed), and staff attribution moved to a
+      `StaffAttributionInterceptor` that cannot be mistaken for access control. Audit rows now record
+      `meta.actorSource`, so a claim from a forgeable header is not written as though it were proof.
+      `check-service.sh` now detects a forked guard **by content** — any `CanActivate` under `src/`
+      that inspects the internal secret or a token — because this fork lived at a path the old
+      three-path list did not name, and `--all` reported it compliant for months.
+- [ ] **Staff identity is still a claim, not a verified identity.** `x-staff-id` / `x-staff-email` are
+      forgeable by anything holding `INTERNAL_SECRET`, i.e. all 15 services. Do this at the Entra cut,
+      not before: the portal forwards the staff token, admin-service validates it through
+      `@clubspark/auth`, and `actorSource` becomes `entra-token`. Same change as the staff-claim gate
+      above — one job, not two.
 
 ## P0 — work through next
 

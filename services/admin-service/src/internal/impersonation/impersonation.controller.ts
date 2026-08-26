@@ -1,17 +1,32 @@
 import {
-  Controller, Get, Post, Param, Body, Query, HttpCode, HttpStatus, UseGuards, Request,
+  Controller,
+  Get,
+  Post,
+  Param,
+  Body,
+  Query,
+  HttpCode,
+  HttpStatus,
+  UseGuards,
+  Request,
+  UseInterceptors,
 } from '@nestjs/common'
 import { ApiTags, ApiOperation } from '@nestjs/swagger'
 import type { FastifyRequest } from 'fastify'
 import { ImpersonationService } from './impersonation.service.js'
 import { StartImpersonationDto } from './dto/start-impersonation.dto.js'
-import { InternalGuard, type InternalContext } from '../guards/internal.guard.js'
+import { InternalSecretGuard } from '@clubspark/auth'
+import {
+  StaffAttributionInterceptor,
+  type InternalContext,
+} from '../staff-attribution.interceptor.js'
 import { AuditService } from '../audit/audit.service.js'
 
 type InternalReq = FastifyRequest & { internalContext: InternalContext }
 
 @ApiTags('internal/impersonation')
-@UseGuards(InternalGuard)
+@UseGuards(InternalSecretGuard)
+@UseInterceptors(StaffAttributionInterceptor)
 @Controller({ version: '1' })
 export class ImpersonationController {
   constructor(
